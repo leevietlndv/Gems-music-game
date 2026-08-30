@@ -38,12 +38,6 @@ bot.launch();
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server đang chạy trên cổng ${PORT}`));
 
-// Lưu trữ dữ liệu game trong bộ nhớ
-let gameState = {
-  isLocked: false,
-  songs: [] // Cấu trúc: { id, user, url, title }
-};
-
 // Lệnh bot gửi nút mở Mini App vào nhóm chat
 bot.command('musicgame', (ctx) => {
   ctx.reply('🎪 Nhấn vào nút dưới đây để tham gia gửi link nhạc hoặc mở Vòng Quay!', {
