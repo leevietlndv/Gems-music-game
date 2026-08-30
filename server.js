@@ -1,14 +1,21 @@
 const express = require('express');
 const { Telegraf } = require('telegraf');
 const path = require('path');
+const publicPath = path.join(__dirname, 'public');
+app.use(express.static(publicPath));
 
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Bổ sung Route điều hướng đến file index.html
+// Trả về file index.html kèm kiểm tra lỗi
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(publicPath, 'index.html'), (err) => {
+    if (err) {
+      console.error("Lỗi tìm file:", err);
+      res.status(404).send("Lỗi: Không tìm thấy file index.html trong thư mục public trên Server Render!");
+    }
+  });
 });
 
 // Lấy Token và URL từ Biến môi trường
