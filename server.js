@@ -85,6 +85,12 @@ app.post('/api/reset', (req, res) => {
   res.json({ success: true });
 });
 
+// API Mở lại Form cho phép gửi bài tiếp
+app.post('/api/unlock', (req, res) => {
+  gameState.isLocked = false;
+  res.json({ success: true, isLocked: false });
+});
+
 // 5. Khởi chạy Bot và Server
 bot.launch()
   .then(() => console.log('✅ Telegram Bot đã kết nối thành công!'))
