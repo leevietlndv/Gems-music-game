@@ -1,24 +1,26 @@
 const express = require('express');
 const { Telegraf } = require('telegraf');
 const path = require('path');
+
+// 1. Khởi tạo Express App trước
+const app = express();
+
+// 2. Cấu hình Middleware và Static Files
 const publicPath = path.join(__dirname, 'public');
+app.use(express.json());
 app.use(express.static(publicPath));
 
-const app = express();
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Trả về file index.html kèm kiểm tra lỗi
+// Route trang chủ bắt lỗi hiển thị file index.html
 app.get('/', (req, res) => {
   res.sendFile(path.join(publicPath, 'index.html'), (err) => {
     if (err) {
       console.error("Lỗi tìm file:", err);
-      res.status(404).send("Lỗi: Không tìm thấy file index.html trong thư mục public trên Server Render!");
+      res.status(404).send("Lỗi: Không tìm thấy file index.html trong thư mục public!");
     }
   });
 });
 
-// Lấy Token và URL từ Biến môi trường
+// 3. Cấu hình Telegram Bot
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEB_APP_URL = process.env.WEB_APP_URL;
 
@@ -28,13 +30,11 @@ if (!BOT_TOKEN) {
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// Lưu trữ dữ liệu game trong bộ nhớ
 let gameState = {
   isLocked: false,
   songs: []
 };
 
-// Lệnh bot gửi nút mở Mini App vào nhóm chat
 bot.command('musicgame', (ctx) => {
   ctx.reply('🎪 Nhấn vào nút dưới đây để tham gia gửi link nhạc hoặc mở Vòng Quay!', {
     reply_markup: {
@@ -45,18 +45,16 @@ bot.command('musicgame', (ctx) => {
   }).catch(err => console.error('❌ Lỗi gửi tin nhắn:', err));
 });
 
-// API Lấy trạng thái & danh sách bài hát
+// 4. Các API xử lý Game
 app.get('/api/game', (req, res) => {
   res.json(gameState);
 });
 
-// API Thành viên gửi link bài hát
 app.post('/api/submit', (req, res) => {
   if (gameState.isLocked) {
     return res.status(400).json({ error: 'Form đã đóng, không thể gửi thêm bài!' });
   }
   const { user, links } = req.body;
-  
   if (Array.isArray(links)) {
     links.forEach(url => {
       if (url && url.trim() !== '') {
@@ -71,26 +69,23 @@ app.post('/api/submit', (req, res) => {
   res.json({ success: true, total: gameState.songs.length });
 });
 
-// API Người mở nhạc đóng Form
 app.post('/api/lock', (req, res) => {
   gameState.isLocked = true;
   res.json({ success: true, isLocked: true });
 });
 
-// API Xóa bài hát sau khi phát xong
 app.post('/api/remove', (req, res) => {
   const { id } = req.body;
   gameState.songs = gameState.songs.filter(song => song.id !== id);
   res.json({ success: true, remaining: gameState.songs });
 });
 
-// Reset trò chơi mới
 app.post('/api/reset', (req, res) => {
   gameState = { isLocked: false, songs: [] };
   res.json({ success: true });
 });
 
-// Khởi chạy Telegram Bot
+// 5. Khởi chạy Bot và Server
 bot.launch()
   .then(() => console.log('✅ Telegram Bot đã kết nối thành công!'))
   .catch((err) => console.error('❌ Lỗi kết nối Telegram Bot:', err));
@@ -98,6 +93,5 @@ bot.launch()
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
 
-// Khởi chạy Server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server đang chạy trên cổng ${PORT}`));
