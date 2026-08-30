@@ -35,11 +35,22 @@ let gameState = {
   songs: []
 };
 
-bot.command('musicgame', (ctx) => {
+// 1. Log tất cả tin nhắn gửi tới Bot để debug trên Render
+bot.use((ctx, next) => {
+  if (ctx.message && ctx.message.text) {
+    console.log(`📩 Nhận tin nhắn từ [${ctx.chat.type}] (ID: ${ctx.chat.id}): ${ctx.message.text}`);
+  }
+  return next();
+});
+
+// 2. Bắt tất cả các câu lệnh liên quan đến musicgame / music (kể cả có @username phía sau)
+bot.hears(/\/musicgame|\/music/i, (ctx) => {
+  console.log('✅ Đã kích hoạt lệnh Mở Game Nhạc!');
+  
   ctx.reply('🎪 Nhấn vào nút dưới đây để tham gia gửi link nhạc hoặc mở Vòng Quay!', {
     reply_markup: {
       inline_keyboard: [[
-        { text: "🎵 Mở Game Nhạc", web_app: { url: WEB_APP_URL } }
+        { text: "🎵 Mở Game Nhạc", web_app: { url: process.env.WEB_APP_URL || WEB_APP_URL } }
       ]]
     }
   }).catch(err => console.error('❌ Lỗi gửi tin nhắn:', err));
