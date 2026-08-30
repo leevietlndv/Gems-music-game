@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vòng Quay Nhạc Telegram</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; background: #181c24; color: #fff; padding: 15px; }
+        .input-group { margin: 8px 0; }
+        input[type="text"] { width: 80%; padding: 8px; border-radius: 4px; border: 1px solid #444; }
+        button { padding: 8px 16px; margin: 5px; background: #2aabee; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button.admin { background: #e74c3c; }
+        #canvas-container { margin: 20px auto; position: relative; width: 300px; height: 300px; }
+        canvas { border-radius: 50%; }
+        #player-container { margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+    <h2>🎵 Vòng Quay Nhạc Nhóm</h2>
+
+    <!-- GIAO DIỆN DÀNH CHO THÀNH VIÊN GỬI BÀI -->
+    <div id="user-section">
+        <h3>Gửi Bài Hát Dạng Link YouTube</h3>
+        <div id="form-inputs">
+            <div class="input-group">
+                <input type="text" class="song-link" placeholder="Dán link YouTube tại đây...">
+            </div>
+        </div>
+        <button onclick="addInputSlot()">➕ Thêm ô dán link</button>
+        <button onclick="submitSongs()">🚀 Gửi bài hát</button>
+    </div>
+
+    <hr style="margin: 20px 0; border-color: #333;">
+
+    <!-- GIAO DIỆN DÀNH CHO NGƯỜI MỞ NHẠC (HOST / DJ) -->
+    <div id="host-section">
+        <h3>🎛️ Bảng Điều Khiển DJ</h3>
+        <button class="admin" onclick="lockForm()">🔒 Đóng Form Nhận Bài</button>
+        <button onclick="spinWheel()">🎡 Quay Tìm Bài Hát</button>
+
+        <div id="canvas-container">
+            <canvas id="wheel" width="300" height="300"></canvas>
+        </div>
+
+        <div id="player-container">
+            <div id="yt-player"></div>
+        </div>
+    </div>
+
+    <!-- YouTube Iframe API -->
+    <script src="https://www.youtube.com/iframe_api"></script>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+
+        let songsList = [];
+        let player;
+        let currentWinningSong = null;
+
+        // Khởi tạo YouTube Player
+        function onYouTubeIframeAPIReady() {
+            player = new YT.Player('yt-player', {
+                height: '200',
+                width: '320',
+                events: {
+                    'onStateChange': onPlayerStateChange
+                }
+            });
+        }
+
+        // Tự động xử lý khi bài hát KẾT THÚC
+        function onPlayerStateChange(event) {
+            if (event.data === YT.PlayerState.ENDED && currentWinningSong) {
+                alert(`Bài hát "${currentWinningSong.url}" đã phát xong! Đang xóa và quay tiếp...`);
+                // Gọi API xóa bài hát khỏi danh sách
+                fetch('/api/remove', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: currentWinningSong.id })
+                }).then(() => {
+                    fetchGameState().then(() => {
+                        // Tự động kích hoạt lại vòng quay sau khi hết bài
+                        if (songsList.length > 0) {
+                            spinWheel();
+                        } else {
+                            alert("Đã phát hết danh sách bài hát trong danh sách!");
+                        }
+                    });
+                });
+            }
+        }
+
+        // Thêm ô nhập link nhạc
+        function addInputSlot() {
+            const container = document.getElementById('form-inputs');
+            const div = document.createElement('div');
+            div.className = 'input-group';
+            div.innerHTML = '<input type="text" class="song-link" placeholder="Dán link YouTube tiếp theo...">';
+            container.appendChild(div);
+        }
+
+        // Gửi danh sách bài hát lên server
+        function submitSongs() {
+            const inputs = document.querySelectorAll('.song-link');
+            const links = Array.from(inputs).map(i => i.value).filter(v => v.trim() !== '');
+            const username = tg.initDataUnsafe?.user?.first_name || "Thành viên";
+
+            fetch('/api/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user: username, links })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) alert(data.error);
+                else alert(`Đã gửi thành công ${data.total} bài hát vào danh sách!`);
+            });
+        }
+
+        // Đóng form
+        function lockForm() {
+            fetch('/api/lock', { method: 'POST' })
+            .then(res => res.json())
+            .then(() => alert("Đã khóa form thành công!"));
+        }
+
+        // Lấy danh sách bài hát hiện tại từ Server
+        async function fetchGameState() {
+            const res = await fetch('/api/game');
+            const data = await res.json();
+            songsList = data.songs;
+            drawWheel();
+        }
+
+        // Vẽ Vòng Quay bằng HTML5 Canvas
+        function drawWheel() {
+            const canvas = document.getElementById('wheel');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, 300, 300);
+
+            if (songsList.length === 0) {
+                ctx.fillStyle = '#fff';
+                ctx.fillText("Chưa có bài hát nào", 100, 150);
+                return;
+            }
+
+            const arc = (2 * Math.PI) / songsList.length;
+            const colors = ['#f39c12', '#e74c3c', '#9b59b6', '#3498db', '#2ecc71', '#1abc9c'];
+
+            songsList.forEach((song, i) => {
+                const angle = i * arc;
+                ctx.beginPath();
+                ctx.fillStyle = colors[i % colors.length];
+                ctx.moveTo(150, 150);
+                ctx.arc(150, 150, 140, angle, angle + arc);
+                ctx.fill();
+                ctx.stroke();
+
+                // Vẽ tên người gửi lên ô
+                ctx.save();
+                ctx.translate(150, 150);
+                ctx.rotate(angle + arc / 2);
+                ctx.fillStyle = '#fff';
+                ctx.font = '12px Arial';
+                ctx.fillText(song.user.substring(0, 10), 50, 5);
+                ctx.restore();
+            });
+        }
+
+        // Hiệu ứng quay và chọn nhạc
+        function spinWheel() {
+            if (songsList.length === 0) return alert("Danh sách bài hát đang trống!");
+
+            const randomIndex = Math.floor(Math.random() * songsList.length);
+            currentWinningSong = songsList[randomIndex];
+
+            alert(`🎉 Bài hát may mắn trúng thưởng từ: ${currentWinningSong.user}`);
+            
+            // Trích xuất Video ID từ Link YouTube
+            const videoId = extractYouTubeId(currentWinningSong.url);
+            if (videoId) {
+                player.loadVideoById(videoId);
+            } else {
+                alert("Link bài hát không hợp lệ, đang xóa và chuyển bài...");
+            }
+        }
+
+        function extractYouTubeId(url) {
+            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+            const match = url.match(regExp);
+            return (match && match[2].length === 11) ? match[2] : null;
+        }
+
+        // Tải dữ liệu ban đầu
+        fetchGameState();
+    </script>
+</body>
+</html>
