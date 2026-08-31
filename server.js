@@ -102,17 +102,28 @@ app.post('/api/unlock', (req, res) => {
   res.json({ success: true, isLocked: false });
 });
 
-// 5. Khởi chạy Bot và Server
-// Kích hoạt Bot và tự động bỏ qua các tin nhắn bị dồn nén cũ
-bot.launch({
-  dropPendingUpdates: true
-}).then(() => {
-  console.log('✅ Telegram Bot đã kết nối thành công!');
-}).catch((err) => {
-  console.error('❌ Lỗi kết nối Telegram Bot:', err);
-});
+// --- KHỞI CHẠY BOT VÀ XÁC NHẬN KẾT NỐI ---
+console.log("🔍 Đang kiểm tra BOT_TOKEN trên Render...");
 
-// Tự động đóng bot khi server dừng
+if (!process.env.BOT_TOKEN) {
+  console.error("❌ LỖI: Không tìm thấy biến BOT_TOKEN trên Render!");
+} else {
+  // 1. Lấy thông tin Bot từ Telegram API để xác thực Token
+  bot.telegram.getMe()
+    .then((botInfo) => {
+      console.log(`🤖 Đã xác thực thành công Bot: @${botInfo.username}`);
+      // 2. Bắt đầu nhận tin nhắn từ Telegram
+      return bot.launch({ dropPendingUpdates: true });
+    })
+    .then(() => {
+      console.log('✅ Telegram Bot Polling đã sẵn sàng nhận lệnh!');
+    })
+    .catch((err) => {
+      console.error('❌ Lỗi kết nối Telegram API:', err.message || err);
+    });
+}
+
+// Đóng bot an toàn khi restart
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
 
