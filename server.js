@@ -231,7 +231,6 @@ function performSpin() {
   bot.launch()
     .then(() => console.log('🤖 Bot Telegram đã khởi chạy thành công!'))
     .catch(err => console.error('Lỗi khởi chạy Bot:', err));
-}
 
 // --- API HTTP & SOCKET.IO ---
 app.use(express.json());
