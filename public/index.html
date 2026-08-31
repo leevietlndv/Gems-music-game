@@ -92,7 +92,6 @@
     const tg = window.Telegram?.WebApp;
     if (tg) { tg.ready(); tg.expand(); }
 
-    // LẤY ĐẦY ĐỦ HỌ VÀ TÊN TỪ TELEGRAM
     const userObj = tg?.initDataUnsafe?.user;
     let userName = 'Người dùng';
     if (userObj) {
@@ -208,8 +207,6 @@
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 11px Arial';
         const label = songs[i].user || `Bài ${i+1}`;
-        
-        // Tối ưu hóa không gian: Dời mép ngoài lên 132px và cho phép kéo dài vào sát tâm (tối đa 25 ký tự)
         ctx.fillText(label.length > 25 ? label.substring(0, 25) + '...' : label, 132, 4);
         ctx.restore();
       }
@@ -220,6 +217,7 @@
       isSpinning = true;
       btnSpin.disabled = true;
 
+      // Ẩn player và dừng nhạc cũ khi bắt đầu quay mới
       ytPlayer.src = '';
       playerCard.style.display = 'none';
 
