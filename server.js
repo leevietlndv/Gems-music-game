@@ -1,6 +1,8 @@
+require('dotenv').config();
+
 const express = require('express');
 const http = require('http');
-const { Server } = require("socket.io");
+const { Server } = require('socket.io');
 const path = require('path');
 const { Telegraf, Markup } = require('telegraf');
 
@@ -8,21 +10,34 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// --- CẤU HÌNH BOT TELEGRAM ---
 const BOT_TOKEN = process.env.BOT_TOKEN;
+
+const ADMIN_IDS = new Set(
+  (process.env.ADMIN_IDS || '')
+    .split(',')
+    .map(id => id.trim())
+    .filter(Boolean)
+);
+
 const bot = BOT_TOKEN ? new Telegraf(BOT_TOKEN) : null;
 
+function isAdmin(telegramId) {
+  if (telegramId === null || telegramId === undefined) {
+    return false;
+  }
+
+  return ADMIN_IDS.has(String(telegramId));
+}
+
 let isFormOpen = true;
-let songs = []; // [{ url, user, telegramId }]
+let songs = [];
 let lastWinner = null;
-let lastSpinner = null; // Lưu người bấm quay gần nhất
 
 function broadcastState() {
   io.emit('stateUpdate', { isFormOpen, songs, lastWinner });
 }
 
-function performSpin(spinnerName = 'Hệ thống') {
-  // 1. Tự động xóa bài vừa phát xong/vừa trúng thưởng ở lượt trước
+function performSpin() {
   if (lastWinner) {
     const index = songs.findIndex(s => s.url === lastWinner.url && s.user === lastWinner.user);
     if (index !== -1) {
@@ -31,21 +46,18 @@ function performSpin(spinnerName = 'Hệ thống') {
     lastWinner = null;
   }
 
-  // 2. Kiểm tra nếu hết bài
   if (songs.length === 0) {
     broadcastState();
     return { success: false, message: 'Danh sách bài hát đã hết!' };
   }
 
-  // 3. Quay bài hát mới
   const selectedIndex = Math.floor(Math.random() * songs.length);
   const winner = songs[selectedIndex];
   lastWinner = winner;
-  lastSpinner = spinnerName;
 
   broadcastState();
-  io.emit('triggerSpin', { selectedIndex, winner, spinner: lastSpinner });
-  return { success: true, winner, spinner: lastSpinner };
+  io.emit('triggerSpin', { selectedIndex, winner });
+  return { success: true, winner };
 }
 
 // --- CÁC LỆNH BOT TELEGRAM ---
@@ -53,18 +65,18 @@ if (bot) {
   const sendWebAppButton = (ctx) => {
     const directMiniAppUrl = 'https://t.me/GU3B_Radio_Bot/music3B';
     ctx.reply(
-      '🎵 **VÒNG QUAY NHẠC GEMS**\nBấm nút bên dưới để tham gia quay bài hát ngay:',
+      '🎵 Bấm vào đây để gửi những bài nhạc hay nhức nách',
       Markup.inlineKeyboard([
         [Markup.button.url('🎡 Mở Vòng Quay Nhạc', directMiniAppUrl)]
       ])
     );
   };
 
-  bot.command(['start', 'musicgems', 'musicgame'], sendWebAppButton);
+  // Nhận lệnh /start và /musicgems
+  bot.command(['start', 'musicgems'], sendWebAppButton);
 
   bot.command('spin', (ctx) => {
-    const userName = ctx.from.first_name || 'Người dùng';
-    const result = performSpin(userName);
+    const result = performSpin();
     if (!result.success) {
       ctx.reply(`⚠️ ${result.message}`);
     } else {
@@ -93,6 +105,7 @@ if (bot) {
     ctx.reply(`📋 **Danh sách bài hát (${songs.length}):**\n\n${listStr}`);
   });
 
+  // Tự động đăng ký Menu lệnh
   bot.telegram.setMyCommands([
     { command: 'musicgems', description: 'Mở Vòng Quay Nhạc' },
     { command: 'spin', description: 'Quay ngẫu nhiên bài hát' },
@@ -108,12 +121,7 @@ if (bot) {
 
 // --- API HTTP & SOCKET.IO ---
 app.use(express.json());
-app.use(express.static(path.join(__dirname)));
-
-// Trả về trang chủ index.html
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
+app.use(express.static(path.join(__dirname, 'public')));
 
 io.on('connection', (socket) => {
   socket.emit('stateUpdate', { isFormOpen, songs, lastWinner });
@@ -134,14 +142,7 @@ app.post('/api/submit', (req, res) => {
 });
 
 app.post('/api/spin', (req, res) => {
-  const { user } = req.body;
-  const result = performSpin(user || 'Người dùng');
-  res.json(result);
-});
-
-// API TỰ ĐỘNG QUAY KHI HẾT BÀI HÁT (GỌI TỪ FRONTEND)
-app.post('/api/song-ended', (req, res) => {
-  const result = performSpin(lastSpinner || 'Tự động');
+  const result = performSpin();
   res.json(result);
 });
 
