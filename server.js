@@ -4,6 +4,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const crypto = require('crypto');
 const { Telegraf, Markup } = require('telegraf');
 
 const app = express();
@@ -27,6 +28,101 @@ function isAdmin(telegramId) {
   }
 
   return ADMIN_IDS.has(String(telegramId));
+}
+
+function validateTelegramInitData(initData) {
+  if (!initData || !BOT_TOKEN) {
+    return {
+      valid: false,
+      message: 'Thiếu Telegram initData hoặc BOT_TOKEN'
+    };
+  }
+
+  try {
+    const params = new URLSearchParams(initData);
+    const receivedHash = params.get('hash');
+
+    if (!receivedHash) {
+      return {
+        valid: false,
+        message: 'Không có hash'
+      };
+    }
+
+    params.delete('hash');
+
+    const dataCheckString = Array.from(params.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => `${key}=${value}`)
+      .join('\n');
+
+    const secretKey = crypto
+      .createHmac('sha256', 'WebAppData')
+      .update(BOT_TOKEN)
+      .digest();
+
+    const calculatedHash = crypto
+      .createHmac('sha256', secretKey)
+      .update(dataCheckString)
+      .digest('hex');
+
+    if (calculatedHash !== receivedHash) {
+      return {
+        valid: false,
+        message: 'Chữ ký Telegram không hợp lệ'
+      };
+    }
+
+    const authDate = Number(params.get('auth_date'));
+
+    if (!authDate) {
+      return {
+        valid: false,
+        message: 'Thiếu auth_date'
+      };
+    }
+
+    const maxAge = 24 * 60 * 60;
+    const now = Math.floor(Date.now() / 1000);
+
+    if (now - authDate > maxAge) {
+      return {
+        valid: false,
+        message: 'Telegram initData đã hết hạn'
+      };
+    }
+
+    const userRaw = params.get('user');
+
+    if (!userRaw) {
+      return {
+        valid: false,
+        message: 'Không có thông tin user'
+      };
+    }
+
+    const user = JSON.parse(userRaw);
+
+    if (!user.id) {
+      return {
+        valid: false,
+        message: 'Không xác định được Telegram user ID'
+      };
+    }
+
+    return {
+      valid: true,
+      user
+    };
+
+  } catch (error) {
+    console.error('Lỗi xác thực Telegram initData:', error);
+
+    return {
+      valid: false,
+      message: 'initData không hợp lệ'
+    };
+  }
 }
 
 let isFormOpen = true;
@@ -129,15 +225,49 @@ io.on('connection', (socket) => {
 
 app.post('/api/submit', (req, res) => {
   if (!isFormOpen) {
-    return res.json({ success: false, message: 'Form đã đóng, không thể gửi bài!' });
-  }
-  const { url, user } = req.body;
-  if (!url) {
-    return res.json({ success: false, message: 'Vui lòng nhập link bài hát!' });
+    return res.json({
+      success: false,
+      message: 'Form đã đóng, không thể gửi bài!'
+    });
   }
 
-  songs.push({ url, user: user || 'Người dùng' });
+  const { url, initData } = req.body;
+
+  if (!url) {
+    return res.json({
+      success: false,
+      message: 'Vui lòng nhập link bài hát!'
+    });
+  }
+
+  // Xác thực người dùng bằng dữ liệu có chữ ký của Telegram
+  const auth = validateTelegramInitData(initData);
+
+  if (!auth.valid) {
+    return res.status(401).json({
+      success: false,
+      message: 'Xác thực Telegram thất bại!'
+    });
+  }
+
+  const telegramUser = auth.user;
+
+  // Tạo tên hiển thị từ dữ liệu Telegram đã xác thực
+  const userName =
+    telegramUser.username
+      ? `@${telegramUser.username}`
+      : [telegramUser.first_name, telegramUser.last_name]
+          .filter(Boolean)
+          .join(' ') || 'Người dùng';
+
+  songs.push({
+    url,
+    user: userName,
+    telegramId: String(telegramUser.id)
+  });
+
   broadcastState();
+
   res.json({ success: true });
 });
 

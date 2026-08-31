@@ -95,9 +95,14 @@
 
   <script>
     const tg = window.Telegram?.WebApp;
-    if (tg) { tg.ready(); tg.expand(); }
+if (tg) { 
+  tg.ready(); 
+  tg.expand(); 
+}
 
-    function getTelegramUserData() {
+const telegramInitData = tg?.initData || '';
+
+function getTelegramUserData() {
       const u = tg?.initDataUnsafe?.user;
       if (!u) return { name: 'Người dùng', id: null };
       
@@ -153,8 +158,9 @@
 
     // Quản lý trạng thái socket
     socket.on('connect', () => {
-      // Gửi Telegram ID lên backend để nhận quyền Admin nếu có
-      socket.emit('authenticate', { telegramId: userData.id });
+      socket.emit('authenticate', {
+        initData: telegramInitData
+      });
     });
 
     socket.on('disconnect', () => {
@@ -340,7 +346,10 @@
         const res = await fetch('/api/submit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url, user: userData.name, telegramId: userData.id })
+          body: JSON.stringify({
+            url,
+            initData: telegramInitData
+          })
         });
         const data = await res.json();
         if (data.success) songUrlInput.value = '';
@@ -360,7 +369,9 @@
         const res = await fetch('/api/spin', { 
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ telegramId: userData.id })
+          body: JSON.stringify({
+            initData: telegramInitData
+          })
         });
         const data = await res.json();
         if (!data.success) {
@@ -377,7 +388,9 @@
       fetch('/api/toggle-form', { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ telegramId: userData.id })
+        body: JSON.stringify({
+          initData: telegramInitData
+        })
       });
     });
 
@@ -389,7 +402,9 @@
         fetch('/api/reset', { 
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ telegramId: userData.id })
+          body: JSON.stringify({
+            initData: telegramInitData
+          })
         });
       }
     });
