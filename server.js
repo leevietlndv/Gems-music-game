@@ -46,7 +46,7 @@ function performSpin() {
 // --- CÁC LỆNH BOT TELEGRAM ---
 if (bot) {
   const sendWebAppButton = (ctx) => {
-    const webAppUrl = process.env.WEB_APP_URL || 'https://gems-music-game.onrender.com/';
+    const webAppUrl = process.env.WEB_APP_URL || 't.me/GU3B_Radio_Bot/music3B';
 
     ctx.reply(
       '🎵 Bấm vào đây để gửi những bài nhạc hay nhức nách',
