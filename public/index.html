@@ -91,7 +91,6 @@
     const tg = window.Telegram?.WebApp;
     if (tg) { tg.ready(); tg.expand(); }
 
-    // XỬ LÝ LẤY ĐẦY ĐỦ HỌ VÀ TÊN
     function getFullUserName() {
       const u = tg?.initDataUnsafe?.user;
       if (!u) return 'Người dùng';
@@ -126,6 +125,7 @@
     let isSpinning = false;
     let currentAngle = 0;
     let isInitiator = false;
+    let currentPlayingUrl = null;
 
     const colors = ['#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9800', '#ff5722'];
 
@@ -135,10 +135,20 @@
       return (match && match[1]) ? match[1] : null;
     }
 
+    // LÍCH SỬ & ĐỒNG BỘ TRẠNG THÁI MỚI NẤT
     socket.on('stateUpdate', (data) => {
       isFormOpen = data.isFormOpen;
       songs = data.songs || [];
       updateUI();
+
+      // Nếu đang phát nhạc và không trong quá trình quay, cập nhật player cho người mới vào
+      if (data.lastWinner && !isSpinning && currentPlayingUrl !== data.lastWinner.url) {
+        renderPlayer(data.lastWinner, false);
+      } else if (!data.lastWinner && !isSpinning) {
+        ytPlayer.src = '';
+        playerCard.style.display = 'none';
+        currentPlayingUrl = null;
+      }
     });
 
     socket.on('triggerSpin', (data) => {
@@ -213,10 +223,9 @@
 
         const label = songs[i].user || `Bài ${i+1}`;
         
-        // TỰ ĐỘNG THU NHỎ FONT ĐỂ TÊN DÀI ĐƯỢC HIỂN THỊ FULL 100%
         let fontSize = 12;
         ctx.font = `bold ${fontSize}px Arial`;
-        const maxAllowedWidth = 110; // Khoảng cách khả dụng trên bán kính
+        const maxAllowedWidth = 110;
 
         while (ctx.measureText(label).width > maxAllowedWidth && fontSize > 7) {
           fontSize -= 0.5;
@@ -226,6 +235,26 @@
         ctx.fillText(label, 134, fontSize / 3);
         ctx.restore();
       }
+    }
+
+    function renderPlayer(winner, shouldPlaySound) {
+      const videoId = extractYouTubeId(winner.url);
+      if (!videoId) return;
+
+      currentPlayingUrl = winner.url;
+      winnerUser.textContent = winner.user;
+
+      if (shouldPlaySound) {
+        ytPlayer.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&enablejsapi=1`;
+        audioNotice.textContent = '🔊 Âm thanh: Mở (Bạn là người xoay)';
+        audioNotice.className = 'audio-notice unmuted';
+      } else {
+        ytPlayer.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&enablejsapi=1`;
+        audioNotice.textContent = '🔇 Âm thanh: Đã Tắt (Bấm vào video để mở tiếng)';
+        audioNotice.className = 'audio-notice muted';
+      }
+
+      playerCard.style.display = 'block';
     }
 
     function startSpinAnimation(targetIndex, winner, shouldPlaySound) {
@@ -261,24 +290,8 @@
         } else {
           isSpinning = false;
           btnSpin.disabled = false;
-          
-          const videoId = extractYouTubeId(winner.url);
-          if (videoId) {
-            winnerUser.textContent = winner.user;
-
-            if (shouldPlaySound) {
-              ytPlayer.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&enablejsapi=1`;
-              audioNotice.textContent = '🔊 Âm thanh: Mở (Bạn là người xoay)';
-              audioNotice.className = 'audio-notice unmuted';
-            } else {
-              ytPlayer.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&enablejsapi=1`;
-              audioNotice.textContent = '🔇 Âm thanh: Đã Tắt (Bấm vào video để mở tiếng)';
-              audioNotice.className = 'audio-notice muted';
-            }
-
-            playerCard.style.display = 'block';
-            playerCard.scrollIntoView({ behavior: 'smooth' });
-          }
+          renderPlayer(winner, shouldPlaySound);
+          playerCard.scrollIntoView({ behavior: 'smooth' });
         }
       }
 
@@ -325,6 +338,7 @@
       if (confirm('Xóa tất cả bài hát?')) {
         ytPlayer.src = '';
         playerCard.style.display = 'none';
+        currentPlayingUrl = null;
         fetch('/api/reset', { method: 'POST' });
       }
     });
