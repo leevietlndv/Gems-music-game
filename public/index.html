@@ -2,328 +2,345 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Vòng Quay Nhạc Telegram</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Vòng Quay Nhạc</title>
+  <!-- Telegram WebApp SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
-    :root {
-      --bg-color: #1a1e29;
-      --card-bg: #242a38;
-      --accent-color: #0088cc;
-      --accent-hover: #00a0f0;
-      --text-color: #ffffff;
-      --text-muted: #a0aab8;
-      --danger-color: #e74c3c;
-      --success-color: #2ecc71;
-    }
-
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-    body { background-color: var(--bg-color); color: var(--text-color); padding: 16px; display: flex; justify-content: center; }
-    .container { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 16px; align-items: center; }
+    body { background-color: #1c2333; color: #ffffff; padding: 16px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
     
-    h1 { font-size: 1.5rem; color: #fff; text-align: center; }
-    .badge { padding: 6px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; }
-    .badge.open { background-color: rgba(46, 204, 113, 0.2); color: var(--success-color); border: 1px solid var(--success-color); }
-    .badge.locked { background-color: rgba(231, 76, 60, 0.2); color: var(--danger-color); border: 1px solid var(--danger-color); }
-
-    .card { background: var(--card-bg); border-radius: 12px; padding: 16px; width: 100%; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-    .card h3 { font-size: 1.1rem; margin-bottom: 12px; color: var(--accent-color); }
-
-    input[type="text"] { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #343d4f; background: #181c25; color: #fff; margin-bottom: 10px; font-size: 0.95rem; }
-    input[type="text"]:focus { outline: none; border-color: var(--accent-color); }
-
-    button { width: 100%; padding: 12px; border-radius: 8px; border: none; background: var(--accent-color); color: #fff; font-weight: bold; font-size: 0.95rem; cursor: pointer; transition: 0.2s; }
-    button:hover { background: var(--accent-hover); }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    .btn-secondary { background: #34495e; }
-    .btn-secondary:hover { background: #2c3e50; }
-    .btn-danger { background: var(--danger-color); }
-    .btn-spin { background: #f39c12; color: #000; font-size: 1.1rem; padding: 14px; margin-bottom: 8px; }
-    .btn-spin:hover { background: #d35400; color: #fff; }
-
-    .wheel-container { position: relative; display: flex; justify-content: center; align-items: center; margin: 10px 0; }
-    .pointer { position: absolute; top: -12px; z-index: 10; font-size: 24px; color: #f1c40f; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
-    canvas { border-radius: 50%; box-shadow: 0 0 15px rgba(0,0,0,0.5); }
-
-    .controls { display: flex; flex-direction: column; gap: 8px; width: 100%; }
-    .row-btns { display: flex; gap: 8px; }
-    .row-btns button { flex: 1; }
-
-    ul { list-style: none; max-height: 200px; overflow-y: auto; }
-    li { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #2f3646; font-size: 0.9rem; }
-    li span.user { font-weight: bold; color: #f1c40f; }
-    .hidden { display: none; }
-    iframe { width: 100%; height: 210px; border-radius: 8px; border: none; margin-top: 10px; }
+    .header { text-align: center; margin-bottom: 16px; width: 100%; max-width: 480px; }
+    .header h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    
+    .status-badge {
+      display: inline-block;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      background: #2b384e;
+      color: #00e676;
+      transition: all 0.3s ease;
+    }
+    .status-badge.closed { background: #3a2329; color: #ff5252; }
+    
+    .card { background: #252f42; border-radius: 12px; padding: 16px; width: 100%; max-width: 480px; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+    .card-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: #64b5f6; }
+    
+    .input-group { display: flex; flex-direction: column; gap: 10px; }
+    input[type="text"] { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #3b4861; background: #1a2232; color: #fff; font-size: 14px; outline: none; }
+    input[type="text"]:focus { border-color: #2196f3; }
+    
+    button { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .btn-submit { background: #0088cc; color: white; }
+    .btn-submit:hover { background: #0077b5; }
+    .btn-submit:disabled { background: #4a5568; opacity: 0.6; cursor: not-allowed; }
+    
+    .wheel-container { position: relative; width: 300px; height: 300px; margin: 10px auto 20px auto; }
+    .pointer { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 12px solid transparent; border-right: 12px solid transparent; border-top: 20px solid #ffcc00; z-index: 10; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); }
+    canvas { width: 300px; height: 300px; border-radius: 50%; box-shadow: 0 0 15px rgba(0,0,0,0.5); }
+    
+    .btn-spin { background: #ff9800; color: #111; font-size: 16px; font-weight: 700; margin-bottom: 12px; }
+    .btn-spin:hover { background: #e68a00; }
+    
+    .admin-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; width: 100%; max-width: 480px; }
+    .btn-toggle { background: #37474f; color: white; }
+    .btn-reset { background: #d32f2f; color: white; }
+    
+    .song-list { max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+    .song-item { background: #1a2232; padding: 10px; border-radius: 6px; font-size: 13px; word-break: break-all; border-left: 3px solid #0088cc; }
+    .song-user { font-weight: bold; color: #ffca28; margin-bottom: 2px; }
   </style>
 </head>
 <body>
-  <div class="container">
+
+  <div class="header">
     <h1>🎵 Vòng Quay Nhạc</h1>
-    <div id="statusBadge" class="badge open">Đang tải trạng thái...</div>
+    <span id="statusBadge" class="status-badge">⏳ Đang tải trạng thái...</span>
+  </div>
 
-    <!-- Form gửi bài -->
-    <div class="card" id="submitCard">
-      <h3>Gửi link bài hát (YouTube)</h3>
-      <input type="text" id="youtubeUrl" placeholder="https://www.youtube.com/watch?v=...">
-      <button id="submitBtn" onclick="submitSong()">🚀 Gửi bài hát</button>
+  <div class="card">
+    <div class="card-title">Gửi link bài hát (YouTube)</div>
+    <div class="input-group">
+      <input type="text" id="songUrl" placeholder="https://www.youtube.com/watch?v=..." />
+      <button id="btnSubmit" class="btn-submit">🚀 Gửi bài hát</button>
+    </div>
+  </div>
+
+  <div class="wheel-container">
+    <div class="pointer"></div>
+    <canvas id="wheelCanvas" width="300" height="300"></canvas>
+  </div>
+
+  <div style="width: 100%; max-width: 480px;">
+    <button id="btnSpin" class="btn-spin">🎡 QUAY VÒNG QUAY</button>
+    
+    <div class="admin-actions">
+      <button id="btnToggleForm" class="btn-toggle">🔒 Đóng Form</button>
+      <button id="btnReset" class="btn-reset">🧹 Reset Game</button>
     </div>
 
-    <!-- Vòng quay Canvas -->
-    <div class="wheel-container">
-      <div class="pointer">▼</div>
-      <canvas id="wheelCanvas" width="320" height="320"></canvas>
-    </div>
-
-    <!-- Khối điều khiển -->
-    <div class="controls">
-      <button class="btn-spin" id="spinBtn" onclick="spinWheel()">🎡 QUAY VÒNG QUAY</button>
-      <div class="row-btns">
-        <button id="toggleLockBtn" class="btn-secondary" onclick="toggleLock()">🔒 Đóng Form</button>
-        <button class="btn-danger" onclick="resetGame()">🧹 Reset Game</button>
-      </div>
-    </div>
-
-    <!-- Kết quả / Trình phát video -->
-    <div id="playerCard" class="card hidden">
-      <h3 id="winnerText">🎉 Kết quả</h3>
-      <div id="playerContainer"></div>
-    </div>
-
-    <!-- Danh sách bài hát -->
     <div class="card">
-      <h3>📋 Danh sách bài hát (<span id="songCount">0</span>)</h3>
-      <ul id="songList"></ul>
+      <div id="listTitle" class="card-title">📋 Danh sách bài hát (0)</div>
+      <div id="songList" class="song-list">
+        <div style="text-align: center; color: #888; font-size: 13px; padding: 10px;">Chưa có bài hát nào được gửi.</div>
+      </div>
     </div>
   </div>
 
   <script>
+    // 1. Khởi tạo Telegram WebApp
     const tg = window.Telegram?.WebApp;
-    if (tg) tg.ready();
+    if (tg) {
+      tg.ready();
+      tg.expand();
+    }
 
-    // Lấy thông tin user Telegram
-    const tgUser = tg?.initDataUnsafe?.user;
-    const currentUserName = tgUser 
-      ? (tgUser.first_name + (tgUser.last_name ? ' ' + tgUser.last_name : '')) 
-      : 'Thành viên';
+    const userName = tg?.initDataUnsafe?.user?.first_name || 'Người dùng';
 
-    let gameState = { isLocked: false, songs: [] };
-    let currentAngle = 0;
-    let isSpinning = false;
-    const colors = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#1A535C', '#FF9F1C', '#2EC4B6', '#E71D36', '#9B59B6'];
-
+    // Elements
+    const statusBadge = document.getElementById('statusBadge');
+    const songUrlInput = document.getElementById('songUrl');
+    const btnSubmit = document.getElementById('btnSubmit');
+    const btnSpin = document.getElementById('btnSpin');
+    const btnToggleForm = document.getElementById('btnToggleForm');
+    const btnReset = document.getElementById('btnReset');
+    const songListEl = document.getElementById('songList');
+    const listTitleEl = document.getElementById('listTitle');
     const canvas = document.getElementById('wheelCanvas');
     const ctx = canvas.getContext('2d');
 
-    // Tải dữ liệu từ Server
-    async function loadGameState() {
+    let isFormOpen = true;
+    let songs = [];
+    let isSpinning = false;
+    let currentAngle = 0;
+
+    const colors = ['#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9800', '#ff5722'];
+
+    // 2. Hàm tải trạng thái từ Server
+    async function loadState() {
       try {
-        const res = await fetch('/api/game');
-        gameState = await res.json();
+        const res = await fetch('/api/state');
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        const data = await res.json();
+        
+        isFormOpen = data.isFormOpen;
+        songs = data.songs || [];
+        
         updateUI();
-        drawWheel();
       } catch (err) {
-        console.error("Lỗi tải game state:", err);
+        console.error('Lỗi kết nối Server:', err);
+        statusBadge.textContent = '❌ Lỗi kết nối Server';
+        statusBadge.className = 'status-badge closed';
       }
     }
 
-    // Cập nhật Giao diện theo trạng thái
+    // 3. Cập nhật giao diện UI
     function updateUI() {
-      const badge = document.getElementById('statusBadge');
-      const submitBtn = document.getElementById('submitBtn');
-      const urlInput = document.getElementById('youtubeUrl');
-      const lockBtn = document.getElementById('toggleLockBtn');
-
-      if (gameState.isLocked) {
-        badge.textContent = 'Form đã ĐÓNG';
-        badge.className = 'badge locked';
-        submitBtn.disabled = true;
-        urlInput.disabled = true;
-        lockBtn.textContent = '🔓 Mở lại Form';
+      // Cập nhật trạng thái Form
+      if (isFormOpen) {
+        statusBadge.textContent = '🟢 Đang mở form';
+        statusBadge.className = 'status-badge';
+        btnSubmit.disabled = false;
+        btnToggleForm.textContent = '🔒 Đóng Form';
       } else {
-        badge.textContent = 'Form đang MỞ';
-        badge.className = 'badge open';
-        submitBtn.disabled = false;
-        urlInput.disabled = false;
-        lockBtn.textContent = '🔒 Đóng Form';
+        statusBadge.textContent = '🔴 Đã đóng form';
+        statusBadge.className = 'status-badge closed';
+        btnSubmit.disabled = true;
+        btnToggleForm.textContent = '🔓 Mở Form';
       }
 
-      document.getElementById('songCount').textContent = gameState.songs.length;
-      const songList = document.getElementById('songList');
-      songList.innerHTML = gameState.songs.map(s => 
-        `<li><span class="user">${escapeHtml(s.user)}</span> <a href="${escapeHtml(s.url)}" target="_blank" style="color:#0088cc;">Link bài hát</a></li>`
-      ).join('');
+      // Cập nhật danh sách bài hát
+      listTitleEl.textContent = `📋 Danh sách bài hát (${songs.length})`;
+      if (songs.length === 0) {
+        songListEl.innerHTML = '<div style="text-align: center; color: #888; font-size: 13px; padding: 10px;">Chưa có bài hát nào được gửi.</div>';
+      } else {
+        songListEl.innerHTML = songs.map((s, idx) => `
+          <div class="song-item">
+            <div class="song-user">#${idx + 1} - ${s.user}</div>
+            <div>${s.url}</div>
+          </div>
+        `).join('');
+      }
+
+      drawWheel();
     }
 
-    // Vẽ Vòng Quay Canvas
+    // 4. Vẽ Vòng quay
     function drawWheel() {
-      const numOptions = gameState.songs.length;
-      const centerX = canvas.width / 2;
-      const centerY = canvas.height / 2;
-      const radius = canvas.width / 2 - 10;
+      const numSlices = songs.length;
+      ctx.clearRect(0, 0, 300, 300);
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      if (numOptions === 0) {
+      if (numSlices === 0) {
         ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-        ctx.fillStyle = '#34495e';
+        ctx.arc(150, 150, 140, 0, 2 * Math.PI);
+        ctx.fillStyle = '#2b384e';
         ctx.fill();
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '16px sans-serif';
+        ctx.fillStyle = '#888';
+        ctx.font = '14px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText('Chưa có bài hát nào', centerX, centerY);
+        ctx.fillText('Thêm bài hát để quay', 150, 155);
         return;
       }
 
-      const arcSize = (2 * Math.PI) / numOptions;
+      const sliceAngle = (2 * Math.PI) / numSlices;
+      for (let i = 0; i < numSlices; i++) {
+        const start = currentAngle + i * sliceAngle;
+        const end = start + sliceAngle;
 
-      for (let i = 0; i < numOptions; i++) {
-        const angle = currentAngle + i * arcSize;
         ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, angle, angle + arcSize);
-        ctx.lineTo(centerX, centerY);
+        ctx.moveTo(150, 150);
+        ctx.arc(150, 150, 140, start, end);
+        ctx.closePath();
+
         ctx.fillStyle = colors[i % colors.length];
         ctx.fill();
+        ctx.strokeStyle = '#1c2333';
+        ctx.lineWidth = 2;
         ctx.stroke();
 
-        // Vẽ tên thành viên lên các ô
+        // Tên bài / người gửi trên vòng quay
         ctx.save();
-        ctx.translate(centerX, centerY);
-        ctx.rotate(angle + arcSize / 2);
-        ctx.textAlign = "right";
-        ctx.fillStyle = "#fff";
-        ctx.font = "bold 14px sans-serif";
-        ctx.fillText(truncateText(gameState.songs[i].user, 12), radius - 15, 5);
+        ctx.translate(150, 150);
+        ctx.rotate(start + sliceAngle / 2);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 12px Arial';
+        const label = songs[i].user || `Bài ${i+1}`;
+        ctx.fillText(label.length > 10 ? label.substring(0, 10) + '...' : label, 120, 4);
         ctx.restore();
       }
     }
 
-    // Hiệu ứng quay bánh xe mượt (Ease-Out)
-    function spinWheel() {
-      if (isSpinning) return;
-      if (gameState.songs.length === 0) {
-        alert("Chưa có bài hát nào trong danh sách!");
+    // 5. Sự kiện Gửi bài hát
+    btnSubmit.addEventListener('click', async () => {
+      const url = songUrlInput.value.trim();
+      if (!url) {
+        alert('Vui lòng nhập link bài hát!');
         return;
       }
 
-      isSpinning = true;
-      document.getElementById('spinBtn').disabled = true;
+      btnSubmit.disabled = true;
+      try {
+        const res = await fetch('/api/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url, user: userName })
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+          songUrlInput.value = '';
+          songs = data.songs;
+          updateUI();
+          alert('✅ Gửi bài hát thành công!');
+        } else {
+          alert('❌ ' + (data.message || 'Lỗi gửi bài hát'));
+        }
+      } catch (err) {
+        alert('❌ Lỗi kết nối tới Server!');
+      } finally {
+        btnSubmit.disabled = !isFormOpen;
+      }
+    });
 
-      const spinTimeTotal = Math.random() * 2000 + 4000; // Quay từ 4 - 6s
-      let spinTime = 0;
-      const startAngleVel = Math.random() * 0.3 + 0.4; // Tốc độ ban đầu
+    // 6. Sự kiện Quay vòng quay
+    btnSpin.addEventListener('click', async () => {
+      if (isSpinning) return;
+      if (songs.length === 0) {
+        alert('Chưa có bài hát nào để quay!');
+        return;
+      }
 
-      function animate() {
-        spinTime += 20;
-        if (spinTime >= spinTimeTotal) {
-          isSpinning = false;
-          document.getElementById('spinBtn').disabled = false;
-          calculateWinner();
+      try {
+        const res = await fetch('/api/spin', { method: 'POST' });
+        const data = await res.json();
+        if (!data.success) {
+          alert(data.message);
           return;
         }
 
-        // Công thức Ease-Out giảm tốc độ mượt mà
-        const progress = spinTime / spinTimeTotal;
-        const easeOut = 1 - Math.pow(1 - progress, 3);
-        currentAngle += startAngleVel * (1 - easeOut);
+        isSpinning = true;
+        btnSpin.disabled = true;
 
-        drawWheel();
-        requestAnimationFrame(animate);
+        const targetIndex = data.selectedIndex;
+        const numSlices = songs.length;
+        const sliceAngle = (2 * Math.PI) / numSlices;
+        
+        // Tính toán góc quay để dừng ở vị trí Mũi tên (Top = -90 độ hay -PI/2)
+        const targetSliceStartAngle = targetIndex * sliceAngle;
+        const targetSliceCenterAngle = targetSliceStartAngle + sliceAngle / 2;
+        
+        const extraSpins = 5 * 2 * Math.PI; // Quay 5 vòng
+        const desiredFinalAngle = (1.5 * Math.PI) - targetSliceCenterAngle;
+        
+        const startAngle = currentAngle % (2 * Math.PI);
+        const totalRotation = extraSpins + (desiredFinalAngle - startAngle);
+        
+        let startTime = null;
+        const duration = 4000; // Quay trong 4 giây
+
+        function animateSpin(timestamp) {
+          if (!startTime) startTime = timestamp;
+          const progress = Math.min((timestamp - startTime) / duration, 1);
+          
+          // Easing out cubic
+          const easeOut = 1 - Math.pow(1 - progress, 3);
+          currentAngle = startAngle + totalRotation * easeOut;
+          
+          drawWheel();
+
+          if (progress < 1) {
+            requestAnimationFrame(animateSpin);
+          } else {
+            isSpinning = false;
+            btnSpin.disabled = false;
+            alert(`🎉 Chúc mừng! Bài hát được chọn là: ${data.winner.user}\nLink: ${data.winner.url}`);
+          }
+        }
+
+        requestAnimationFrame(animateSpin);
+      } catch (err) {
+        alert('Lỗi khi quay vòng quay!');
+        isSpinning = false;
+        btnSpin.disabled = false;
       }
+    });
 
-      animate();
-    }
-
-    // Xác định bài hát trúng thưởng
-    function calculateWinner() {
-      const numOptions = gameState.songs.length;
-      const arcSize = (2 * Math.PI) / numOptions;
-      
-      // Mũi tên chỉ ở hướng 12 giờ (-90 độ hoặc 3pi/2)
-      let normalizedAngle = (3 * Math.PI / 2 - (currentAngle % (2 * Math.PI))) % (2 * Math.PI);
-      if (normalizedAngle < 0) normalizedAngle += 2 * Math.PI;
-
-      const winningIndex = Math.floor(normalizedAngle / arcSize) % numOptions;
-      const winner = gameState.songs[winningIndex];
-
-      // Hiển thị kết quả & Trình phát YouTube
-      const playerCard = document.getElementById('playerCard');
-      const winnerText = document.getElementById('winnerText');
-      const playerContainer = document.getElementById('playerContainer');
-
-      winnerText.textContent = `🎉 CHÚC MỪNG: ${winner.user}!`;
-      const videoId = extractYouTubeId(winner.url);
-
-      if (videoId) {
-        playerContainer.innerHTML = `<iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1" allow="autoplay" allowfullscreen></iframe>`;
-      } else {
-        playerContainer.innerHTML = `<p style="margin-top:10px;"><a href="${escapeHtml(winner.url)}" target="_blank" style="color:#0088cc;">Mở link nhạc trên YouTube</a></p>`;
+    // 7. Sự kiện Đóng/Mở Form
+    btnToggleForm.addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/toggle-form', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          isFormOpen = data.isFormOpen;
+          updateUI();
+        }
+      } catch (err) {
+        alert('Không thể thay đổi trạng thái Form!');
       }
+    });
 
-      playerCard.classList.remove('hidden');
-
-      // Tự động gỡ bài hát trúng ra khỏi vòng quay
-      fetch('/api/remove', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: winner.id })
-      }).then(() => loadGameState());
-    }
-
-    // Gửi bài hát
-    async function submitSong() {
-      const input = document.getElementById('youtubeUrl');
-      const url = input.value.trim();
-      if (!url) return alert("Vui lòng dán link bài hát YouTube!");
-
-      const res = await fetch('/api/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user: currentUserName, links: [url] })
-      });
-
-      if (res.ok) {
-        input.value = '';
-        loadGameState();
-      } else {
-        const err = await res.json();
-        alert(err.error || "Không thể gửi bài!");
+    // 8. Sự kiện Reset Game
+    btnReset.addEventListener('click', async () => {
+      if (!confirm('Bạn có chắc chắn muốn xóa toàn bộ danh sách bài hát không?')) return;
+      try {
+        const res = await fetch('/api/reset', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          songs = [];
+          isFormOpen = data.isFormOpen;
+          currentAngle = 0;
+          updateUI();
+        }
+      } catch (err) {
+        alert('Lỗi khi reset game!');
       }
-    }
+    });
 
-    // Bật/Tắt khóa Form (Đóng / Mở lại)
-    async function toggleLock() {
-      const endpoint = gameState.isLocked ? '/api/unlock' : '/api/lock';
-      await fetch(endpoint, { method: 'POST' });
-      loadGameState();
-    }
-
-    // Reset Game
-    async function resetGame() {
-      if (!confirm("Bạn có chắc chắn muốn xóa toàn bộ danh sách để chơi lượt mới?")) return;
-      await fetch('/api/reset', { method: 'POST' });
-      document.getElementById('playerCard').classList.add('hidden');
-      loadGameState();
-    }
-
-    // Utilities
-    function extractYouTubeId(url) {
-      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-      const match = url.match(regExp);
-      return (match && match[2].length === 11) ? match[2] : null;
-    }
-
-    function truncateText(str, n) {
-      return (str.length > n) ? str.substr(0, n-1) + '...' : str;
-    }
-
-    function escapeHtml(text) {
-      return text.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
-    }
-
-    // Khởi chạy
-    loadGameState();
+    // Tải dữ liệu ban đầu
+    loadState();
   </script>
 </body>
 </html>
