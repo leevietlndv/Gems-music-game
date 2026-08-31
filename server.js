@@ -50,26 +50,17 @@ const sendWebAppButton = async (ctx) => {
     const directMiniAppUrl = 'https://t.me/GU3B_Radio_Bot/music3B';
     const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
 
-    // Trường hợp 1: Nhắn trong Nhóm Chat -> Dùng Link Mini App (directMiniAppUrl)
-    if (isGroup) {
-      return ctx.reply(
-        '🎵 **VÒNG QUAY NHẠC GEMS**\nBấm nút bên dưới để tham gia',
-        {
-          parse_mode: 'Markdown',
-          ...Markup.inlineKeyboard([
-            [Markup.button.url('🎡 Mở Vòng Quay Nhạc', directMiniAppUrl)]
-          ])
-        }
-      );
+    bot.command(['start', 'musicgame'], (ctx) => {
+  // Thay TenBotCuaBan/app bằng link thực tế từ BotFather
+  const directMiniAppUrl = 'https://t.me/TenBotCuaBan/app'; 
 
-    // Trường hợp 2: Chat riêng trực tiếp với Bot -> Dùng Nút WebApp (webAppUrl)
-    ctx.reply(
-      '🎵 Bấm nút bên dưới để gửi bài hát của bạn:',
-      Markup.inlineKeyboard([
-        [Markup.button.webApp('🎡 Mở Vòng Quay Nhạc', webAppUrl)]
-      ])
-    );
-  };
+  ctx.reply(
+    '🎵 **VÒNG QUAY NHẠC GEMS**\nBấm nút bên dưới để tham gia quay bài hát ngay trong nhóm:',
+    Markup.inlineKeyboard([
+      [Markup.button.url('🎡 Mở Vòng Quay Nhạc', directMiniAppUrl)]
+    ])
+  );
+});
 
   // Nhận lệnh /start và /musicgame
   bot.command(['start', 'musicgame'], sendWebAppButton);
