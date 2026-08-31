@@ -5,19 +5,18 @@ const { Telegraf, Markup } = require('telegraf');
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// 1. Phục vụ các file tĩnh trong thư mục public (CSS, JS, index.html)
+// 1. Phục vụ các file tĩnh trong thư mục public
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Route trang chủ
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// 2. Khởi tạo Telegram Bot (Tự động loại bỏ khoảng trắng dư thừa)
+// 2. Khởi tạo Telegram Bot
 const botToken = process.env.BOT_TOKEN ? process.env.BOT_TOKEN.trim() : '';
 const bot = new Telegraf(botToken);
 
-// Middleware ghi log theo dõi tin nhắn gửi đến
+// Middleware ghi log theo dõi tin nhắn
 bot.use(async (ctx, next) => {
   if (ctx.message && ctx.message.text) {
     console.log(`📩 Nhận tin nhắn từ [${ctx.chat.type}] (ID: ${ctx.chat.id}): ${ctx.message.text}`);
@@ -30,11 +29,9 @@ const handleMusicGameCommand = async (ctx) => {
   try {
     console.log('✅ Đã kích hoạt lệnh Mở Game Nhạc!');
 
-    // Lấy URL và làm sạch ký tự xuống dòng / khoảng trắng dư thừa
     const rawUrl = process.env.WEB_APP_URL || 'https://gems-music-game.onrender.com';
     const webAppUrl = rawUrl.trim();
 
-    // Gửi tin nhắn kèm nút bấm Web App chuẩn cú pháp Telegraf Markup
     await ctx.reply(
       '🎶 Nhấn vào nút dưới đây để tham gia gửi link nhạc hoặc mở Vòng Quay!',
       Markup.inlineKeyboard([
@@ -46,16 +43,16 @@ const handleMusicGameCommand = async (ctx) => {
   }
 };
 
-// Đăng ký nhận cả 3 lệnh: /start, /musicgame và /music
+// Nhận diện tất cả các kiểu gõ: /musicgame, /musicgame@GU3B_Radio_Bot, /music...
+bot.hears(/^\/(musicgame|music)/i, handleMusicGameCommand);
 bot.command('start', handleMusicGameCommand);
-bot.command(['musicgame', 'music'], handleMusicGameCommand);
 
 // 4. Khởi chạy Express Web Server
 app.listen(PORT, () => {
   console.log(`🚀 Server đang chạy trên cổng ${PORT}`);
 });
 
-// 5. Khởi chạy Telegram Bot an toàn (Xóa Webhook cũ để tránh kẹt)
+// 5. Khởi chạy Telegram Bot an toàn
 async function startTelegramBot() {
   try {
     console.log('🔍 Đang kiểm tra và kết nối Bot...');
@@ -65,20 +62,13 @@ async function startTelegramBot() {
       return;
     }
 
-    // Xóa Webhook kẹt cũ trên máy chủ Telegram
     await bot.telegram.deleteWebhook({ drop_pending_updates: true });
     console.log('🧹 Đã xóa Webhook cũ thành công!');
 
-    // Xác thực thông tin Bot
-    const botInfo = await bot.telegram.getMe();
-    console.log(`🤖 Xác thực thành công Bot: @${botInfo.username}`);
+    // Gán thông tin botInfo trực tiếp (chỉ khai báo 1 lần)
+    bot.botInfo = await bot.telegram.getMe();
+    console.log(`🤖 Xác thực thành công Bot: @${bot.botInfo.username}`);
 
-    // Trong hàm startTelegramBot():
-    const botInfo = await bot.telegram.getMe();
-    bot.botInfo = botInfo; // 👈 BẮT BUỘC: Giúp Telegraf nhận dạng lệnh /musicgame@GU3B_Radio_Bot trong nhóm
-    console.log(`🤖 Xác thực thành công Bot: @${botInfo.username}`);
-
-    // Kích hoạt Long Polling
     bot.launch();
     console.log('✅ Telegram Bot đã chính thức lắng nghe tin nhắn!');
   } catch (err) {
@@ -88,6 +78,5 @@ async function startTelegramBot() {
 
 startTelegramBot();
 
-// Tự động đóng bot khi ngắt server
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
