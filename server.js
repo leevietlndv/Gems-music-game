@@ -46,11 +46,13 @@ function performSpin() {
 // --- CÁC LỆNH BOT TELEGRAM ---
 if (bot) {
   const sendWebAppButton = (ctx) => {
-    const directMiniAppUrl = 'https://t.me/GU3B_Radio_Bot/music3B';
+    const webAppUrl = process.env.WEB_APP_URL || 'https://gems-music-game.onrender.com/';
+
     ctx.reply(
-      '🎵 **VÒNG QUAY NHẠC GEMS**\nBấm nút bên dưới để tham gia quay bài hát ngay trong nhóm:',
+      '🎵 Bấm vào đây để gửi những bài nhạc hay nhức nách',
       Markup.inlineKeyboard([
-        [Markup.button.url('🎡 Mở Vòng Quay Nhạc', directMiniAppUrl)]
+        // Sử dụng button.webApp thay vì button.url để mở thẳng không bị cảnh báo
+        [Markup.button.webApp('🎡 Mở Vòng Quay Nhạc', webAppUrl)]
       ])
     );
   };
