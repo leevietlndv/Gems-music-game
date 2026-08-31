@@ -53,7 +53,6 @@
     </div>
   </div>
 
-  <!-- Khung phát video YouTube -->
   <div class="card" id="playerCard" style="display: none; border: 2px solid #ffca28;">
     <div class="card-title" style="color: #ffca28;">🎉 ĐANG PHÁT BÀI HÁT TRÚNG THƯỞNG</div>
     <div style="font-size: 13px; color: #ddd; margin-bottom: 6px;">
@@ -92,13 +91,19 @@
     const tg = window.Telegram?.WebApp;
     if (tg) { tg.ready(); tg.expand(); }
 
-    const userObj = tg?.initDataUnsafe?.user;
-    let userName = 'Người dùng';
-    if (userObj) {
-      const fullName = [userObj.first_name, userObj.last_name].filter(Boolean).join(' ');
-      userName = fullName || userObj.username || 'Người dùng';
+    // XỬ LÝ LẤY ĐẦY ĐỦ HỌ VÀ TÊN
+    function getFullUserName() {
+      const u = tg?.initDataUnsafe?.user;
+      if (!u) return 'Người dùng';
+      
+      const first = (u.first_name || '').trim();
+      const last = (u.last_name || '').trim();
+      const combined = `${first} ${last}`.trim();
+      
+      return combined || u.username || 'Người dùng';
     }
 
+    const userName = getFullUserName();
     const socket = io();
 
     const statusBadge = document.getElementById('statusBadge');
@@ -205,9 +210,20 @@
         ctx.rotate(start + sliceAngle / 2);
         ctx.textAlign = 'right';
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 11px Arial';
+
         const label = songs[i].user || `Bài ${i+1}`;
-        ctx.fillText(label.length > 25 ? label.substring(0, 25) + '...' : label, 132, 4);
+        
+        // TỰ ĐỘNG THU NHỎ FONT ĐỂ TÊN DÀI ĐƯỢC HIỂN THỊ FULL 100%
+        let fontSize = 12;
+        ctx.font = `bold ${fontSize}px Arial`;
+        const maxAllowedWidth = 110; // Khoảng cách khả dụng trên bán kính
+
+        while (ctx.measureText(label).width > maxAllowedWidth && fontSize > 7) {
+          fontSize -= 0.5;
+          ctx.font = `bold ${fontSize}px Arial`;
+        }
+
+        ctx.fillText(label, 134, fontSize / 3);
         ctx.restore();
       }
     }
@@ -217,7 +233,6 @@
       isSpinning = true;
       btnSpin.disabled = true;
 
-      // Ẩn player và dừng nhạc cũ khi bắt đầu quay mới
       ytPlayer.src = '';
       playerCard.style.display = 'none';
 
