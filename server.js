@@ -73,6 +73,11 @@ async function startTelegramBot() {
     const botInfo = await bot.telegram.getMe();
     console.log(`🤖 Xác thực thành công Bot: @${botInfo.username}`);
 
+    // Trong hàm startTelegramBot():
+    const botInfo = await bot.telegram.getMe();
+    bot.botInfo = botInfo; // 👈 BẮT BUỘC: Giúp Telegraf nhận dạng lệnh /musicgame@GU3B_Radio_Bot trong nhóm
+    console.log(`🤖 Xác thực thành công Bot: @${botInfo.username}`);
+
     // Kích hoạt Long Polling
     bot.launch();
     console.log('✅ Telegram Bot đã chính thức lắng nghe tin nhắn!');
