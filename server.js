@@ -46,7 +46,7 @@ function performSpin() {
 // --- CÁC LỆNH BOT TELEGRAM (ĐÃ BỔ SUNG /musicgame) ---
 if (bot) {
   const sendWebAppButton = (ctx) => {
-    const webAppUrl = process.env.WEB_APP_URL || 'https://vongquaynhac.onrender.com';
+    const webAppUrl = process.env.WEB_APP_URL || 'https://gems-music-game.onrender.com/';
     ctx.reply(
       '🎵 Bấm nút bên dưới để tham gia gửi bài hát:',
       Markup.inlineKeyboard([
