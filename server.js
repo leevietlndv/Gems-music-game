@@ -16,11 +16,11 @@ let isFormOpen = true;
 let songs = [];
 let lastWinner = null; // Lưu bài hát đang phát
 
+// ĐỒNG BỘ TRẠNG THÁI BAO GỒM CẢ LASTWINNER
 function broadcastState() {
-  io.emit('stateUpdate', { isFormOpen, songs });
+  io.emit('stateUpdate', { isFormOpen, songs, lastWinner });
 }
 
-// Hàm dùng chung cho việc Quay (từ WebApp hoặc từ Bot command)
 function performSpin() {
   // 1. Tự động xóa bài đang phát ở lượt trước
   if (lastWinner) {
@@ -47,7 +47,7 @@ function performSpin() {
   return { success: true, winner };
 }
 
-// --- CÁC LỆNH BOT TELEGRAM (BOT.COMMAND) ---
+// --- LỆNH BOT TELEGRAM ---
 if (bot) {
   bot.command('start', (ctx) => {
     const webAppUrl = process.env.WEB_APP_URL || 'https://vongquaynhac.onrender.com';
@@ -94,12 +94,13 @@ if (bot) {
     .catch(err => console.error('Lỗi khởi chạy Bot:', err));
 }
 
-// --- API HTTP CHO WEBAPP ---
+// --- API HTTP & SOCKET.IO ---
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 io.on('connection', (socket) => {
-  socket.emit('stateUpdate', { isFormOpen, songs });
+  // Gửi thông tin trạng thái ban đầu cho người dùng mới kết nối
+  socket.emit('stateUpdate', { isFormOpen, songs, lastWinner });
 });
 
 app.post('/api/submit', (req, res) => {
