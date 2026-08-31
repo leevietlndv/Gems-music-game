@@ -2,30 +2,109 @@ const express = require('express');
 const http = require('http');
 const { Server } = require("socket.io");
 const path = require('path');
+const { Telegraf, Markup } = require('telegraf');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+// --- CẤU HÌNH BOT TELEGRAM ---
+const BOT_TOKEN = process.env.BOT_TOKEN;
+const bot = BOT_TOKEN ? new Telegraf(BOT_TOKEN) : null;
 
 let isFormOpen = true;
 let songs = [];
-let lastWinner = null; // Lưu vết bài hát đang phát hiện tại
+let lastWinner = null; // Lưu bài hát đang phát
 
 function broadcastState() {
   io.emit('stateUpdate', { isFormOpen, songs });
 }
 
+// Hàm dùng chung cho việc Quay (từ WebApp hoặc từ Bot command)
+function performSpin() {
+  // 1. Tự động xóa bài đang phát ở lượt trước
+  if (lastWinner) {
+    const index = songs.findIndex(s => s.url === lastWinner.url && s.user === lastWinner.user);
+    if (index !== -1) {
+      songs.splice(index, 1);
+    }
+    lastWinner = null;
+  }
+
+  // 2. Kiểm tra danh sách
+  if (songs.length === 0) {
+    broadcastState();
+    return { success: false, message: 'Danh sách bài hát đã hết!' };
+  }
+
+  // 3. Chọn ngẫu nhiên bài mới
+  const selectedIndex = Math.floor(Math.random() * songs.length);
+  const winner = songs[selectedIndex];
+  lastWinner = winner;
+
+  broadcastState();
+  io.emit('triggerSpin', { selectedIndex, winner });
+  return { success: true, winner };
+}
+
+// --- CÁC LỆNH BOT TELEGRAM (BOT.COMMAND) ---
+if (bot) {
+  bot.command('start', (ctx) => {
+    const webAppUrl = process.env.WEB_APP_URL || 'https://vongquaynhac.onrender.com';
+    ctx.reply(
+      '🎵 **Chào mừng bạn đến với Vòng Quay Nhạc!**\nBấm nút bên dưới để mở giao diện quay bài hát:',
+      Markup.inlineKeyboard([
+        [Markup.button.webApp('🎡 Mở Vòng Quay Nhạc', webAppUrl)]
+      ])
+    );
+  });
+
+  bot.command('spin', (ctx) => {
+    const result = performSpin();
+    if (!result.success) {
+      ctx.reply(`⚠️ ${result.message}`);
+    } else {
+      ctx.reply(`🎡 Đã quay! Bài trúng thưởng: ${result.winner.user} - ${result.winner.url}`);
+    }
+  });
+
+  bot.command('toggle', (ctx) => {
+    isFormOpen = !isFormOpen;
+    broadcastState();
+    ctx.reply(`📢 Trạng thái form: ${isFormOpen ? '🟢 Đang MỞ' : '🔴 Đã ĐÓNG'}`);
+  });
+
+  bot.command('reset', (ctx) => {
+    songs = [];
+    lastWinner = null;
+    broadcastState();
+    ctx.reply('🧹 Đã xóa sạch danh sách bài hát!');
+  });
+
+  bot.command('list', (ctx) => {
+    if (songs.length === 0) {
+      return ctx.reply('📋 Danh sách bài hát hiện đang trống.');
+    }
+    const listStr = songs.map((s, i) => `${i + 1}. ${s.user}: ${s.url}`).join('\n');
+    ctx.reply(`📋 **Danh sách bài hát (${songs.length}):**\n\n${listStr}`);
+  });
+
+  bot.launch()
+    .then(() => console.log('🤖 Bot Telegram đã khởi chạy thành công!'))
+    .catch(err => console.error('Lỗi khởi chạy Bot:', err));
+}
+
+// --- API HTTP CHO WEBAPP ---
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
+
 io.on('connection', (socket) => {
   socket.emit('stateUpdate', { isFormOpen, songs });
 });
 
-// API Nhận bài hát gửi lên
 app.post('/api/submit', (req, res) => {
   if (!isFormOpen) {
-    return res.json({ success: false, message: 'Form đã đóng, không thể gửi thêm!' });
+    return res.json({ success: false, message: 'Form đã đóng, không thể gửi bài!' });
   }
   const { url, user } = req.body;
   if (!url) {
@@ -37,46 +116,17 @@ app.post('/api/submit', (req, res) => {
   res.json({ success: true });
 });
 
-// API Quay vòng quay
 app.post('/api/spin', (req, res) => {
-  // 1. Tự động xóa bài hát đang phát từ lượt quay trước khỏi danh sách
-  if (lastWinner) {
-    const index = songs.findIndex(s => s.url === lastWinner.url && s.user === lastWinner.user);
-    if (index !== -1) {
-      songs.splice(index, 1);
-    }
-    lastWinner = null; // Xóa xong thì reset vết
-  }
-
-  // 2. Kiểm tra nếu danh sách bài hát đã hết
-  if (songs.length === 0) {
-    broadcastState();
-    return res.json({ success: false, message: 'Danh sách bài hát đã hết!' });
-  }
-
-  // 3. Chọn ngẫu nhiên bài hát mới từ các bài còn lại
-  const selectedIndex = Math.floor(Math.random() * songs.length);
-  const winner = songs[selectedIndex];
-  
-  // Ghi nhận bài hát mới trúng thưởng để phát
-  lastWinner = winner;
-
-  // Cập nhật lại vòng quay mới cho tất cả người dùng trước khi xoay
-  broadcastState();
-
-  // Kích hoạt hiệu ứng quay
-  io.emit('triggerSpin', { selectedIndex, winner });
-  res.json({ success: true });
+  const result = performSpin();
+  res.json(result);
 });
 
-// API Đóng/Mở Form
 app.post('/api/toggle-form', (req, res) => {
   isFormOpen = !isFormOpen;
   broadcastState();
   res.json({ success: true });
 });
 
-// API Reset Game
 app.post('/api/reset', (req, res) => {
   songs = [];
   lastWinner = null;
@@ -86,5 +136,5 @@ app.post('/api/reset', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server đang chạy tại port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
