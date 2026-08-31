@@ -102,6 +102,12 @@ app.post('/api/unlock', (req, res) => {
   res.json({ success: true, isLocked: false });
 });
 
+// Middleware ghi log mọi tin nhắn gửi tới Bot
+bot.use(async (ctx, next) => {
+  console.log(`📩 [LOG NHÓM] Nhận tin nhắn: "${ctx.message?.text}" từ ID: ${ctx.chat?.id}`);
+  return next();
+});
+
 // --- KHỞI CHẠY BOT VÀ XÓA WEBHOOK CŨ ---
 async function startTelegramBot() {
   try {
