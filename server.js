@@ -48,7 +48,7 @@ if (bot) {
   const sendWebAppButton = (ctx) => {
     const webAppUrl = process.env.WEB_APP_URL || 'https://vongquaynhac.onrender.com';
     ctx.reply(
-      '🎵 **Chào mừng bạn đến với Vòng Quay Nhạc!**\nBấm nút bên dưới để mở giao diện quay bài hát:',
+      '🎵 Bấm nút bên dưới để tham gia gửi bài hát:',
       Markup.inlineKeyboard([
         [Markup.button.webApp('🎡 Mở Vòng Quay Nhạc', webAppUrl)]
       ])
