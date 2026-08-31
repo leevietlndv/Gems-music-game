@@ -13,18 +13,20 @@
     .header h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; gap: 8px; }
     .status-badge { display: inline-block; padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; background: #2b384e; color: #00e676; transition: all 0.3s ease; }
     .status-badge.closed { background: #3a2329; color: #ff5252; }
+    .status-badge.offline { background: #4a4a4a; color: #bdbdbd; }
     .card { background: #252f42; border-radius: 12px; padding: 16px; width: 100%; max-width: 480px; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
     .card-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: #64b5f6; }
     .input-group { display: flex; flex-direction: column; gap: 10px; }
     input[type="text"] { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #3b4861; background: #1a2232; color: #fff; font-size: 14px; outline: none; }
     input[type="text"]:focus { border-color: #2196f3; }
-    button { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    button { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s, opacity 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
     .btn-submit { background: #0088cc; color: white; }
     .btn-submit:disabled { background: #4a5568; opacity: 0.6; cursor: not-allowed; }
     .wheel-container { position: relative; width: 300px; height: 300px; margin: 10px auto 20px auto; }
     .pointer { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 12px solid transparent; border-right: 12px solid transparent; border-top: 20px solid #ffcc00; z-index: 10; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); }
     canvas { width: 300px; height: 300px; border-radius: 50%; box-shadow: 0 0 15px rgba(0,0,0,0.5); }
     .btn-spin { background: #ff9800; color: #111; font-size: 16px; font-weight: 700; margin-bottom: 12px; }
+    .btn-spin:disabled { background: #78541c; color: #666; cursor: not-allowed; }
     .admin-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; width: 100%; max-width: 480px; }
     .btn-toggle { background: #37474f; color: white; }
     .btn-reset { background: #d32f2f; color: white; }
@@ -36,6 +38,9 @@
     .audio-notice { font-size: 12px; padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 4px; font-weight: 600; }
     .audio-notice.unmuted { background: #1b5e20; color: #a5d6a7; }
     .audio-notice.muted { background: #4a148c; color: #e1bee7; }
+    
+    /* Utility class cho admin */
+    .admin-only { display: none; }
   </style>
 </head>
 <body>
@@ -68,13 +73,14 @@
 
   <div class="wheel-container">
     <div class="pointer"></div>
-    <canvas id="wheelCanvas" width="300" height="300"></canvas>
+    <canvas id="wheelCanvas" width="600" height="600"></canvas>
   </div>
 
   <div style="width: 100%; max-width: 480px;">
-    <button id="btnSpin" class="btn-spin">🎡 QUAY VÒNG QUAY</button>
+    <!-- Thêm class admin-only để ẩn nút với người dùng thường -->
+    <button id="btnSpin" class="btn-spin admin-only">🎡 QUAY VÒNG QUAY</button>
     
-    <div class="admin-actions">
+    <div id="adminPanel" class="admin-actions admin-only">
       <button id="btnToggleForm" class="btn-toggle">🔒 Đóng Form</button>
       <button id="btnReset" class="btn-reset">🧹 Reset Game</button>
     </div>
@@ -91,18 +97,21 @@
     const tg = window.Telegram?.WebApp;
     if (tg) { tg.ready(); tg.expand(); }
 
-    function getFullUserName() {
+    function getTelegramUserData() {
       const u = tg?.initDataUnsafe?.user;
-      if (!u) return 'Người dùng';
+      if (!u) return { name: 'Người dùng', id: null };
       
       const first = (u.first_name || '').trim();
       const last = (u.last_name || '').trim();
       const combined = `${first} ${last}`.trim();
       
-      return combined || u.username || 'Người dùng';
+      return {
+        name: combined || u.username || 'Người dùng',
+        id: u.id
+      };
     }
 
-    const userName = getFullUserName();
+    const userData = getTelegramUserData();
     const socket = io();
 
     const statusBadge = document.getElementById('statusBadge');
@@ -111,6 +120,7 @@
     const btnSpin = document.getElementById('btnSpin');
     const btnToggleForm = document.getElementById('btnToggleForm');
     const btnReset = document.getElementById('btnReset');
+    const adminPanel = document.getElementById('adminPanel');
     const songListEl = document.getElementById('songList');
     const listTitleEl = document.getElementById('listTitle');
     const canvas = document.getElementById('wheelCanvas');
@@ -129,19 +139,42 @@
 
     const colors = ['#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9800', '#ff5722'];
 
+    // Xử lý Retina display cho Canvas sắc nét hơn
+    const dpr = window.devicePixelRatio || 2;
+    canvas.width = 300 * dpr;
+    canvas.height = 300 * dpr;
+    ctx.scale(dpr, dpr);
+
     function extractYouTubeId(url) {
       if (!url) return null;
       const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
       return (match && match[1]) ? match[1] : null;
     }
 
-    // LÍCH SỬ & ĐỒNG BỘ TRẠNG THÁI MỚI NẤT
+    // Quản lý trạng thái socket
+    socket.on('connect', () => {
+      // Gửi Telegram ID lên backend để nhận quyền Admin nếu có
+      socket.emit('authenticate', { telegramId: userData.id });
+    });
+
+    socket.on('disconnect', () => {
+      statusBadge.textContent = '🔴 Mất kết nối';
+      statusBadge.className = 'status-badge offline';
+    });
+
+    // Cập nhật phân quyền từ Backend
+    socket.on('adminStatus', (data) => {
+      if (data.isAdmin) {
+        btnSpin.classList.remove('admin-only');
+        adminPanel.classList.remove('admin-only');
+      }
+    });
+
     socket.on('stateUpdate', (data) => {
       isFormOpen = data.isFormOpen;
       songs = data.songs || [];
       updateUI();
 
-      // Nếu đang phát nhạc và không trong quá trình quay, cập nhật player cho người mới vào
       if (data.lastWinner && !isSpinning && currentPlayingUrl !== data.lastWinner.url) {
         renderPlayer(data.lastWinner, false);
       } else if (!data.lastWinner && !isSpinning) {
@@ -169,19 +202,25 @@
         btnToggleForm.textContent = '🔓 Mở Form';
       }
 
+      btnSpin.disabled = isSpinning || songs.length === 0;
+
       listTitleEl.textContent = `📋 Danh sách bài hát (${songs.length})`;
       if (songs.length === 0) {
         songListEl.innerHTML = '<div style="text-align: center; color: #888; font-size: 13px; padding: 10px;">Chưa có bài hát nào được gửi.</div>';
       } else {
         songListEl.innerHTML = songs.map((s, idx) => `
           <div class="song-item">
-            <div class="song-user">#${idx + 1} - ${s.user}</div>
-            <div>${s.url}</div>
+            <div class="song-user">#${idx + 1} - ${escapeHtml(s.user)}</div>
+            <div>${escapeHtml(s.url)}</div>
           </div>
         `).join('');
       }
 
       drawWheel();
+    }
+
+    function escapeHtml(str) {
+      return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
 
     function drawWheel() {
@@ -221,17 +260,11 @@
         ctx.textAlign = 'right';
         ctx.fillStyle = '#ffffff';
 
-        const label = songs[i].user || `Bài ${i+1}`;
-        
+        let label = songs[i].user || `Bài ${i+1}`;
+        if (label.length > 16) label = label.substring(0, 14) + '...';
+
         let fontSize = 12;
         ctx.font = `bold ${fontSize}px Arial`;
-        const maxAllowedWidth = 110;
-
-        while (ctx.measureText(label).width > maxAllowedWidth && fontSize > 7) {
-          fontSize -= 0.5;
-          ctx.font = `bold ${fontSize}px Arial`;
-        }
-
         ctx.fillText(label, 134, fontSize / 3);
         ctx.restore();
       }
@@ -289,7 +322,7 @@
           requestAnimationFrame(animateSpin);
         } else {
           isSpinning = false;
-          btnSpin.disabled = false;
+          btnSpin.disabled = songs.length === 0;
           renderPlayer(winner, shouldPlaySound);
           playerCard.scrollIntoView({ behavior: 'smooth' });
         }
@@ -301,18 +334,22 @@
     btnSubmit.addEventListener('click', async () => {
       const url = songUrlInput.value.trim();
       if (!url) return alert('Vui lòng nhập link!');
+      
       btnSubmit.disabled = true;
       try {
         const res = await fetch('/api/submit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url, user: userName })
+          body: JSON.stringify({ url, user: userData.name, telegramId: userData.id })
         });
         const data = await res.json();
         if (data.success) songUrlInput.value = '';
         else alert(data.message);
-      } catch (e) { alert('Lỗi kết nối!'); }
-      finally { btnSubmit.disabled = !isFormOpen; }
+      } catch (e) { 
+        alert('Lỗi kết nối!'); 
+      } finally { 
+        btnSubmit.disabled = !isFormOpen; 
+      }
     });
 
     btnSpin.addEventListener('click', async () => {
@@ -320,7 +357,11 @@
       isInitiator = true;
 
       try {
-        const res = await fetch('/api/spin', { method: 'POST' });
+        const res = await fetch('/api/spin', { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ telegramId: userData.id })
+        });
         const data = await res.json();
         if (!data.success) {
           isInitiator = false;
@@ -332,14 +373,24 @@
       }
     });
 
-    btnToggleForm.addEventListener('click', () => fetch('/api/toggle-form', { method: 'POST' }));
+    btnToggleForm.addEventListener('click', () => {
+      fetch('/api/toggle-form', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telegramId: userData.id })
+      });
+    });
 
     btnReset.addEventListener('click', () => {
       if (confirm('Xóa tất cả bài hát?')) {
         ytPlayer.src = '';
         playerCard.style.display = 'none';
         currentPlayingUrl = null;
-        fetch('/api/reset', { method: 'POST' });
+        fetch('/api/reset', { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ telegramId: userData.id })
+        });
       }
     });
   </script>
