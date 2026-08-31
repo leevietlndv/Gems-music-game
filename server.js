@@ -1,7 +1,6 @@
 const express = require('express');
 const path = require('path');
 const { Telegraf, Markup } = require('telegraf');
-require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -14,7 +13,7 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// 2. Khởi tạo Telegram Bot (Tự động loại bỏ khoảng trắng dư thừa nếu có)
+// 2. Khởi tạo Telegram Bot (Tự động loại bỏ khoảng trắng dư thừa)
 const botToken = process.env.BOT_TOKEN ? process.env.BOT_TOKEN.trim() : '';
 const bot = new Telegraf(botToken);
 
