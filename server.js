@@ -14,15 +14,13 @@ const bot = BOT_TOKEN ? new Telegraf(BOT_TOKEN) : null;
 
 let isFormOpen = true;
 let songs = [];
-let lastWinner = null; // Lưu bài hát đang phát
+let lastWinner = null;
 
-// ĐỒNG BỘ TRẠNG THÁI BAO GỒM CẢ LASTWINNER
 function broadcastState() {
   io.emit('stateUpdate', { isFormOpen, songs, lastWinner });
 }
 
 function performSpin() {
-  // 1. Tự động xóa bài đang phát ở lượt trước
   if (lastWinner) {
     const index = songs.findIndex(s => s.url === lastWinner.url && s.user === lastWinner.user);
     if (index !== -1) {
@@ -31,13 +29,11 @@ function performSpin() {
     lastWinner = null;
   }
 
-  // 2. Kiểm tra danh sách
   if (songs.length === 0) {
     broadcastState();
     return { success: false, message: 'Danh sách bài hát đã hết!' };
   }
 
-  // 3. Chọn ngẫu nhiên bài mới
   const selectedIndex = Math.floor(Math.random() * songs.length);
   const winner = songs[selectedIndex];
   lastWinner = winner;
@@ -47,9 +43,9 @@ function performSpin() {
   return { success: true, winner };
 }
 
-// --- LỆNH BOT TELEGRAM ---
+// --- CÁC LỆNH BOT TELEGRAM (ĐÃ BỔ SUNG /musicgame) ---
 if (bot) {
-  bot.command('start', (ctx) => {
+  const sendWebAppButton = (ctx) => {
     const webAppUrl = process.env.WEB_APP_URL || 'https://vongquaynhac.onrender.com';
     ctx.reply(
       '🎵 **Chào mừng bạn đến với Vòng Quay Nhạc!**\nBấm nút bên dưới để mở giao diện quay bài hát:',
@@ -57,7 +53,10 @@ if (bot) {
         [Markup.button.webApp('🎡 Mở Vòng Quay Nhạc', webAppUrl)]
       ])
     );
-  });
+  };
+
+  // Nhận cả /start lẫn /musicgame
+  bot.command(['start', 'musicgame'], sendWebAppButton);
 
   bot.command('spin', (ctx) => {
     const result = performSpin();
@@ -89,6 +88,15 @@ if (bot) {
     ctx.reply(`📋 **Danh sách bài hát (${songs.length}):**\n\n${listStr}`);
   });
 
+  // Tự động đăng ký Menu lệnh hiển thị khi gõ dấu /
+  bot.telegram.setMyCommands([
+    { command: 'musicgame', description: 'Mở Vòng Quay Nhạc' },
+    { command: 'spin', description: 'Quay ngẫu nhiên bài hát' },
+    { command: 'toggle', description: 'Bật/Tắt form gửi bài' },
+    { command: 'list', description: 'Xem danh sách bài hát' },
+    { command: 'reset', description: 'Xóa toàn bộ danh sách' }
+  ]).catch(err => console.error('Lỗi thiết lập menu lệnh:', err));
+
   bot.launch()
     .then(() => console.log('🤖 Bot Telegram đã khởi chạy thành công!'))
     .catch(err => console.error('Lỗi khởi chạy Bot:', err));
@@ -99,7 +107,6 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 io.on('connection', (socket) => {
-  // Gửi thông tin trạng thái ban đầu cho người dùng mới kết nối
   socket.emit('stateUpdate', { isFormOpen, songs, lastWinner });
 });
 
