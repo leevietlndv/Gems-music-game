@@ -4,65 +4,45 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Vòng Quay Nhạc</title>
-  <!-- Telegram WebApp SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
     body { background-color: #1c2333; color: #ffffff; padding: 16px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
-    
     .header { text-align: center; margin-bottom: 16px; width: 100%; max-width: 480px; }
     .header h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; gap: 8px; }
-    
-    .status-badge {
-      display: inline-block;
-      padding: 6px 16px;
-      border-radius: 20px;
-      font-size: 13px;
-      font-weight: 600;
-      background: #2b384e;
-      color: #00e676;
-      transition: all 0.3s ease;
-    }
+    .status-badge { display: inline-block; padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; background: #2b384e; color: #00e676; transition: all 0.3s ease; }
     .status-badge.closed { background: #3a2329; color: #ff5252; }
-    
     .card { background: #252f42; border-radius: 12px; padding: 16px; width: 100%; max-width: 480px; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
     .card-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: #64b5f6; }
-    
     .input-group { display: flex; flex-direction: column; gap: 10px; }
     input[type="text"] { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #3b4861; background: #1a2232; color: #fff; font-size: 14px; outline: none; }
     input[type="text"]:focus { border-color: #2196f3; }
-    
     button { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
     .btn-submit { background: #0088cc; color: white; }
-    .btn-submit:hover { background: #0077b5; }
     .btn-submit:disabled { background: #4a5568; opacity: 0.6; cursor: not-allowed; }
-    
     .wheel-container { position: relative; width: 300px; height: 300px; margin: 10px auto 20px auto; }
     .pointer { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 12px solid transparent; border-right: 12px solid transparent; border-top: 20px solid #ffcc00; z-index: 10; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); }
     canvas { width: 300px; height: 300px; border-radius: 50%; box-shadow: 0 0 15px rgba(0,0,0,0.5); }
-    
     .btn-spin { background: #ff9800; color: #111; font-size: 16px; font-weight: 700; margin-bottom: 12px; }
-    .btn-spin:hover { background: #e68a00; }
-    
     .admin-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; width: 100%; max-width: 480px; }
     .btn-toggle { background: #37474f; color: white; }
     .btn-reset { background: #d32f2f; color: white; }
-    
     .song-list { max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
     .song-item { background: #1a2232; padding: 10px; border-radius: 6px; font-size: 13px; word-break: break-all; border-left: 3px solid #0088cc; }
     .song-user { font-weight: bold; color: #ffca28; margin-bottom: 2px; }
-
-    /* YouTube Player Responsive */
     .player-wrapper { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px; background: #000; }
     .player-wrapper iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
+    .audio-notice { font-size: 12px; padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 4px; font-weight: 600; }
+    .audio-notice.unmuted { background: #1b5e20; color: #a5d6a7; }
+    .audio-notice.muted { background: #4a148c; color: #e1bee7; }
   </style>
 </head>
 <body>
 
   <div class="header">
     <h1>🎵 Vòng Quay Nhạc</h1>
-    <span id="statusBadge" class="status-badge">⏳ Đang tải trạng thái...</span>
+    <span id="statusBadge" class="status-badge">⏳ Đang kết nối...</span>
   </div>
 
   <div class="card">
@@ -73,11 +53,14 @@
     </div>
   </div>
 
-  <!-- Khung phát nhạc/video YouTube (Tự động hiện khi quay trúng) -->
+  <!-- Khung phát video YouTube -->
   <div class="card" id="playerCard" style="display: none; border: 2px solid #ffca28;">
     <div class="card-title" style="color: #ffca28;">🎉 ĐANG PHÁT BÀI HÁT TRÚNG THƯỞNG</div>
-    <div style="font-size: 13px; color: #ddd; margin-bottom: 10px;">
+    <div style="font-size: 13px; color: #ddd; margin-bottom: 6px;">
       Người gửi: <strong id="winnerUser" style="color: #64b5f6;">-</strong>
+    </div>
+    <div style="margin-bottom: 10px;">
+      <span id="audioNotice" class="audio-notice"></span>
     </div>
     <div class="player-wrapper">
       <iframe id="ytPlayer" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
@@ -107,14 +90,18 @@
 
   <script>
     const tg = window.Telegram?.WebApp;
-    if (tg) {
-      tg.ready();
-      tg.expand();
+    if (tg) { tg.ready(); tg.expand(); }
+
+    // LẤY ĐẦY ĐỦ HỌ VÀ TÊN TỪ TELEGRAM
+    const userObj = tg?.initDataUnsafe?.user;
+    let userName = 'Người dùng';
+    if (userObj) {
+      const fullName = [userObj.first_name, userObj.last_name].filter(Boolean).join(' ');
+      userName = fullName || userObj.username || 'Người dùng';
     }
 
-    const userName = tg?.initDataUnsafe?.user?.first_name || 'Người dùng';
+    const socket = io();
 
-    // Elements
     const statusBadge = document.getElementById('statusBadge');
     const songUrlInput = document.getElementById('songUrl');
     const btnSubmit = document.getElementById('btnSubmit');
@@ -125,44 +112,35 @@
     const listTitleEl = document.getElementById('listTitle');
     const canvas = document.getElementById('wheelCanvas');
     const ctx = canvas.getContext('2d');
-
-    // Player Elements
     const playerCard = document.getElementById('playerCard');
     const winnerUser = document.getElementById('winnerUser');
     const ytPlayer = document.getElementById('ytPlayer');
+    const audioNotice = document.getElementById('audioNotice');
 
     let isFormOpen = true;
     let songs = [];
     let isSpinning = false;
     let currentAngle = 0;
+    let isInitiator = false;
 
     const colors = ['#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9800', '#ff5722'];
 
-    // Hàm lấy Video ID từ URL YouTube
     function extractYouTubeId(url) {
       if (!url) return null;
-      const regExp = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
-      const match = url.match(regExp);
+      const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
       return (match && match[1]) ? match[1] : null;
     }
 
-    // Tải trạng thái từ Server
-    async function loadState() {
-      try {
-        const res = await fetch('/api/state');
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        const data = await res.json();
-        
-        isFormOpen = data.isFormOpen;
-        songs = data.songs || [];
-        
-        updateUI();
-      } catch (err) {
-        console.error('Lỗi kết nối Server:', err);
-        statusBadge.textContent = '❌ Lỗi kết nối Server';
-        statusBadge.className = 'status-badge closed';
-      }
-    }
+    socket.on('stateUpdate', (data) => {
+      isFormOpen = data.isFormOpen;
+      songs = data.songs || [];
+      updateUI();
+    });
+
+    socket.on('triggerSpin', (data) => {
+      startSpinAnimation(data.selectedIndex, data.winner, isInitiator);
+      isInitiator = false;
+    });
 
     function updateUI() {
       if (isFormOpen) {
@@ -217,7 +195,6 @@
         ctx.moveTo(150, 150);
         ctx.arc(150, 150, 140, start, end);
         ctx.closePath();
-
         ctx.fillStyle = colors[i % colors.length];
         ctx.fill();
         ctx.strokeStyle = '#1c2333';
@@ -229,21 +206,75 @@
         ctx.rotate(start + sliceAngle / 2);
         ctx.textAlign = 'right';
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 12px Arial';
+        ctx.font = 'bold 11px Arial';
         const label = songs[i].user || `Bài ${i+1}`;
-        ctx.fillText(label.length > 10 ? label.substring(0, 10) + '...' : label, 120, 4);
+        
+        // Tối ưu hóa không gian: Dời mép ngoài lên 132px và cho phép kéo dài vào sát tâm (tối đa 25 ký tự)
+        ctx.fillText(label.length > 25 ? label.substring(0, 25) + '...' : label, 132, 4);
         ctx.restore();
       }
     }
 
-    // Gửi bài hát
-    btnSubmit.addEventListener('click', async () => {
-      const url = songUrlInput.value.trim();
-      if (!url) {
-        alert('Vui lòng nhập link bài hát!');
-        return;
+    function startSpinAnimation(targetIndex, winner, shouldPlaySound) {
+      if (isSpinning) return;
+      isSpinning = true;
+      btnSpin.disabled = true;
+
+      ytPlayer.src = '';
+      playerCard.style.display = 'none';
+
+      const numSlices = songs.length;
+      const sliceAngle = (2 * Math.PI) / numSlices;
+      const targetSliceStartAngle = targetIndex * sliceAngle;
+      const targetSliceCenterAngle = targetSliceStartAngle + sliceAngle / 2;
+      const extraSpins = 5 * 2 * Math.PI;
+      const desiredFinalAngle = (1.5 * Math.PI) - targetSliceCenterAngle;
+      const startAngle = currentAngle % (2 * Math.PI);
+      const totalRotation = extraSpins + (desiredFinalAngle - startAngle);
+      
+      let startTime = null;
+      const duration = 4000;
+
+      function animateSpin(timestamp) {
+        if (!startTime) startTime = timestamp;
+        const progress = Math.min((timestamp - startTime) / duration, 1);
+        const easeOut = 1 - Math.pow(1 - progress, 3);
+        
+        currentAngle = startAngle + totalRotation * easeOut;
+        drawWheel();
+
+        if (progress < 1) {
+          requestAnimationFrame(animateSpin);
+        } else {
+          isSpinning = false;
+          btnSpin.disabled = false;
+          
+          const videoId = extractYouTubeId(winner.url);
+          if (videoId) {
+            winnerUser.textContent = winner.user;
+
+            if (shouldPlaySound) {
+              ytPlayer.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&enablejsapi=1`;
+              audioNotice.textContent = '🔊 Âm thanh: Mở (Bạn là người xoay)';
+              audioNotice.className = 'audio-notice unmuted';
+            } else {
+              ytPlayer.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&enablejsapi=1`;
+              audioNotice.textContent = '🔇 Âm thanh: Đã Tắt (Bấm vào video để mở tiếng)';
+              audioNotice.className = 'audio-notice muted';
+            }
+
+            playerCard.style.display = 'block';
+            playerCard.scrollIntoView({ behavior: 'smooth' });
+          }
+        }
       }
 
+      requestAnimationFrame(animateSpin);
+    }
+
+    btnSubmit.addEventListener('click', async () => {
+      const url = songUrlInput.value.trim();
+      if (!url) return alert('Vui lòng nhập link!');
       btnSubmit.disabled = true;
       try {
         const res = await fetch('/api/submit', {
@@ -252,142 +283,37 @@
           body: JSON.stringify({ url, user: userName })
         });
         const data = await res.json();
-        
-        if (data.success) {
-          songUrlInput.value = '';
-          songs = data.songs;
-          updateUI();
-          alert('✅ Gửi bài hát thành công!');
-        } else {
-          alert('❌ ' + (data.message || 'Lỗi gửi bài hát'));
-        }
-      } catch (err) {
-        alert('❌ Lỗi kết nối tới Server!');
-      } finally {
-        btnSubmit.disabled = !isFormOpen;
-      }
+        if (data.success) songUrlInput.value = '';
+        else alert(data.message);
+      } catch (e) { alert('Lỗi kết nối!'); }
+      finally { btnSubmit.disabled = !isFormOpen; }
     });
 
-    // Quay vòng quay
     btnSpin.addEventListener('click', async () => {
-      if (isSpinning) return;
-      if (songs.length === 0) {
-        alert('Chưa có bài hát nào để quay!');
-        return;
-      }
+      if (isSpinning || songs.length === 0) return;
+      isInitiator = true;
 
       try {
         const res = await fetch('/api/spin', { method: 'POST' });
         const data = await res.json();
         if (!data.success) {
+          isInitiator = false;
           alert(data.message);
-          return;
         }
-
-        isSpinning = true;
-        btnSpin.disabled = true;
-
-        const targetIndex = data.selectedIndex;
-        const numSlices = songs.length;
-        const sliceAngle = (2 * Math.PI) / numSlices;
-        
-        const targetSliceStartAngle = targetIndex * sliceAngle;
-        const targetSliceCenterAngle = targetSliceStartAngle + sliceAngle / 2;
-        
-        const extraSpins = 5 * 2 * Math.PI;
-        const desiredFinalAngle = (1.5 * Math.PI) - targetSliceCenterAngle;
-        
-        const startAngle = currentAngle % (2 * Math.PI);
-        const totalRotation = extraSpins + (desiredFinalAngle - startAngle);
-        
-        let startTime = null;
-        const duration = 4000;
-
-        function animateSpin(timestamp) {
-          if (!startTime) startTime = timestamp;
-          const progress = Math.min((timestamp - startTime) / duration, 1);
-          const easeOut = 1 - Math.pow(1 - progress, 3);
-          
-          currentAngle = startAngle + totalRotation * easeOut;
-          drawWheel();
-
-          if (progress < 1) {
-            requestAnimationFrame(animateSpin);
-          } else {
-            isSpinning = false;
-            btnSpin.disabled = false;
-            
-            // TỰ ĐỘNG PHÁT VIDEO KHI QUAY XONG
-            const winner = data.winner;
-            const videoId = extractYouTubeId(winner.url);
-
-            if (videoId) {
-              winnerUser.textContent = winner.user;
-              ytPlayer.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1`;
-              playerCard.style.display = 'block';
-              
-              // Cuộn nhẹ lên trình phát video
-              playerCard.scrollIntoView({ behavior: 'smooth' });
-            } else {
-              alert(`🎉 Bài hát được chọn: ${winner.user}\nLink: ${winner.url}\n(Link này không đúng định dạng YouTube chuẩn để phát trực tiếp)`);
-            }
-          }
-        }
-
-        requestAnimationFrame(animateSpin);
-      } catch (err) {
-        alert('Lỗi khi quay vòng quay!');
-        isSpinning = false;
-        btnSpin.disabled = false;
+      } catch (e) {
+        isInitiator = false;
+        alert('Lỗi khi quay!');
       }
     });
 
-    // Đóng/Mở Form
-    btnToggleForm.addEventListener('click', async () => {
-      try {
-        const res = await fetch('/api/toggle-form', { method: 'POST' });
-        const data = await res.json();
-        if (data.success) {
-          isFormOpen = data.isFormOpen;
-          updateUI();
-        }
-      } catch (err) {
-        alert('Không thể thay đổi trạng thái Form!');
+    btnToggleForm.addEventListener('click', () => fetch('/api/toggle-form', { method: 'POST' }));
+
+    btnReset.addEventListener('click', () => {
+      if (confirm('Xóa tất cả bài hát?')) {
+        ytPlayer.src = '';
+        playerCard.style.display = 'none';
+        fetch('/api/reset', { method: 'POST' });
       }
-    });
-
-    // Reset Game
-    btnReset.addEventListener('click', async () => {
-      if (!confirm('Bạn có chắc chắn muốn xóa toàn bộ danh sách bài hát không?')) return;
-      try {
-        const res = await fetch('/api/reset', { method: 'POST' });
-        const data = await res.json();
-        if (data.success) {
-          songs = [];
-          isFormOpen = data.isFormOpen;
-          currentAngle = 0;
-          playerCard.style.display = 'none';
-          ytPlayer.src = '';
-          updateUI();
-        }
-      } catch (err) {
-        alert('Lỗi khi reset game!');
-      }
-    });
-
-    loadState();
-    const socket = io();
-
-    // Nhận cập nhật trạng thái thời gian thực từ Server
-    socket.on('stateUpdate', (data) => {
-      isFormOpen = data.isFormOpen;
-      songs = data.songs || [];
-      updateUI();
-    });
-    
-    // Tự động xoay vòng quay khi có người nhấn nút Quay
-    socket.on('triggerSpin', (data) => {
-      startSpinAnimation(data.selectedIndex, data.winner);
     });
   </script>
 </body>
