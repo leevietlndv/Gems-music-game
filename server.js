@@ -43,19 +43,34 @@ function performSpin() {
   return { success: true, winner };
 }
 
-// --- CÁC LỆNH BOT TELEGRAM (ĐÃ BỔ SUNG /musicgame) ---
+// --- CÁC LỆNH BOT TELEGRAM (ĐÃ TỐI ƯU CHO NHÓM CHAT) ---
 if (bot) {
-  const sendWebAppButton = (ctx) => {
+  const sendWebAppButton = async (ctx) => {
     const webAppUrl = process.env.WEB_APP_URL || 'https://gems-music-game.onrender.com/';
+    const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
+    const botUsername = ctx.botInfo?.username || '';
+
+    // Trường hợp 1: Nhắn tin trong Nhóm Chat
+    if (isGroup) {
+      return ctx.reply(
+        '🎵 Vòng Quay Nhạc',
+        Markup.inlineKeyboard([
+          [Markup.button.url('💬 Mở trong Chat riêng với Bot', `https://t.me/${botUsername}?start=musicgame`)],
+          [Markup.button.url('🌐 Mở trực tiếp bằng Trình duyệt', webAppUrl)]
+        ])
+      );
+    }
+
+    // Trường hợp 2: Chat riêng trực tiếp với Bot
     ctx.reply(
-      '🎵 Bấm nút bên dưới để tham gia gửi bài hát:',
+      '🎵 Bấm nút bên dưới để gửi bài hát của bạn',
       Markup.inlineKeyboard([
         [Markup.button.webApp('🎡 Mở Vòng Quay Nhạc', webAppUrl)]
       ])
     );
   };
 
-  // Nhận cả /start lẫn /musicgame
+  // Nhận lệnh /start và /musicgame (kể cả dạng /musicgame@bot_username trong nhóm)
   bot.command(['start', 'musicgame'], sendWebAppButton);
 
   bot.command('spin', (ctx) => {
@@ -88,7 +103,7 @@ if (bot) {
     ctx.reply(`📋 **Danh sách bài hát (${songs.length}):**\n\n${listStr}`);
   });
 
-  // Tự động đăng ký Menu lệnh hiển thị khi gõ dấu /
+  // Tự động đăng ký Menu lệnh
   bot.telegram.setMyCommands([
     { command: 'musicgame', description: 'Mở Vòng Quay Nhạc' },
     { command: 'spin', description: 'Quay ngẫu nhiên bài hát' },
