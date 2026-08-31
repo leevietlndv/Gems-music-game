@@ -45,32 +45,33 @@ function performSpin() {
 
 // --- CÁC LỆNH BOT TELEGRAM (ĐÃ TỐI ƯU CHO NHÓM CHAT) ---
 if (bot) {
-  const sendWebAppButton = async (ctx) => {
+const sendWebAppButton = async (ctx) => {
     const webAppUrl = process.env.WEB_APP_URL || 'https://gems-music-game.onrender.com/';
+    const directMiniAppUrl = 'https://t.me/GU3B_Radio_Bot/music3B';
     const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
-    const botUsername = ctx.botInfo?.username || '';
 
-    // Trường hợp 1: Nhắn tin trong Nhóm Chat
+    // Trường hợp 1: Nhắn trong Nhóm Chat -> Dùng Link Mini App (directMiniAppUrl)
     if (isGroup) {
       return ctx.reply(
-        '🎵 Vòng Quay Nhạc',
-        Markup.inlineKeyboard([
-          [Markup.button.url('💬 Mở trong Chat riêng với Bot', `https://t.me/${botUsername}?start=musicgame`)],
-          [Markup.button.url('🌐 Mở trực tiếp bằng Trình duyệt', webAppUrl)]
-        ])
+        '🎵 **VÒNG QUAY NHẠC GEMS**\nBấm nút bên dưới để tham gia',
+        {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([
+            [Markup.button.url('🎡 Mở Vòng Quay Nhạc', directMiniAppUrl)]
+          ])
+        }
       );
-    }
 
-    // Trường hợp 2: Chat riêng trực tiếp với Bot
+    // Trường hợp 2: Chat riêng trực tiếp với Bot -> Dùng Nút WebApp (webAppUrl)
     ctx.reply(
-      '🎵 Bấm nút bên dưới để gửi bài hát của bạn',
+      '🎵 Bấm nút bên dưới để gửi bài hát của bạn:',
       Markup.inlineKeyboard([
         [Markup.button.webApp('🎡 Mở Vòng Quay Nhạc', webAppUrl)]
       ])
     );
   };
 
-  // Nhận lệnh /start và /musicgame (kể cả dạng /musicgame@bot_username trong nhóm)
+  // Nhận lệnh /start và /musicgame
   bot.command(['start', 'musicgame'], sendWebAppButton);
 
   bot.command('spin', (ctx) => {
