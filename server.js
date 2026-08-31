@@ -43,24 +43,17 @@ function performSpin() {
   return { success: true, winner };
 }
 
-// --- CÁC LỆNH BOT TELEGRAM (ĐÃ TỐI ƯU CHO NHÓM CHAT) ---
+// --- CÁC LỆNH BOT TELEGRAM ---
 if (bot) {
-const sendWebAppButton = async (ctx) => {
-    const webAppUrl = process.env.WEB_APP_URL || 'https://gems-music-game.onrender.com/';
+  const sendWebAppButton = (ctx) => {
     const directMiniAppUrl = 'https://t.me/GU3B_Radio_Bot/music3B';
-    const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
-
-    bot.command(['start', 'musicgame'], (ctx) => {
-  // Thay TenBotCuaBan/app bằng link thực tế từ BotFather
-  const directMiniAppUrl = 'https://t.me/TenBotCuaBan/app'; 
-
-  ctx.reply(
-    '🎵 **VÒNG QUAY NHẠC GEMS**\nBấm nút bên dưới để tham gia quay bài hát ngay trong nhóm:',
-    Markup.inlineKeyboard([
-      [Markup.button.url('🎡 Mở Vòng Quay Nhạc', directMiniAppUrl)]
-    ])
-  );
-});
+    ctx.reply(
+      '🎵 **VÒNG QUAY NHẠC GEMS**\nBấm nút bên dưới để tham gia quay bài hát ngay trong nhóm:',
+      Markup.inlineKeyboard([
+        [Markup.button.url('🎡 Mở Vòng Quay Nhạc', directMiniAppUrl)]
+      ])
+    );
+  };
 
   // Nhận lệnh /start và /musicgame
   bot.command(['start', 'musicgame'], sendWebAppButton);
