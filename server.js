@@ -1,138 +1,164 @@
 const express = require('express');
 const http = require('http');
-const { Server } = require('socket.io');
+const { Server } = require("socket.io");
+const path = require('path');
+const { Telegraf, Markup } = require('telegraf');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
+const io = new Server(server);
+
+// --- CẤU HÌNH BOT TELEGRAM ---
+const BOT_TOKEN = process.env.BOT_TOKEN;
+const bot = BOT_TOKEN ? new Telegraf(BOT_TOKEN) : null;
+
+let isFormOpen = true;
+let songs = []; // [{ url, user, telegramId }]
+let lastWinner = null;
+let lastSpinner = null; // Lưu người bấm quay gần nhất
+
+function broadcastState() {
+  io.emit('stateUpdate', { isFormOpen, songs, lastWinner });
+}
+
+function performSpin(spinnerName = 'Hệ thống') {
+  // 1. Tự động xóa bài vừa phát xong/vừa trúng thưởng ở lượt trước
+  if (lastWinner) {
+    const index = songs.findIndex(s => s.url === lastWinner.url && s.user === lastWinner.user);
+    if (index !== -1) {
+      songs.splice(index, 1);
+    }
+    lastWinner = null;
   }
+
+  // 2. Kiểm tra nếu hết bài
+  if (songs.length === 0) {
+    broadcastState();
+    return { success: false, message: 'Danh sách bài hát đã hết!' };
+  }
+
+  // 3. Quay bài hát mới
+  const selectedIndex = Math.floor(Math.random() * songs.length);
+  const winner = songs[selectedIndex];
+  lastWinner = winner;
+  lastSpinner = spinnerName;
+
+  broadcastState();
+  io.emit('triggerSpin', { selectedIndex, winner, spinner: lastSpinner });
+  return { success: true, winner, spinner: lastSpinner };
+}
+
+// --- CÁC LỆNH BOT TELEGRAM ---
+if (bot) {
+  const sendWebAppButton = (ctx) => {
+    const directMiniAppUrl = 'https://t.me/GU3B_Radio_Bot/music3B';
+    ctx.reply(
+      '🎵 **VÒNG QUAY NHẠC GEMS**\nBấm nút bên dưới để tham gia quay bài hát ngay:',
+      Markup.inlineKeyboard([
+        [Markup.button.url('🎡 Mở Vòng Quay Nhạc', directMiniAppUrl)]
+      ])
+    );
+  };
+
+  bot.command(['start', 'musicgems', 'musicgame'], sendWebAppButton);
+
+  bot.command('spin', (ctx) => {
+    const userName = ctx.from.first_name || 'Người dùng';
+    const result = performSpin(userName);
+    if (!result.success) {
+      ctx.reply(`⚠️ ${result.message}`);
+    } else {
+      ctx.reply(`🎡 Đã quay! Bài trúng thưởng: ${result.winner.user} - ${result.winner.url}`);
+    }
+  });
+
+  bot.command('toggle', (ctx) => {
+    isFormOpen = !isFormOpen;
+    broadcastState();
+    ctx.reply(`📢 Trạng thái form: ${isFormOpen ? '🟢 Đang MỞ' : '🔴 Đã ĐÓNG'}`);
+  });
+
+  bot.command('reset', (ctx) => {
+    songs = [];
+    lastWinner = null;
+    broadcastState();
+    ctx.reply('🧹 Đã xóa sạch danh sách bài hát!');
+  });
+
+  bot.command('list', (ctx) => {
+    if (songs.length === 0) {
+      return ctx.reply('📋 Danh sách bài hát hiện đang trống.');
+    }
+    const listStr = songs.map((s, i) => `${i + 1}. ${s.user}: ${s.url}`).join('\n');
+    ctx.reply(`📋 **Danh sách bài hát (${songs.length}):**\n\n${listStr}`);
+  });
+
+  bot.telegram.setMyCommands([
+    { command: 'musicgems', description: 'Mở Vòng Quay Nhạc' },
+    { command: 'spin', description: 'Quay ngẫu nhiên bài hát' },
+    { command: 'toggle', description: 'Bật/Tắt form gửi bài' },
+    { command: 'list', description: 'Xem danh sách bài hát' },
+    { command: 'reset', description: 'Xóa toàn bộ danh sách' }
+  ]).catch(err => console.error('Lỗi thiết lập menu lệnh:', err));
+
+  bot.launch()
+    .then(() => console.log('🤖 Bot Telegram đã khởi chạy thành công!'))
+    .catch(err => console.error('Lỗi khởi chạy Bot:', err));
+}
+
+// --- API HTTP & SOCKET.IO ---
+app.use(express.json());
+app.use(express.static(path.join(__dirname)));
+
+// Trả về trang chủ index.html
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Trạng thái phòng phòng hát / trò chơi
-let gameState = {
-  users: [],           // Danh sách người chơi: [{ id, name, score }]
-  playlist: [],        // Danh sách bài hát: [{ id, title, url, addedBy }]
-  currentSong: null,   // Bài hát đang phát
-  currentTurn: null,   // ID người chơi đang tới lượt quay/hát
-  isPlaying: false
-};
+io.on('connection', (socket) => {
+  socket.emit('stateUpdate', { isFormOpen, songs, lastWinner });
+});
 
-// Hàm lấy người chơi tiếp theo theo vòng tròn
-function getNextUser(currentUserId) {
-  if (gameState.users.length === 0) return null;
-  const currentIndex = gameState.users.findIndex(u => u.id === currentUserId);
-  const nextIndex = (currentIndex + 1) % gameState.users.length;
-  return gameState.users[nextIndex].id;
-}
-
-// Hàm xử lý khi bài hát kết thúc hoặc khi chuyển lượt
-function handleSongEnd() {
-  if (gameState.playlist.length > 0) {
-    // Lấy bài hát tiếp theo khỏi danh sách
-    gameState.currentSong = gameState.playlist.shift();
-    gameState.isPlaying = true;
-
-    // Chuyển lượt sang người chơi tiếp theo (nếu có người trong phòng)
-    if (gameState.users.length > 0) {
-      gameState.currentTurn = getNextUser(gameState.currentTurn);
-    }
-  } else {
-    // Hết bài hát trong hàng chờ
-    gameState.currentSong = null;
-    gameState.isPlaying = false;
+app.post('/api/submit', (req, res) => {
+  if (!isFormOpen) {
+    return res.json({ success: false, message: 'Form đã đóng, không thể gửi bài!' });
+  }
+  const { url, user } = req.body;
+  if (!url) {
+    return res.json({ success: false, message: 'Vui lòng nhập link bài hát!' });
   }
 
-  // Phát trạng thái mới tới toàn bộ người dùng
-  io.emit('game-state-update', gameState);
-  io.emit('auto-spin-next', {
-    currentSong: gameState.currentSong,
-    currentTurn: gameState.currentTurn
-  });
-}
+  songs.push({ url, user: user || 'Người dùng' });
+  broadcastState();
+  res.json({ success: true });
+});
 
-io.on('connection', (socket) => {
-  console.log(`User connected: ${socket.id}`);
+app.post('/api/spin', (req, res) => {
+  const { user } = req.body;
+  const result = performSpin(user || 'Người dùng');
+  res.json(result);
+});
 
-  // Gửi trạng thái hiện tại cho người mới vào
-  socket.emit('game-state-update', gameState);
+// API TỰ ĐỘNG QUAY KHI HẾT BÀI HÁT (GỌI TỪ FRONTEND)
+app.post('/api/song-ended', (req, res) => {
+  const result = performSpin(lastSpinner || 'Tự động');
+  res.json(result);
+});
 
-  // 1. Thêm người dùng vào phòng
-  socket.on('join-room', (userData) => {
-    const newUser = {
-      id: socket.id,
-      name: userData.name || `User_${socket.id.slice(0, 4)}`,
-      score: 0
-    };
-    gameState.users.push(newUser);
+app.post('/api/toggle-form', (req, res) => {
+  isFormOpen = !isFormOpen;
+  broadcastState();
+  res.json({ success: true });
+});
 
-    // Nếu chưa có ai tới lượt, gán lượt cho người mới vào
-    if (!gameState.currentTurn) {
-      gameState.currentTurn = newUser.id;
-    }
-
-    io.emit('game-state-update', gameState);
-  });
-
-  // 2. Thêm bài hát vào playlist
-  socket.on('add-song', (song) => {
-    const newSong = {
-      id: Date.now().toString(),
-      title: song.title,
-      url: song.url,
-      addedBy: socket.id
-    };
-    gameState.playlist.push(newSong);
-
-    // Nếu phòng đang rảnh và chưa phát bài nào, tự động phát bài vừa thêm
-    if (!gameState.isPlaying && !gameState.currentSong) {
-      handleSongEnd();
-    } else {
-      io.emit('game-state-update', gameState);
-    }
-  });
-
-  // 3. Sự kiện kích hoạt quay (Spin) thủ công
-  socket.on('spin-wheel', () => {
-    // Chỉ cho phép người tới lượt thực hiện quay
-    if (socket.id !== gameState.currentTurn) return;
-
-    const randomIndex = Math.floor(Math.random() * gameState.users.length);
-    const selectedUser = gameState.users[randomIndex];
-
-    io.emit('spin-result', {
-      selectedUser,
-      spunBy: socket.id
-    });
-  });
-
-  // 4. TÍCH HỢP MỚI: Nhận tín hiệu khi Client phát xong bài hát
-  socket.on('song-ended', () => {
-    console.log(`Song ended. Triggering auto-spin / next song.`);
-    handleSongEnd();
-  });
-
-  // 5. Bỏ qua bài hát (Skip)
-  socket.on('skip-song', () => {
-    handleSongEnd();
-  });
-
-  // 6. Xử lý khi ngắt kết nối
-  socket.on('disconnect', () => {
-    console.log(`User disconnected: ${socket.id}`);
-    gameState.users = gameState.users.filter(u => u.id !== socket.id);
-
-    if (gameState.currentTurn === socket.id) {
-      gameState.currentTurn = gameState.users.length > 0 ? gameState.users[0].id : null;
-    }
-
-    io.emit('game-state-update', gameState);
-  });
+app.post('/api/reset', (req, res) => {
+  songs = [];
+  lastWinner = null;
+  broadcastState();
+  res.json({ success: true });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
