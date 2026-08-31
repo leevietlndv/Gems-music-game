@@ -102,28 +102,30 @@ app.post('/api/unlock', (req, res) => {
   res.json({ success: true, isLocked: false });
 });
 
-// --- KHỞI CHẠY BOT VÀ XÁC NHẬN KẾT NỐI ---
-console.log("🔍 Đang kiểm tra BOT_TOKEN trên Render...");
+// --- KHỞI CHẠY BOT VÀ XÓA WEBHOOK CŨ ---
+async function startTelegramBot() {
+  try {
+    console.log("🔍 Đang kiểm tra và kết nối Bot...");
 
-if (!process.env.BOT_TOKEN) {
-  console.error("❌ LỖI: Không tìm thấy biến BOT_TOKEN trên Render!");
-} else {
-  // 1. Lấy thông tin Bot từ Telegram API để xác thực Token
-  bot.telegram.getMe()
-    .then((botInfo) => {
-      console.log(`🤖 Đã xác thực thành công Bot: @${botInfo.username}`);
-      // 2. Bắt đầu nhận tin nhắn từ Telegram
-      return bot.launch({ dropPendingUpdates: true });
-    })
-    .then(() => {
-      console.log('✅ Telegram Bot Polling đã sẵn sàng nhận lệnh!');
-    })
-    .catch((err) => {
-      console.error('❌ Lỗi kết nối Telegram API:', err.message || err);
-    });
+    // 1. Xóa sạch Webhook cũ kẹt trên Telegram Server
+    await bot.telegram.deleteWebhook({ drop_pending_updates: true });
+    console.log("🧹 Đã xóa Webhook cũ thành công!");
+
+    // 2. Xác thực Token và lấy thông tin Bot
+    const botInfo = await bot.telegram.getMe();
+    console.log(`🤖 Xác thực thành công Bot: @${botInfo.username}`);
+
+    // 3. Khởi chạy Long Polling
+    bot.launch();
+    console.log("✅ Telegram Bot đã chính thức lắng nghe tin nhắn!");
+  } catch (err) {
+    console.error("❌ Lỗi khởi chạy Telegram Bot:", err.message || err);
+  }
 }
 
-// Đóng bot an toàn khi restart
+startTelegramBot();
+
+// Đóng bot an toàn khi server restart
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
 
