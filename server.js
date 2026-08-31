@@ -1,156 +1,89 @@
 const express = require('express');
-const { Telegraf } = require('telegraf');
 const path = require('path');
+const { Telegraf, Markup } = require('telegraf');
+require('dotenv').config();
 
-// 1. Khởi tạo Express App trước
 const app = express();
+const PORT = process.env.PORT || 10000;
 
-// 2. Cấu hình Middleware và Static Files
-const publicPath = path.join(__dirname, 'public');
-app.use(express.json());
-app.use(express.static(publicPath));
+// 1. Phục vụ các file tĩnh trong thư mục public (CSS, JS, index.html)
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Route trang chủ bắt lỗi hiển thị file index.html
+// Route trang chủ
 app.get('/', (req, res) => {
-  res.sendFile(path.join(publicPath, 'index.html'), (err) => {
-    if (err) {
-      console.error("Lỗi tìm file:", err);
-      res.status(404).send("Lỗi: Không tìm thấy file index.html trong thư mục public!");
-    }
-  });
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// 3. Cấu hình Telegram Bot
-const BOT_TOKEN = process.env.BOT_TOKEN;
-const WEB_APP_URL = process.env.WEB_APP_URL;
+// 2. Khởi tạo Telegram Bot (Tự động loại bỏ khoảng trắng dư thừa nếu có)
+const botToken = process.env.BOT_TOKEN ? process.env.BOT_TOKEN.trim() : '';
+const bot = new Telegraf(botToken);
 
-if (!BOT_TOKEN) {
-  console.error("❌ LỖI: Chưa cấu hình BOT_TOKEN trong Environment Variables!");
-}
-
-const bot = new Telegraf(BOT_TOKEN);
-
-let gameState = {
-  isLocked: false,
-  songs: []
-};
-
-// 1. Log tất cả tin nhắn gửi tới Bot để debug trên Render
-bot.use((ctx, next) => {
+// Middleware ghi log theo dõi tin nhắn gửi đến
+bot.use(async (ctx, next) => {
   if (ctx.message && ctx.message.text) {
     console.log(`📩 Nhận tin nhắn từ [${ctx.chat.type}] (ID: ${ctx.chat.id}): ${ctx.message.text}`);
   }
   return next();
 });
 
-// --- LỆNH MỞ GAME NHẠC ---
-bot.command(['musicgame', 'music'], async (ctx) => {
+// 3. Hàm xử lý gửi nút bấm Mở Mini App
+const handleMusicGameCommand = async (ctx) => {
   try {
-    const webAppUrl = process.env.WEB_APP_URL;
+    console.log('✅ Đã kích hoạt lệnh Mở Game Nhạc!');
 
-    // Kiểm tra link Web App
-    if (!webAppUrl || !webAppUrl.startsWith('https://')) {
-      console.error('❌ Lỗi: WEB_APP_URL không hợp lệ hoặc thiếu https://');
-      return ctx.reply('⚠️ Lỗi cấu hình Server: WEB_APP_URL chưa được cài đặt chuẩn https://');
-    }
+    // Lấy URL và làm sạch ký tự xuống dòng / khoảng trắng dư thừa
+    const rawUrl = process.env.WEB_APP_URL || 'https://gems-music-game.onrender.com';
+    const webAppUrl = rawUrl.trim();
 
-    // Gửi tin nhắn kèm nút bấm Mini App chuẩn
-    await ctx.reply('🎶 Nhấn vào nút dưới đây để tham gia gửi link nhạc hoặc mở Vòng Quay!', {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            {
-              text: '🎮 Mở Game Nhạc',
-              web_app: { url: webAppUrl }
-            }
-          ]
-        ]
-      }
-    });
-    console.log('✅ Đã gửi nút Mở Game thành công vào nhóm!');
+    // Gửi tin nhắn kèm nút bấm Web App chuẩn cú pháp Telegraf Markup
+    await ctx.reply(
+      '🎶 Nhấn vào nút dưới đây để tham gia gửi link nhạc hoặc mở Vòng Quay!',
+      Markup.inlineKeyboard([
+        [Markup.button.webApp('🎮 Mở Game Nhạc', webAppUrl)]
+      ])
+    );
   } catch (err) {
     console.error('❌ Lỗi gửi tin nhắn:', err);
   }
+};
+
+// Đăng ký nhận cả 3 lệnh: /start, /musicgame và /music
+bot.command('start', handleMusicGameCommand);
+bot.command(['musicgame', 'music'], handleMusicGameCommand);
+
+// 4. Khởi chạy Express Web Server
+app.listen(PORT, () => {
+  console.log(`🚀 Server đang chạy trên cổng ${PORT}`);
 });
 
-// 4. Các API xử lý Game
-app.get('/api/game', (req, res) => {
-  res.json(gameState);
-});
-
-app.post('/api/submit', (req, res) => {
-  if (gameState.isLocked) {
-    return res.status(400).json({ error: 'Form đã đóng, không thể gửi thêm bài!' });
-  }
-  const { user, links } = req.body;
-  if (Array.isArray(links)) {
-    links.forEach(url => {
-      if (url && url.trim() !== '') {
-        gameState.songs.push({
-          id: Date.now() + Math.random().toString(36).substr(2, 4),
-          user: user || 'Ẩn danh',
-          url: url.trim()
-        });
-      }
-    });
-  }
-  res.json({ success: true, total: gameState.songs.length });
-});
-
-app.post('/api/lock', (req, res) => {
-  gameState.isLocked = true;
-  res.json({ success: true, isLocked: true });
-});
-
-app.post('/api/remove', (req, res) => {
-  const { id } = req.body;
-  gameState.songs = gameState.songs.filter(song => song.id !== id);
-  res.json({ success: true, remaining: gameState.songs });
-});
-
-app.post('/api/reset', (req, res) => {
-  gameState = { isLocked: false, songs: [] };
-  res.json({ success: true });
-});
-
-// API Mở lại Form cho phép gửi bài tiếp
-app.post('/api/unlock', (req, res) => {
-  gameState.isLocked = false;
-  res.json({ success: true, isLocked: false });
-});
-
-// Middleware ghi log mọi tin nhắn gửi tới Bot
-bot.use(async (ctx, next) => {
-  console.log(`📩 [LOG NHÓM] Nhận tin nhắn: "${ctx.message?.text}" từ ID: ${ctx.chat?.id}`);
-  return next();
-});
-
-// --- KHỞI CHẠY BOT VÀ XÓA WEBHOOK CŨ ---
+// 5. Khởi chạy Telegram Bot an toàn (Xóa Webhook cũ để tránh kẹt)
 async function startTelegramBot() {
   try {
-    console.log("🔍 Đang kiểm tra và kết nối Bot...");
+    console.log('🔍 Đang kiểm tra và kết nối Bot...');
 
-    // 1. Xóa sạch Webhook cũ kẹt trên Telegram Server
+    if (!botToken) {
+      console.error('❌ LỖI: Chưa cấu hình BOT_TOKEN trên Render Environment!');
+      return;
+    }
+
+    // Xóa Webhook kẹt cũ trên máy chủ Telegram
     await bot.telegram.deleteWebhook({ drop_pending_updates: true });
-    console.log("🧹 Đã xóa Webhook cũ thành công!");
+    console.log('🧹 Đã xóa Webhook cũ thành công!');
 
-    // 2. Xác thực Token và lấy thông tin Bot
+    // Xác thực thông tin Bot
     const botInfo = await bot.telegram.getMe();
     console.log(`🤖 Xác thực thành công Bot: @${botInfo.username}`);
 
-    // 3. Khởi chạy Long Polling
+    // Kích hoạt Long Polling
     bot.launch();
-    console.log("✅ Telegram Bot đã chính thức lắng nghe tin nhắn!");
+    console.log('✅ Telegram Bot đã chính thức lắng nghe tin nhắn!');
   } catch (err) {
-    console.error("❌ Lỗi khởi chạy Telegram Bot:", err.message || err);
+    console.error('❌ Lỗi khởi chạy Telegram Bot:', err.message || err);
   }
 }
 
 startTelegramBot();
 
-// Đóng bot an toàn khi server restart
+// Tự động đóng bot khi ngắt server
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 Server đang chạy trên cổng ${PORT}`));
