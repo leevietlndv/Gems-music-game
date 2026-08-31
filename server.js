@@ -46,19 +46,17 @@ function performSpin() {
 // --- CÁC LỆNH BOT TELEGRAM ---
 if (bot) {
   const sendWebAppButton = (ctx) => {
-    const webAppUrl = process.env.WEB_APP_URL || 't.me/GU3B_Radio_Bot/music3B';
-
+    const directMiniAppUrl = 'https://t.me/GU3B_Radio_Bot/music3B';
     ctx.reply(
       '🎵 Bấm vào đây để gửi những bài nhạc hay nhức nách',
       Markup.inlineKeyboard([
-        // Sử dụng button.webApp thay vì button.url để mở thẳng không bị cảnh báo
-        [Markup.button.webApp('🎡 Mở Vòng Quay Nhạc', webAppUrl)]
+        [Markup.button.url('🎡 Mở Vòng Quay Nhạc', directMiniAppUrl)]
       ])
     );
   };
 
-  // Nhận lệnh /start và /musicgame
-  bot.command(['start', 'musicgame'], sendWebAppButton);
+  // Nhận lệnh /start và /musicgems
+  bot.command(['start', 'musicgems'], sendWebAppButton);
 
   bot.command('spin', (ctx) => {
     const result = performSpin();
@@ -92,7 +90,7 @@ if (bot) {
 
   // Tự động đăng ký Menu lệnh
   bot.telegram.setMyCommands([
-    { command: 'musicgame', description: 'Mở Vòng Quay Nhạc' },
+    { command: 'musicgems', description: 'Mở Vòng Quay Nhạc' },
     { command: 'spin', description: 'Quay ngẫu nhiên bài hát' },
     { command: 'toggle', description: 'Bật/Tắt form gửi bài' },
     { command: 'list', description: 'Xem danh sách bài hát' },
