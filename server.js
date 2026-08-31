@@ -76,7 +76,7 @@ const bot = new Telegraf(botToken);
 const handleMusicGameCommand = async (ctx) => {
   const rawUrl = process.env.WEB_APP_URL || 'https://gems-music-game.onrender.com';
   await ctx.reply(
-    '🎶 Nhấn vào nút dưới đây để tham gia gửi link nhạc hoặc mở Vòng Quay!',
+    '🎶 Nhấn vào nút dưới đây để tham gia gửi link nhạc',
     Markup.inlineKeyboard([[Markup.button.webApp('🎮 Mở Game Nhạc', rawUrl.trim())]])
   );
 };
