@@ -43,17 +43,34 @@ bot.use((ctx, next) => {
   return next();
 });
 
-// 2. Bắt tất cả các câu lệnh liên quan đến musicgame / music (kể cả có @username phía sau)
-bot.hears(/\/musicgame|\/music/i, (ctx) => {
-  console.log('✅ Đã kích hoạt lệnh Mở Game Nhạc!');
-  
-  ctx.reply('🎪 Nhấn vào nút dưới đây để tham gia gửi link nhạc hoặc mở Vòng Quay!', {
-    reply_markup: {
-      inline_keyboard: [[
-        { text: "🎵 Mở Game Nhạc", web_app: { url: process.env.WEB_APP_URL || WEB_APP_URL } }
-      ]]
+// --- LỆNH MỞ GAME NHẠC ---
+bot.command(['musicgame', 'music'], async (ctx) => {
+  try {
+    const webAppUrl = process.env.WEB_APP_URL;
+
+    // Kiểm tra link Web App
+    if (!webAppUrl || !webAppUrl.startsWith('https://')) {
+      console.error('❌ Lỗi: WEB_APP_URL không hợp lệ hoặc thiếu https://');
+      return ctx.reply('⚠️ Lỗi cấu hình Server: WEB_APP_URL chưa được cài đặt chuẩn https://');
     }
-  }).catch(err => console.error('❌ Lỗi gửi tin nhắn:', err));
+
+    // Gửi tin nhắn kèm nút bấm Mini App chuẩn
+    await ctx.reply('🎶 Nhấn vào nút dưới đây để tham gia gửi link nhạc hoặc mở Vòng Quay!', {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: '🎮 Mở Game Nhạc',
+              web_app: { url: webAppUrl }
+            }
+          ]
+        ]
+      }
+    });
+    console.log('✅ Đã gửi nút Mở Game thành công vào nhóm!');
+  } catch (err) {
+    console.error('❌ Lỗi gửi tin nhắn:', err);
+  }
 });
 
 // 4. Các API xử lý Game
