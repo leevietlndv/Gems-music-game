@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Vòng Quay Nhạc</title>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
   <script src="/socket.io/socket.io.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
@@ -102,6 +102,18 @@ if (tg) {
 
 const telegramInitData = tg?.initData || '';
 
+console.log('📱 Telegram WebApp:', {
+  available: !!tg,
+  platform: tg?.platform || 'unknown',
+  version: tg?.version || 'unknown',
+  initDataLength: telegramInitData.length,
+  userId: tg?.initDataUnsafe?.user?.id || null
+});
+
+if (!tg) {
+  console.warn('⚠️ Trang này không được mở bên trong Telegram Mini App.');
+}
+
 function getTelegramUserData() {
       const u = tg?.initDataUnsafe?.user;
       if (!u) return { name: 'Người dùng', id: null };
@@ -158,9 +170,16 @@ function getTelegramUserData() {
 
     // Quản lý trạng thái socket
     socket.on('connect', () => {
+      console.log('🔌 Socket connected:', socket.id);
+      console.log('🔑 Sending Telegram initData, length:', telegramInitData.length);
+
       socket.emit('authenticate', {
         initData: telegramInitData
       });
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('❌ Socket connection error:', error);
     });
 
     socket.on('disconnect', () => {
@@ -170,11 +189,16 @@ function getTelegramUserData() {
 
     // Cập nhật phân quyền từ Backend
     socket.on('adminStatus', (data) => {
-      if (data.isAdmin) {
+    console.log('👮 ADMIN STATUS:', data);
+
+    if (data.isAdmin === true) {
         btnSpin.classList.remove('admin-only');
         adminPanel.classList.remove('admin-only');
-      }
-    });
+    } else {
+        btnSpin.classList.add('admin-only');
+        adminPanel.classList.add('admin-only');
+    }
+  });
 
     socket.on('stateUpdate', (data) => {
       isFormOpen = data.isFormOpen;

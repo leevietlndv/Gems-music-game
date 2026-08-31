@@ -12,6 +12,7 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
+const WEBAPP_URL = process.env.WEBAPP_URL || 'https://gems-music-game.onrender.com';
 
 const ADMIN_IDS = new Set(
   (process.env.ADMIN_IDS || '')
@@ -66,7 +67,10 @@ function validateTelegramInitData(initData) {
       .update(dataCheckString)
       .digest('hex');
 
-    if (calculatedHash !== receivedHash) {
+    const calculated = Buffer.from(calculatedHash, 'hex');
+    const received = Buffer.from(receivedHash, 'hex');
+
+    if (calculated.length !== received.length || !crypto.timingSafeEqual(calculated, received)) {
       return {
         valid: false,
         message: 'Chữ ký Telegram không hợp lệ'
@@ -156,14 +160,19 @@ function performSpin() {
   return { success: true, winner };
 }
 
-// --- CÁC LỆNH BOT TELEGRAM ---
-if (bot) {
+  // --- CÁC LỆNH BOT TELEGRAM ---
   const sendWebAppButton = (ctx) => {
-    const directMiniAppUrl = 'https://t.me/GU3B_Radio_Bot/music3B';
+    const miniAppUrl = 'https://gems-music-game.onrender.com';
+
     ctx.reply(
-      '🎵 Bấm vào đây để gửi những bài nhạc hay nhức nách',
+      '🎵 Bấm vào đây để gửi nhạc',
       Markup.inlineKeyboard([
-        [Markup.button.url('🎡 Mở Vòng Quay Nhạc', directMiniAppUrl)]
+        [
+          Markup.button.webApp(
+            '🎡 Mở Vòng Quay Nhạc',
+            miniAppUrl
+          )
+        ]
       ])
     );
   };
@@ -210,6 +219,15 @@ if (bot) {
     { command: 'reset', description: 'Xóa toàn bộ danh sách' }
   ]).catch(err => console.error('Lỗi thiết lập menu lệnh:', err));
 
+  bot.telegram.setChatMenuButton({
+    menu_button: {
+      type: 'web_app',
+      text: '🎵 Mở Game Nhạc',
+      web_app: { url: WEBAPP_URL }
+    }
+  }).then(() => console.log('📱 Menu Telegram đã trỏ tới Mini App:', WEBAPP_URL))
+    .catch(err => console.error('Lỗi thiết lập Menu Mini App:', err));
+
   bot.launch()
     .then(() => console.log('🤖 Bot Telegram đã khởi chạy thành công!'))
     .catch(err => console.error('Lỗi khởi chạy Bot:', err));
@@ -220,8 +238,76 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 io.on('connection', (socket) => {
-  socket.emit('stateUpdate', { isFormOpen, songs, lastWinner });
+  console.log(`🔌 Socket connected: ${socket.id}`);
+
+  socket.emit('stateUpdate', {
+    isFormOpen,
+    songs,
+    lastWinner
+  });
+
+  socket.on('authenticate', (payload = {}) => {
+    const initData = payload.initData || '';
+    console.log(`🔑 Authenticate received: socket=${socket.id}, initDataLength=${initData.length}`);
+
+    const auth = validateTelegramInitData(initData);
+
+    if (!auth.valid) {
+      console.log('❌ Telegram authentication failed:', auth.message);
+
+      socket.emit('adminStatus', {
+        isAdmin: false,
+        authenticated: false,
+        message: auth.message
+      });
+
+      return;
+    }
+
+    const telegramId = String(auth.user.id);
+    const admin = isAdmin(telegramId);
+
+    console.log(`🔐 Telegram ID: ${telegramId} | Admin: ${admin}`);
+
+    socket.emit('adminStatus', {
+      isAdmin: admin,
+      authenticated: true,
+      telegramId
+    });
+  });
+
+  socket.on('disconnect', (reason) => {
+    console.log(`🔌 Socket disconnected: ${socket.id} | ${reason}`);
+  });
 });
+
+function requireTelegramAdmin(req, res) {
+  const initData = req.body?.initData || '';
+  const auth = validateTelegramInitData(initData);
+
+  if (!auth.valid) {
+    return {
+      ok: false,
+      response: res.status(401).json({
+        success: false,
+        message: `Xác thực Telegram thất bại: ${auth.message}`
+      })
+    };
+  }
+
+  const telegramId = String(auth.user.id);
+  if (!isAdmin(telegramId)) {
+    return {
+      ok: false,
+      response: res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền Admin.'
+      })
+    };
+  }
+
+  return { ok: true, user: auth.user };
+}
 
 app.post('/api/submit', (req, res) => {
   if (!isFormOpen) {
@@ -272,17 +358,26 @@ app.post('/api/submit', (req, res) => {
 });
 
 app.post('/api/spin', (req, res) => {
+  const auth = requireTelegramAdmin(req, res);
+  if (!auth.ok) return;
+
   const result = performSpin();
   res.json(result);
 });
 
 app.post('/api/toggle-form', (req, res) => {
+  const auth = requireTelegramAdmin(req, res);
+  if (!auth.ok) return;
+
   isFormOpen = !isFormOpen;
   broadcastState();
-  res.json({ success: true });
+  res.json({ success: true, isFormOpen });
 });
 
 app.post('/api/reset', (req, res) => {
+  const auth = requireTelegramAdmin(req, res);
+  if (!auth.ok) return;
+
   songs = [];
   lastWinner = null;
   broadcastState();
