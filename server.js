@@ -103,7 +103,8 @@ app.post('/api/unlock', (req, res) => {
 });
 
 // 5. Khởi chạy Bot và Server
-bot.launch()
+bot.telegram.deleteWebhook({ drop_pending_updates: true })
+  .then(() => bot.launch())
   .then(() => console.log('✅ Telegram Bot đã kết nối thành công!'))
   .catch((err) => console.error('❌ Lỗi kết nối Telegram Bot:', err));
 
