@@ -107,6 +107,8 @@
       width: 80%;
       flex: 1;
       min-width: 0;
+      font-weight: 700;
+      color: #ffcc00;
 
       white-space: nowrap;
       overflow: hidden;
@@ -388,16 +390,6 @@ function getTelegramUserData() {
       isInitiator = false;
     });
 
-    function limitText(str, maxLength) {
-      str = String(str ?? '').trim();
-
-      if (str.length <= maxLength) {
-        return str;
-      }
-
-      return str.substring(0, maxLength) + '...';
-    }
-
     function updateUI() {
       if (isFormOpen) {
         statusBadge.textContent = '🟢 Đang mở form';
@@ -439,11 +431,11 @@ function getTelegramUserData() {
             s = s || {};
 
             const user = escapeHtml(
-              limitText(s.user || 'Người dùng', 25)
+              s.user || 'Người dùng'
             );
 
             const title = escapeHtml(
-              limitText(s.title || 'Đang cập nhật tiêu đề...', 30)
+              s.title || 'Đang cập nhật tiêu đề...'
             );
             const id = String(s.id ?? '');
 
