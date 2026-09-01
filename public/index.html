@@ -401,16 +401,6 @@ function getTelegramUserData() {
       }
     }
 
-    songListEl.addEventListener('click', (event) => {
-      const button = event.target.closest('.btn-delete-song');
-
-      if (!button) return;
-
-      const songId = button.dataset.songId;
-
-      deleteSong(songId);
-    });
-
     function drawWheel() {
       const numSlices = songs.length;
       ctx.clearRect(0, 0, 300, 300);
