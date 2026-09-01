@@ -75,7 +75,7 @@
       width: 50px !important;
       min-width: 50px;
 
-      padding: 7px 5px;
+      padding: 7px 3px;
 
       border: none;
       border-radius: 6px;
@@ -128,7 +128,7 @@
       width: 50px !important;
       min-width: 50px;
 
-      padding: 7px 5px;
+      padding: 7px 3px;
 
       border: none;
       border-radius: 6px;
@@ -374,76 +374,108 @@ function getTelegramUserData() {
         btnToggleForm.textContent = '🔓 Mở Form';
       }
 
+      // Đảm bảo songs luôn là mảng
+      if (!Array.isArray(songs)) {
+        console.warn('⚠️ songs không phải mảng:', songs);
+        songs = [];
+      }
+
       btnSpin.disabled = isSpinning || songs.length === 0;
 
       listTitleEl.textContent = `📋 Danh sách bài hát (${songs.length})`;
+
       if (songs.length === 0) {
-        songListEl.innerHTML = '<div style="text-align: center; color: #888; font-size: 13px; padding: 10px;">Chưa có bài hát nào được gửi.</div>';
-      } else {
-        songListEl.innerHTML = songs.map((s, idx) => `
-          <div class="song-item">
-
-            <div class="song-header">
-
-              <div class="song-user">
-                  #${idx + 1} - ${escapeHtml(truncateText(s.user, 24))}
-              </div>
-
-              <div class="song-actions">
-
-                <!-- PLAY: TẤT CẢ USER -->
-                <button
-                  class="btn-play-song"
-                  onclick="playSong('${String(s.id)}')"
-                  title="Phát bài hát"
-                >
-                  ▶
-                </button>
-
-                <!-- DELETE: CHỈ ADMIN -->
-                <button
-                  class="btn-delete-song admin-only"
-                  onclick="deleteSong('${String(s.id)}')"
-                  title="Xóa bài hát"
-                >
-                  ✖
-                </button>
-
-              </div>
-
-            </div>
-
-            <div class="song-url">
-                ${escapeHtml(
-                    truncateText(
-                        s.title || 'Đang cập nhật tiêu đề...',
-                        32
-                    )
-                )}
-            </div>
-
+        songListEl.innerHTML = `
+          <div style="
+            text-align: center;
+            color: #888;
+            font-size: 13px;
+            padding: 10px;
+          ">
+            Chưa có bài hát nào được gửi.
           </div>
-        `).join('');
+        `;
+      } else {
+        try {
+          songListEl.innerHTML = songs.map((s, idx) => {
+            // Bảo vệ trường hợp dữ liệu bài hát bị thiếu
+            s = s || {};
 
-        /*
-        * Sau khi dựng lại danh sách:
-        * - Play luôn hiển thị
-        * - Delete chỉ hiển thị với Admin
-        */
-        document.querySelectorAll('.btn-delete-song').forEach(button => {
-          if (window.isAdmin === true) {
-            button.classList.remove('admin-only');
-          } else {
-            button.classList.add('admin-only');
-          }
-        });
+            const user = escapeHtml(s.user || 'Người dùng');
+            const title = escapeHtml(
+              s.title || 'Đang cập nhật tiêu đề...'
+            );
+            const id = String(s.id ?? '');
+
+            return `
+              <div class="song-item">
+
+                <div class="song-header">
+
+                  <div class="song-user">
+                    #${idx + 1} - ${user}
+                  </div>
+
+                  <div class="song-actions">
+
+                    <!-- PLAY: TẤT CẢ USER -->
+                    <button
+                      class="btn-play-song"
+                      onclick="playSong('${id}')"
+                      title="Phát bài hát"
+                    >
+                      ▶
+                    </button>
+
+                    <!-- DELETE: CHỈ ADMIN -->
+                    <button
+                      class="btn-delete-song admin-only"
+                      onclick="deleteSong('${id}')"
+                      title="Xóa bài hát"
+                    >
+                      ✖
+                    </button>
+
+                  </div>
+
+                </div>
+
+                <div class="song-url">
+                  ${title}
+                </div>
+
+              </div>
+            `;
+          }).join('');
+
+        } catch (error) {
+          console.error('❌ Lỗi render danh sách bài hát:', error);
+          console.error('📦 songs hiện tại:', songs);
+
+          songListEl.innerHTML = `
+            <div style="
+              text-align: center;
+              color: #ff6b6b;
+              font-size: 13px;
+              padding: 10px;
+            ">
+              ⚠️ Lỗi hiển thị danh sách bài hát.
+            </div>
+          `;
+        }
       }
 
       drawWheel();
     }
 
+
     function escapeHtml(str) {
-      return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
     }
     
     async function playSong(songId) {
