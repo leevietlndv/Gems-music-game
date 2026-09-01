@@ -212,15 +212,15 @@ async function performSpin() {
   // --- CÁC LỆNH BOT TELEGRAM ---
   if (bot) {
   const sendWebAppButton = (ctx) => {
-    const miniAppUrl = 'https://t.me/GU3B_Radio_Bot/music3B';
+    const miniAppUrl = 'https://gems-music-game.onrender.com';
 
     ctx.reply(
       '🎧 Bấm vào bên dưới để gửi nhạc',
       Markup.inlineKeyboard([
         [
-          Markup.button.webApp(
+          Markup.button.url(
             '𝄞 Mở GEMS Radio',
-             MAIN_MINI_APP_URL
+            MAIN_MINI_APP_URL
           )
         ]
       ])
