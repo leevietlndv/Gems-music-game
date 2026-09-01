@@ -371,11 +371,16 @@ function getTelegramUserData() {
       if (!data?.song) return;
 
       const song = data.song;
+      const shouldPlaySound = data.initiatorSocketId === socket.id;
 
-      console.log('▶️ Nhận bài hát được phát:', song);
+      console.log(
+        shouldPlaySound
+          ? '▶️ Bạn vừa bấm PLAY — phát có tiếng'
+          : '▶️ Nhận bài hát từ client khác — phát mute',
+        song
+      );
 
-      // Phát bài hát nhưng KHÔNG có âm thanh
-      renderPlayer(song, false);
+      renderPlayer(song, shouldPlaySound);
     });
 
     socket.on('triggerSpin', (data) => {
@@ -535,7 +540,8 @@ function getTelegramUserData() {
           },
           body: JSON.stringify({
             id: songId,
-            initData: telegramInitData
+            initData: telegramInitData,
+            socketId: socket.id
           })
         });
 
@@ -546,9 +552,8 @@ function getTelegramUserData() {
           return;
         }
 
-        // QUAN TRỌNG:
-        // Chính người bấm PLAY sẽ phát có âm thanh.
-        renderPlayer(data.song, true);
+        // Server sẽ phát songPlayed cho tất cả client.
+        // Không render lại ở đây để tránh iframe bị tải 2 lần.
 
       } catch (error) {
         console.error('❌ Lỗi phát bài hát:', error);

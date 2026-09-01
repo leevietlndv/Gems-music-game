@@ -471,9 +471,10 @@ try {
 });
 
 // ==================== PLAY ONE SONG ====================
-
+// Tất cả user đều được phép phát.
+// Người bấm Play nghe tiếng; các client khác phát mute.
 app.post('/api/play-song', async (req, res) => {
-  const { id } = req.body;
+  const { id, initData, socketId } = req.body;
 
   if (!id) {
     return res.status(400).json({
@@ -482,114 +483,26 @@ app.post('/api/play-song', async (req, res) => {
     });
   }
 
-  try {
-    // Tìm bài hát được yêu cầu phát
-    const songResult = await pool.query(
-      `
-        SELECT
-          id,
-          url,
-          title,
-          user_name AS user,
-          telegram_id AS "telegramId",
-          created_at
-        FROM songs
-        WHERE id = $1
-      `,
-      [id]
-    );
-
-    if (songResult.rowCount === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Không tìm thấy bài hát!'
-      });
-    }
-
-    const selectedSong = songResult.rows[0];
-
-    // Nếu đang có bài khác phát thì xóa bài đang phát
-    if (
-      lastWinner &&
-      String(lastWinner.id) !== String(selectedSong.id)
-    ) {
-      await pool.query(
-        'DELETE FROM songs WHERE id = $1',
-        [lastWinner.id]
-      );
-
-      songs = songs.filter(
-        song => String(song.id) !== String(lastWinner.id)
-      );
-
-      console.log(
-        `🗑️ Đã xóa bài đang phát #${lastWinner.id}`
-      );
-    }
-
-    // Bài được chọn trở thành bài đang phát
-    lastWinner = selectedSong;
-
-    broadcastState();
-
-    console.log(
-      `▶️ Phát bài hát #${selectedSong.id}: ${selectedSong.title || selectedSong.url}`
-    );
-
-    res.json({
-      success: true,
-      song: selectedSong
-    });
-
-  } catch (error) {
-    console.error('❌ Lỗi phát bài hát:', error);
-
-    res.status(500).json({
-      success: false,
-      message: 'Không thể phát bài hát!'
-    });
-  }
-});
-
-// ==================== PLAY SONG ====================
-// Tất cả user đều được phép phát bài hát.
-// Người bấm Play sẽ nghe tiếng.
-// Các Mini App khác nhận sự kiện và phát ở chế độ mute.
-app.post('/api/play-song', async (req, res) => {
-  const { id, initData } = req.body;
-
-  if (!id) {
-    return res.status(400).json({
-      success: false,
-      message: 'Thiếu ID bài hát!'
-    });
-  }
-
-  // Xác thực Telegram user, KHÔNG yêu cầu Admin
   const auth = validateTelegramInitData(initData);
-
   if (!auth.valid) {
     return res.status(401).json({
       success: false,
-      message: 'Xác thực Telegram thất bại!'
+      message: `Xác thực Telegram thất bại: ${auth.message}`
     });
   }
 
   try {
-    const result = await pool.query(
-      `
-        SELECT
-          id,
-          url,
-          title,
-          user_name AS user,
-          telegram_id AS "telegramId",
-          created_at
-        FROM songs
-        WHERE id = $1
-      `,
-      [id]
-    );
+    const result = await pool.query(`
+      SELECT
+        id,
+        url,
+        title,
+        user_name AS user,
+        telegram_id AS "telegramId",
+        created_at
+      FROM songs
+      WHERE id = $1
+    `, [id]);
 
     if (result.rowCount === 0) {
       return res.status(404).json({
@@ -600,73 +513,33 @@ app.post('/api/play-song', async (req, res) => {
 
     const song = result.rows[0];
 
-    // Gửi cho TẤT CẢ client.
-    // Client nào là người bấm Play sẽ tự phát có tiếng.
-    // Các client còn lại sẽ phát mute.
+    if (lastWinner && String(lastWinner.id) !== String(song.id)) {
+      await pool.query('DELETE FROM songs WHERE id = $1', [lastWinner.id]);
+      songs = songs.filter(s => String(s.id) !== String(lastWinner.id));
+      console.log(`🗑️ Đã xóa bài đang phát #${lastWinner.id}`);
+    }
+
+    lastWinner = song;
+
+    // Phát event trước stateUpdate để client vừa bấm Play giữ được âm thanh.
     io.emit('songPlayed', {
-      song
+      song,
+      initiatorSocketId: socketId || null
     });
 
-    console.log(
-      `▶️ Phát bài hát #${song.id}: ${song.title}`
-    );
+    broadcastState();
+
+    console.log(`▶️ Phát bài hát #${song.id}: ${song.title || song.url}`);
 
     res.json({
       success: true,
       song
     });
-
   } catch (error) {
     console.error('❌ Lỗi phát bài hát:', error);
-
     res.status(500).json({
       success: false,
       message: 'Không thể phát bài hát!'
-    });
-  }
-});
-
-app.post('/api/spin', async (req, res) => {
-  const auth = requireTelegramAdmin(req, res);
-  if (!auth.ok) return;
-
-  const result = await performSpin();
-  res.json(result);
-});
-
-app.post('/api/toggle-form', (req, res) => {
-  const auth = requireTelegramAdmin(req, res);
-  if (!auth.ok) return;
-
-  isFormOpen = !isFormOpen;
-  broadcastState();
-  res.json({ success: true, isFormOpen });
-});
-
-app.post('/api/reset', async (req, res) => {
-  const auth = requireTelegramAdmin(req, res);
-  if (!auth.ok) return;
-
-  try {
-    await pool.query('DELETE FROM songs');
-
-    songs = [];
-    lastWinner = null;
-
-    broadcastState();
-
-    console.log('🧹 Đã xóa toàn bộ bài hát khỏi PostgreSQL');
-
-    res.json({
-      success: true
-    });
-
-  } catch (error) {
-    console.error('❌ Lỗi reset PostgreSQL:', error);
-
-    res.status(500).json({
-      success: false,
-      message: 'Không thể xóa danh sách bài hát!'
     });
   }
 });
