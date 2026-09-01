@@ -30,9 +30,93 @@
     .admin-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; width: 100%; max-width: 480px; }
     .btn-toggle { background: #37474f; color: white; }
     .btn-reset { background: #d32f2f; color: white; }
-    .song-list { max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
-    .song-item { background: #1a2232; padding: 10px; border-radius: 6px; font-size: 13px; word-break: break-all; border-left: 3px solid #0088cc; }
-    .song-user { font-weight: bold; color: #ffca28; margin-bottom: 2px; }
+
+    .song-list {
+        max-height: 240px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+   .song-item {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 12px 14px;
+        background: #182235;
+        border-left: 4px solid #00aaff;
+        border-radius: 12px;
+
+        /* QUAN TRỌNG: không dùng flex ở đây */
+        display: block;
+
+        overflow: hidden;
+    }
+    .song-header {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 8px;
+    }
+    .song-user {
+        flex: 1;
+        min-width: 0;
+
+        font-weight: bold;
+        color: #ffca28;
+        font-size: 15px;
+
+        /* Không cho username bị ép từng chữ */
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+    .btn-delete-song {
+        width: auto !important;
+        min-width: 50px;
+        flex: 0 0 auto;
+
+        border: none;
+        border-radius: 6px;
+
+        background: #d32f2f;
+        color: #ffffff;
+
+        padding: 7px 10px;
+        font-size: 12px;
+        font-weight: 600;
+
+        cursor: pointer;
+
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+
+        white-space: nowrap;
+    }
+
+    .btn-delete-song:hover {
+        background: #b71c1c;
+    }
+
+    .btn-delete-song:active {
+        transform: scale(0.96);
+    }
+
+    .song-url {
+        width: 100%;
+        min-width: 0;
+
+        color: #cfd8dc;
+        font-size: 14px;
+        line-height: 1.4;
+
+        /* URL dài được xuống dòng */
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+    
     .player-wrapper { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px; background: #000; }
     .player-wrapper iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
     .audio-notice { font-size: 12px; padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 4px; font-weight: 600; }
@@ -238,34 +322,31 @@ function getTelegramUserData() {
       if (songs.length === 0) {
         songListEl.innerHTML = '<div style="text-align: center; color: #888; font-size: 13px; padding: 10px;">Chưa có bài hát nào được gửi.</div>';
       } else {
-    songListEl.innerHTML = songs.map((s, idx) => `
-        <div class="song-item">
-            <div class="song-user">
-                #${idx + 1} - ${escapeHtml(s.user)}
-            </div>
+        songListEl.innerHTML = songs.map((s, idx) => `
+          <div class="song-item">
 
-            <div style="word-break: break-all;">
-                ${escapeHtml(s.url)}
-            </div>
+              <div class="song-header">
 
-            <button
-                type="button"
-                onclick="deleteSong(${s.id})"
-                style="
-                    margin-top: 6px;
-                    background: #d32f2f;
-                    color: white;
-                    border: none;
-                    border-radius: 6px;
-                    padding: 5px 10px;
-                    cursor: pointer;
-                "
-            >
-                🗑️ Xóa bài này
-            </button>
-        </div>
-    `).join('');
-}
+                  <div class="song-user">
+                      #${idx + 1} - ${escapeHtml(s.user)}
+                  </div>
+
+                  <button
+                      class="btn-delete-song"
+                      onclick="deleteSong('${String(s.id)}')"
+                  >
+                      ✖️
+                  </button>
+
+              </div>
+
+              <div class="song-url">
+                  ${escapeHtml(s.url)}
+              </div>
+
+          </div>
+          `).join('');
+      }
 
       drawWheel();
     }
@@ -273,53 +354,52 @@ function getTelegramUserData() {
     function escapeHtml(str) {
       return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
-
-    async function deleteSong(songId) {
-  if (!songId) {
-    alert('Không xác định được bài hát cần xóa!');
-    return;
-  }
-
-  const song = songs.find(s => String(s.id) === String(songId));
-
-  if (!song) {
-    alert('Không tìm thấy bài hát!');
-    return;
-  }
-
-  const confirmed = confirm(
-    `Bạn có chắc muốn xóa bài hát này?\n\n${song.user}\n${song.url}`
-  );
-
-  if (!confirmed) return;
-
-  try {
-    const res = await fetch('/api/delete-song', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        id: songId,
-        initData: telegramInitData
-      })
-    });
-
-    const data = await res.json();
-
-    if (!data.success) {
-      alert(data.message || 'Không thể xóa bài hát!');
-      return;
-    }
-
-    // Không cần tự sửa songs ở đây.
-    // Backend sẽ broadcastState() và updateUI() sẽ tự cập nhật.
     
-  } catch (error) {
-    console.error('Lỗi xóa bài hát:', error);
-    alert('Lỗi kết nối khi xóa bài hát!');
-  }
-}
+    async function deleteSong(songId) {
+      if (!songId) {
+        alert('Không xác định được bài hát cần xóa!');
+        return;
+      }
+
+      const song = songs.find(s => String(s.id) === String(songId));
+
+      if (!song) {
+        alert('Không tìm thấy bài hát!');
+        return;
+      }
+
+      const confirmed = confirm(
+        `Bạn có chắc muốn xóa bài hát này?\n\n${song.user}\n${song.url}`
+      );
+
+      if (!confirmed) return;
+
+      try {
+        const res = await fetch('/api/delete-song', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            id: songId,
+            initData: telegramInitData
+          })
+        });
+
+        const data = await res.json();
+
+        if (!data.success) {
+          alert(data.message || 'Không thể xóa bài hát!');
+          return;
+        }
+
+        // Server sẽ gửi stateUpdate mới,
+        // nên không cần tự sửa mảng songs ở đây.
+      } catch (error) {
+        console.error('Lỗi xóa bài hát:', error);
+        alert('Lỗi kết nối đến server!');
+      }
+    }
 
     songListEl.addEventListener('click', (event) => {
       const button = event.target.closest('.btn-delete-song');
