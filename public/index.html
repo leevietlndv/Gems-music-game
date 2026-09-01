@@ -384,7 +384,7 @@ function getTelegramUserData() {
 
               <div class="song-actions">
 
-                <!-- NÚT PHÁT - TẤT CẢ USER ĐỀU THẤY -->
+                <!-- PLAY: TẤT CẢ USER -->
                 <button
                   class="btn-play-song"
                   onclick="playSong('${String(s.id)}')"
@@ -393,7 +393,7 @@ function getTelegramUserData() {
                   ▶
                 </button>
 
-                <!-- NÚT XÓA - CHỈ ADMIN -->
+                <!-- DELETE: CHỈ ADMIN -->
                 <button
                   class="btn-delete-song admin-only"
                   onclick="deleteSong('${String(s.id)}')"
@@ -412,6 +412,19 @@ function getTelegramUserData() {
 
           </div>
         `).join('');
+
+        /*
+        * Sau khi dựng lại danh sách:
+        * - Play luôn hiển thị
+        * - Delete chỉ hiển thị với Admin
+        */
+        document.querySelectorAll('.btn-delete-song').forEach(button => {
+          if (window.isAdmin === true) {
+            button.classList.remove('admin-only');
+          } else {
+            button.classList.add('admin-only');
+          }
+        });
       }
 
       drawWheel();
