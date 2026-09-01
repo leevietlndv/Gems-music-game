@@ -234,6 +234,7 @@ function getTelegramUserData() {
     let isFormOpen = true;
     let songs = [];
     let isSpinning = false;
+    let isAdmin = false;
     let currentAngle = 0;
     let isInitiator = false;
     let currentPlayingUrl = null;
@@ -273,16 +274,20 @@ function getTelegramUserData() {
 
     // Cập nhật phân quyền từ Backend
     socket.on('adminStatus', (data) => {
-    console.log('👮 ADMIN STATUS:', data);
+        console.log('👮 ADMIN STATUS:', data);
 
-    if (data.isAdmin === true) {
-        btnSpin.classList.remove('admin-only');
-        adminPanel.classList.remove('admin-only');
-    } else {
-        btnSpin.classList.add('admin-only');
-        adminPanel.classList.add('admin-only');
-    }
-  });
+        isAdmin = data.isAdmin === true;
+
+        if (isAdmin) {
+            btnSpin.classList.remove('admin-only');
+            adminPanel.classList.remove('admin-only');
+        } else {
+            btnSpin.classList.add('admin-only');
+            adminPanel.classList.add('admin-only');
+        }
+
+        updateUI();
+    });
 
     socket.on('stateUpdate', (data) => {
       isFormOpen = data.isFormOpen;
@@ -331,12 +336,18 @@ function getTelegramUserData() {
                       #${idx + 1} - ${escapeHtml(s.user)}
                   </div>
 
-                  <button
-                      class="btn-delete-song"
-                      onclick="deleteSong('${String(s.id)}')"
-                  >
-                      ✖️
-                  </button>
+                  ${
+                      isAdmin
+                          ? `
+                              <button
+                                  class="btn-delete-song"
+                                  onclick="deleteSong('${String(s.id)}')"
+                              >
+                                  ✖️
+                              </button>
+                          `
+                          : ''
+                  }
 
               </div>
 
@@ -345,7 +356,7 @@ function getTelegramUserData() {
               </div>
 
           </div>
-          `).join('');
+      `).join('');
       }
 
       drawWheel();
