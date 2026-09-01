@@ -105,15 +105,14 @@
         transform: scale(0.96);
     }
 
-    .song-url {
+    .song-title {
         width: 100%;
         min-width: 0;
 
         color: #cfd8dc;
-        font-size: 14px;
+        font-size: 15px;
         line-height: 1.4;
 
-        /* URL dài được xuống dòng */
         overflow-wrap: anywhere;
         word-break: break-word;
     }
@@ -331,33 +330,27 @@ function getTelegramUserData() {
         songListEl.innerHTML = songs.map((s, idx) => `
           <div class="song-item">
 
-              <div class="song-header">
+            <div class="song-header">
 
-                  <div class="song-user">
-                      #${idx + 1} - ${escapeHtml(s.user)}
-                  </div>
-
-                  ${
-                      isAdmin
-                          ? `
-                              <button
-                                  class="btn-delete-song"
-                                  onclick="deleteSong('${String(s.id)}')"
-                              >
-                                  ✖️
-                              </button>
-                          `
-                          : ''
-                  }
-
+              <div class="song-user">
+                #${idx + 1} - ${escapeHtml(s.user)}
               </div>
 
-              <div class="song-url">
-                  ${escapeHtml(s.url)}
-              </div>
+              <button
+                class="btn-delete-song admin-only"
+                onclick="deleteSong('${String(s.id)}')"
+              >
+                ✖️
+              </button>
+
+            </div>
+
+            <div class="song-title">
+              ${escapeHtml(s.title || 'Đang cập nhật tiêu đề...')}
+            </div>
 
           </div>
-      `).join('');
+        `).join('');
       }
 
       drawWheel();

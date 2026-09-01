@@ -21,13 +21,19 @@ const pool = new Pool({
 async function initDatabase() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS songs (
-      id SERIAL PRIMARY KEY,
-      url TEXT NOT NULL,
-      user_name TEXT NOT NULL,
-      telegram_id TEXT,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
+    id SERIAL PRIMARY KEY,
+    url TEXT NOT NULL,
+    title TEXT,
+    user_name TEXT NOT NULL,
+    telegram_id TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )
   `);
+
+  await pool.query(`
+  ALTER TABLE songs
+  ADD COLUMN IF NOT EXISTS title TEXT
+`);
 
   console.log('🗄️ PostgreSQL: Database ready');
 }
@@ -37,6 +43,7 @@ async function loadSongsFromDatabase() {
     SELECT
       id,
       url,
+      title,
       user_name AS user,
       telegram_id AS "telegramId",
       created_at
@@ -170,23 +177,6 @@ function validateTelegramInitData(initData) {
 let isFormOpen = true;
 let songs = [];
 let lastWinner = null;
-
-async function loadSongsFromDatabase() {
-  const result = await pool.query(`
-    SELECT
-      id,
-      url,
-      user_name AS user,
-      telegram_id AS "telegramId",
-      created_at
-    FROM songs
-    ORDER BY id ASC
-  `);
-
-  songs = result.rows;
-
-  console.log(`🗄️ Đã tải ${songs.length} bài hát từ PostgreSQL`);
-}
 
 function broadcastState() {
   io.emit('stateUpdate', { isFormOpen, songs, lastWinner });
@@ -371,6 +361,28 @@ function requireTelegramAdmin(req, res) {
   return { ok: true, user: auth.user };
 }
 
+async function getYouTubeTitle(url) {
+  try {
+    const oembedUrl =
+      `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
+
+    const response = await fetch(oembedUrl);
+
+    if (!response.ok) {
+      console.warn(`⚠️ Không lấy được YouTube title: HTTP ${response.status}`);
+      return 'Bài hát YouTube';
+    }
+
+    const data = await response.json();
+
+    return data.title || 'Bài hát YouTube';
+
+  } catch (error) {
+    console.error('❌ Lỗi lấy YouTube title:', error);
+    return 'Bài hát YouTube';
+  }
+}
+
 app.post('/api/submit', async (req, res) => {
   if (!isFormOpen) {
     return res.json({
@@ -400,33 +412,40 @@ app.post('/api/submit', async (req, res) => {
 
   const telegramUser = auth.user;
 
-  // Tạo tên hiển thị
+  // Lấy Name Telegram, không dùng @username
   const userName =
-    telegramUser.username
-      ? `@${telegramUser.username}`
-      : [telegramUser.first_name, telegramUser.last_name]
-          .filter(Boolean)
-          .join(' ') || 'Người dùng';
+    [telegramUser.first_name, telegramUser.last_name]
+      .filter(Boolean)
+      .join(' ')
+      .trim() || 'Người dùng';
 
-  try {
-    // Lưu bài hát trực tiếp vào PostgreSQL
-    const result = await pool.query(
-      `
-      INSERT INTO songs (url, user_name, telegram_id)
-      VALUES ($1, $2, $3)
+  // Lấy tiêu đề YouTube
+  const title = await getYouTubeTitle(url);
+try {
+  const result = await pool.query(
+    `
+      INSERT INTO songs (
+        url,
+        title,
+        user_name,
+        telegram_id
+      )
+      VALUES ($1, $2, $3, $4)
       RETURNING
         id,
         url,
+        title,
         user_name AS user,
         telegram_id AS "telegramId",
         created_at
-      `,
-      [
-        url,
-        userName,
-        String(telegramUser.id)
-      ]
-    );
+    `,
+    [
+      url,
+      title,
+      userName,
+      String(telegramUser.id)
+    ]
+  );
 
     // Đồng bộ dữ liệu vừa lưu vào RAM
     songs.push(result.rows[0]);
