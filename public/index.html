@@ -53,12 +53,10 @@
         flex-shrink: 0;
     }
     .song-header {
-        width: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
     }
 
 .song-actions {
@@ -72,8 +70,8 @@
 
   /* Nút PLAY */
   .btn-play-song {
-      width: 50px !important;
-      min-width: 50px;
+      width: 20%;
+      flex-shrink: 0;
 
       padding: 3px 3px;
 
@@ -104,16 +102,12 @@
   }
 
     .song-user {
-        flex: 1;
-        min-width: 0;
+      flex: 1;
+      min-width: 0;
 
-        font-weight: bold;
-        color: #ffca28;
-        font-size: 15px;
-
-        overflow: hidden;
-        white-space: nowrap;
-        text-overflow: ellipsis;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .song-url {
@@ -124,7 +118,7 @@
     }
 
       /* Nút DELETE */
-  .btn-delete-song {
+    .btn-delete-song {
       width: 50px !important;
       min-width: 50px;
 
@@ -161,6 +155,7 @@
       align-items: center;
       width: 100%;
       gap: 10px;
+      margin-top: 8px;
     }
 
     .song-title {
@@ -170,9 +165,6 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-
-      font-size: 18px;
-      color: white;
     }
 
     .song-title-row .btn-delete-song {
@@ -441,33 +433,31 @@ function getTelegramUserData() {
                     #${idx + 1} - ${user}
                   </div>
 
-                  <div class="song-actions">
+                  <button
+                    class="btn-play-song"
+                    onclick="playSong('${id}')"
+                    title="Phát bài hát"
+                  >
+                    ▶
+                  </button>
 
-                    <!-- PLAY: TẤT CẢ USER -->
-                    <button
-                      class="btn-play-song"
-                      onclick="playSong('${id}')"
-                      title="Phát bài hát"
-                    >
-                      ▶
-                    </button>
+                </div>
 
+                <div class="song-title-row">
+
+                  <div class="song-title">
+                    ${title}
                   </div>
 
-                </div>
+                  <button
+                    class="btn-delete-song admin-only"
+                    onclick="deleteSong('${id}')"
+                    title="Xóa bài hát"
+                  >
+                    ✖
+                  </button>
 
-                <div class="song-url">
-                  ${title}
                 </div>
-
-                <!-- DELETE: CHỈ ADMIN -->
-                <button
-                  class="btn-delete-song ${window.isAdmin ? '' : 'admin-only'}"
-                  onclick="deleteSong('${id}')"
-                  title="Xóa bài hát"
-                >
-                  ✖
-                </button>
 
               </div>
             `;
