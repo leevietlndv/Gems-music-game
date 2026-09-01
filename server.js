@@ -470,6 +470,87 @@ try {
   }
 });
 
+// ==================== PLAY ONE SONG ====================
+
+app.post('/api/play-song', async (req, res) => {
+  const { id } = req.body;
+
+  if (!id) {
+    return res.status(400).json({
+      success: false,
+      message: 'Thiếu ID bài hát!'
+    });
+  }
+
+  try {
+    // Tìm bài hát được yêu cầu phát
+    const songResult = await pool.query(
+      `
+        SELECT
+          id,
+          url,
+          title,
+          user_name AS user,
+          telegram_id AS "telegramId",
+          created_at
+        FROM songs
+        WHERE id = $1
+      `,
+      [id]
+    );
+
+    if (songResult.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy bài hát!'
+      });
+    }
+
+    const selectedSong = songResult.rows[0];
+
+    // Nếu đang có bài khác phát thì xóa bài đang phát
+    if (
+      lastWinner &&
+      String(lastWinner.id) !== String(selectedSong.id)
+    ) {
+      await pool.query(
+        'DELETE FROM songs WHERE id = $1',
+        [lastWinner.id]
+      );
+
+      songs = songs.filter(
+        song => String(song.id) !== String(lastWinner.id)
+      );
+
+      console.log(
+        `🗑️ Đã xóa bài đang phát #${lastWinner.id}`
+      );
+    }
+
+    // Bài được chọn trở thành bài đang phát
+    lastWinner = selectedSong;
+
+    broadcastState();
+
+    console.log(
+      `▶️ Phát bài hát #${selectedSong.id}: ${selectedSong.title || selectedSong.url}`
+    );
+
+    res.json({
+      success: true,
+      song: selectedSong
+    });
+
+  } catch (error) {
+    console.error('❌ Lỗi phát bài hát:', error);
+
+    res.status(500).json({
+      success: false,
+      message: 'Không thể phát bài hát!'
+    });
+  }
+});
+
 app.post('/api/spin', async (req, res) => {
   const auth = requireTelegramAdmin(req, res);
   if (!auth.ok) return;
