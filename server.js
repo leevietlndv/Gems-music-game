@@ -209,82 +209,184 @@ async function performSpin() {
 }
 
   // --- CÁC LỆNH BOT TELEGRAM ---
-  if (bot) {
-  const sendWebAppButton = (ctx) => {
-    const miniAppUrl = 'https://gems-music-game.onrender.com';
+if (bot) {
 
-    ctx.reply(
-      '🎵 Bấm vào đây để gửi nhạc',
+  const sendWebAppButton = async (ctx) => {
+    await ctx.reply(
+      '🎵 GEMS MUSIC GAME\n\nBấm nút bên dưới để tham gia cùng nhóm:',
       Markup.inlineKeyboard([
         [
           Markup.button.webApp(
-            '🎡 Mở Vòng Quay Nhạc',
-            miniAppUrl
+            '🎵 THAM GIA GAME',
+            WEBAPP_URL
           )
         ]
       ])
     );
   };
 
-  // Nhận lệnh /start và /musicgems
-  bot.command(['start', 'musicgems'], sendWebAppButton);
+  // /start
+  // /musicgems
+  // /game
+  bot.command(['start', 'gumusic', 'radio'], sendWebAppButton);
+
+  // =========================
+  // INLINE MODE: @TênBot
+  // =========================
+  bot.on('inline_query', async (ctx) => {
+    try {
+      await ctx.answerInlineQuery([
+        {
+          type: 'article',
+          id: 'gems_music_game',
+          title: '🎵 Gems Radio',
+          description: 'Bấm để mở Mini App',
+          input_message_content: {
+            message_text:
+              '🎵 Bấm nút bên dưới để mở Mini App'
+          },
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: '🎵 GEMS Radio',
+                  web_app: {
+                    url: WEBAPP_URL
+                  }
+                }
+              ]
+            ]
+          }
+        }
+      ]);
+    } catch (error) {
+      console.error('❌ Lỗi Inline Mode:', error);
+    }
+  });
+
+  // =========================
+  // ADMIN COMMANDS
+  // =========================
 
   bot.command('spin', async (ctx) => {
     const result = await performSpin();
+
     if (!result.success) {
-      ctx.reply(`⚠️ ${result.message}`);
-    } else {
-      ctx.reply(`🎡 Đã quay! Bài trúng thưởng: ${result.winner.user} - ${result.winner.url}`);
+      return ctx.reply(`⚠️ ${result.message}`);
     }
+
+    await ctx.reply(
+      `🎡 Đã quay!\n\nBài trúng thưởng:\n${result.winner.user} - ${result.winner.url}`
+    );
   });
 
   bot.command('toggle', (ctx) => {
     isFormOpen = !isFormOpen;
     broadcastState();
-    ctx.reply(`📢 Trạng thái form: ${isFormOpen ? '🟢 Đang MỞ' : '🔴 Đã ĐÓNG'}`);
+
+    ctx.reply(
+      `📢 Trạng thái form: ${
+        isFormOpen ? '🟢 Đang MỞ' : '🔴 Đã ĐÓNG'
+      }`
+    );
   });
 
   bot.command('reset', async (ctx) => {
-  await pool.query('DELETE FROM songs');
+    await pool.query('DELETE FROM songs');
 
-  songs = [];
-  lastWinner = null;
+    songs = [];
+    lastWinner = null;
 
-  broadcastState();
+    broadcastState();
 
-  ctx.reply('🧹 Đã xóa sạch danh sách bài hát!');
-});
+    ctx.reply('🧹 Đã xóa sạch danh sách bài hát!');
+  });
 
   bot.command('list', (ctx) => {
     if (songs.length === 0) {
       return ctx.reply('📋 Danh sách bài hát hiện đang trống.');
     }
-    const listStr = songs.map((s, i) => `${i + 1}. ${s.user}: ${s.url}`).join('\n');
-    ctx.reply(`📋 **Danh sách bài hát (${songs.length}):**\n\n${listStr}`);
+
+    const listStr = songs
+      .map((s, i) => `${i + 1}. ${s.user}: ${s.url}`)
+      .join('\n');
+
+    ctx.reply(
+      `📋 Danh sách bài hát (${songs.length}):\n\n${listStr}`
+    );
   });
 
-  // Tự động đăng ký Menu lệnh
+  // =========================
+  // MENU COMMANDS
+  // =========================
+
   bot.telegram.setMyCommands([
-    { command: 'musicgems', description: 'Mở Vòng Quay Nhạc' },
-    { command: 'spin', description: 'Quay ngẫu nhiên bài hát' },
-    { command: 'toggle', description: 'Bật/Tắt form gửi bài' },
-    { command: 'list', description: 'Xem danh sách bài hát' },
-    { command: 'reset', description: 'Xóa toàn bộ danh sách' }
-  ]).catch(err => console.error('Lỗi thiết lập menu lệnh:', err));
+    {
+      command: 'radio',
+      description: '🎵 Mở Gems Radio'
+    },
+    {
+      command: 'gumusic',
+      description: '🎵 Mở Gems Radio'
+    },
+    {
+      command: 'spin',
+      description: '🎡 Quay ngẫu nhiên bài hát'
+    },
+    {
+      command: 'toggle',
+      description: '📢 Bật/Tắt form gửi bài'
+    },
+    {
+      command: 'list',
+      description: '📋 Xem danh sách bài hát'
+    },
+    {
+      command: 'reset',
+      description: '🧹 Xóa toàn bộ danh sách'
+    }
+  ]).catch(err =>
+    console.error('Lỗi thiết lập menu lệnh:', err)
+  );
+
+  // =========================
+  // MENU BUTTON
+  // =========================
 
   bot.telegram.setChatMenuButton({
     menu_button: {
       type: 'web_app',
       text: '🎵 Mở Game Nhạc',
-      web_app: { url: WEBAPP_URL }
+      web_app: {
+        url: WEBAPP_URL
+      }
     }
-  }).then(() => console.log('📱 Menu Telegram đã trỏ tới Mini App:', WEBAPP_URL))
-    .catch(err => console.error('Lỗi thiết lập Menu Mini App:', err));
+  })
+    .then(() =>
+      console.log(
+        '📱 Menu Telegram đã trỏ tới Mini App:',
+        WEBAPP_URL
+      )
+    )
+    .catch(err =>
+      console.error(
+        'Lỗi thiết lập Menu Mini App:',
+        err
+      )
+    );
+
+  // =========================
+  // KHỞI CHẠY BOT
+  // =========================
 
   bot.launch()
-    .then(() => console.log('🤖 Bot Telegram đã khởi chạy thành công!'))
-    .catch(err => console.error('Lỗi khởi chạy Bot:', err));
-  }
+    .then(() =>
+      console.log('🤖 Bot Telegram đã khởi chạy thành công!')
+    )
+    .catch(err =>
+      console.error('❌ Lỗi khởi chạy Bot:', err)
+    );
+}
 // --- API HTTP & SOCKET.IO ---
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
