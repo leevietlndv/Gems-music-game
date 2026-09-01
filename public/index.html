@@ -298,133 +298,6 @@ function getTelegramUserData() {
     let isInitiator = false;
     let currentPlayingUrl = null;
 
-    // ==================== BACKGROUND PLAYBACK TEST ====================
-    // Bản thử nghiệm: không thay đổi server.
-    // Mục tiêu là giữ nguyên YouTube iframe khi Mini App chuyển nền,
-    // đồng thời thử Media Session API nếu WebView/thiết bị hỗ trợ.
-    let currentVideoId = null;
-    let currentShouldPlaySound = false;
-    let backgroundPlaybackActive = false;
-    let pageWasHidden = false;
-    let mediaSessionReady = false;
-
-    function setBackgroundTestStatus(message) {
-      console.log('🎧 BACKGROUND TEST:', message);
-      if (audioNotice) {
-        audioNotice.dataset.backgroundStatus = message;
-      }
-    }
-
-    function sendYouTubeCommand(command) {
-      if (!ytPlayer || !ytPlayer.contentWindow) return;
-
-      try {
-        ytPlayer.contentWindow.postMessage(JSON.stringify({
-          event: 'command',
-          func: command,
-          args: []
-        }), '*');
-      } catch (error) {
-        console.warn('⚠️ Không gửi được lệnh YouTube:', error);
-      }
-    }
-
-    function updateMediaSession(winner) {
-      if (!('mediaSession' in navigator) || !currentShouldPlaySound || !winner) {
-        return;
-      }
-
-      try {
-        if ('MediaMetadata' in window) {
-          navigator.mediaSession.metadata = new MediaMetadata({
-            title: winner.title || 'Đang phát nhạc',
-            artist: winner.user || 'Vòng Quay Nhạc',
-            album: 'Gems Music Game'
-          });
-        }
-
-        navigator.mediaSession.setActionHandler('play', () => {
-          sendYouTubeCommand('playVideo');
-        });
-
-        navigator.mediaSession.setActionHandler('pause', () => {
-          sendYouTubeCommand('pauseVideo');
-        });
-
-        mediaSessionReady = true;
-        console.log('🎧 Media Session: đã kích hoạt');
-      } catch (error) {
-        console.warn('⚠️ Media Session không được hỗ trợ đầy đủ:', error);
-      }
-    }
-
-    function clearMediaSession() {
-      if (!('mediaSession' in navigator)) return;
-
-      try {
-        navigator.mediaSession.metadata = null;
-        if (typeof navigator.mediaSession.setActionHandler === 'function') {
-          navigator.mediaSession.setActionHandler('play', null);
-          navigator.mediaSession.setActionHandler('pause', null);
-        }
-        mediaSessionReady = false;
-      } catch (error) {
-        console.warn('⚠️ Không thể xóa Media Session:', error);
-      }
-    }
-
-    function handlePageHidden() {
-      backgroundPlaybackActive = true;
-      pageWasHidden = true;
-      setBackgroundTestStatus('Mini App đang ở nền — giữ nguyên iframe');
-
-      // QUAN TRỌNG: không set ytPlayer.src = '' và không renderPlayer() ở đây.
-      // Việc giữ nguyên iframe là điều kiện cần để thử background playback.
-    }
-
-    function handlePageVisible() {
-      backgroundPlaybackActive = false;
-
-      if (pageWasHidden) {
-        pageWasHidden = false;
-        setBackgroundTestStatus('Mini App quay lại — giữ nguyên phiên phát');
-
-        // Không tạo iframe mới. Nếu trình duyệt vẫn giữ WebView,
-        // video/audio sẽ tiếp tục từ player hiện tại.
-        if (currentShouldPlaySound && currentVideoId && 'mediaSession' in navigator) {
-          try {
-            navigator.mediaSession.playbackState = 'playing';
-          } catch (_) {}
-        }
-      }
-    }
-
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') {
-        handlePageHidden();
-      } else {
-        handlePageVisible();
-      }
-    });
-
-    window.addEventListener('pagehide', () => {
-      handlePageHidden();
-    });
-
-    window.addEventListener('pageshow', () => {
-      handlePageVisible();
-    });
-
-    // Telegram Mini App: chỉ đăng ký nếu phiên bản hiện tại hỗ trợ event.
-    if (tg?.onEvent) {
-      try {
-        tg.onEvent('deactivated', handlePageHidden);
-        tg.onEvent('activated', handlePageVisible);
-      } catch (error) {
-        console.log('ℹ️ Telegram WebApp không có event activated/deactivated:', error);
-      }
-    }
-
     const colors = ['#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9800', '#ff5722'];
 
     // Xử lý Retina display cho Canvas sắc nét hơn
@@ -483,16 +356,11 @@ function getTelegramUserData() {
       updateUI();
 
       if (data.lastWinner && !isSpinning && currentPlayingUrl !== data.lastWinner.url) {
-        // Nếu đang ở nền, vẫn đồng bộ bài mới nhưng không được phá iframe hiện tại
-        // trừ khi thực sự chuyển sang một bài khác.
         renderPlayer(data.lastWinner, false);
       } else if (!data.lastWinner && !isSpinning) {
         ytPlayer.src = '';
         playerCard.style.display = 'none';
         currentPlayingUrl = null;
-        currentVideoId = null;
-        currentShouldPlaySound = false;
-        clearMediaSession();
       }
     });
 
@@ -797,39 +665,20 @@ function getTelegramUserData() {
       const videoId = extractYouTubeId(winner.url);
       if (!videoId) return;
 
-      const sameVideo = currentVideoId === videoId && currentPlayingUrl === winner.url;
-
       currentPlayingUrl = winner.url;
-      currentVideoId = videoId;
-      currentShouldPlaySound = shouldPlaySound === true;
       winnerUser.textContent = winner.user;
 
-      // BACKGROUND TEST: nếu cùng video thì KHÔNG tạo iframe mới.
-      // Đây là phần quan trọng nhất để tránh làm mất phiên phát khi app đổi trạng thái.
-      if (!sameVideo) {
-        const soundParam = currentShouldPlaySound ? '0' : '1';
-        ytPlayer.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=${soundParam}&enablejsapi=1`;
-      } else if (currentShouldPlaySound && !backgroundPlaybackActive) {
-        // Chỉ thử mở tiếng lại trên cùng iframe khi chính client là initiator.
-        sendYouTubeCommand('unMute');
-      }
-
-      if (currentShouldPlaySound) {
-        audioNotice.textContent = '🔊 Âm thanh: Mở (Background Test)';
+      if (shouldPlaySound) {
+        ytPlayer.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&enablejsapi=1`;
+        audioNotice.textContent = '🔊 Âm thanh: Mở (Bạn là người xoay)';
         audioNotice.className = 'audio-notice unmuted';
-        updateMediaSession(winner);
       } else {
-        audioNotice.textContent = '🔇 Âm thanh: Đã Tắt';
+        ytPlayer.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&enablejsapi=1`;
+        audioNotice.textContent = '🔇 Âm thanh: Đã Tắt (Bấm vào video để mở tiếng)';
         audioNotice.className = 'audio-notice muted';
-        clearMediaSession();
       }
 
       playerCard.style.display = 'block';
-      setBackgroundTestStatus(
-        backgroundPlaybackActive
-          ? 'Đang nền — iframe được giữ nguyên'
-          : 'Đang foreground'
-      );
     }
 
     function startSpinAnimation(targetIndex, winner, shouldPlaySound) {

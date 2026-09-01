@@ -361,6 +361,33 @@ function requireTelegramAdmin(req, res) {
   return { ok: true, user: auth.user };
 }
 
+// ==================== YOUTUBE URL NORMALIZATION ====================
+// Lấy Video ID để nhận diện cùng một video dù dùng nhiều dạng URL.
+function getYouTubeVideoId(inputUrl) {
+  try {
+    const url = new URL(String(inputUrl).trim());
+    const hostname = url.hostname.toLowerCase().replace(/^www\./, '');
+
+    if (hostname === 'youtu.be') {
+      return url.pathname.split('/').filter(Boolean)[0] || null;
+    }
+
+    if (hostname === 'youtube.com' || hostname === 'm.youtube.com' || hostname === 'music.youtube.com') {
+      const videoId = url.searchParams.get('v');
+      if (videoId) return videoId;
+
+      const parts = url.pathname.split('/').filter(Boolean);
+      if (parts.length >= 2 && ['shorts', 'embed', 'live'].includes(parts[0])) {
+        return parts[1];
+      }
+    }
+
+    return null;
+  } catch (error) {
+    return null;
+  }
+}
+
 async function getYouTubeTitle(url) {
   try {
     const oembedUrl =
@@ -419,33 +446,59 @@ app.post('/api/submit', async (req, res) => {
       .join(' ')
       .trim() || 'Người dùng';
 
-  // Lấy tiêu đề YouTube
-  const title = await getYouTubeTitle(url);
-try {
-  const result = await pool.query(
-    `
-      INSERT INTO songs (
-        url,
+  const cleanUrl = String(url).trim();
+  const youtubeVideoId = getYouTubeVideoId(cleanUrl);
+
+  if (!youtubeVideoId) {
+    return res.json({
+      success: false,
+      message: 'Link YouTube không hợp lệ!'
+    });
+  }
+
+  try {
+    // Kiểm tra trùng theo Video ID, không chỉ so sánh chuỗi URL.
+    // watch?v=..., youtu.be/..., shorts/... và embed/... của cùng video
+    // đều được xem là một bài hát.
+    const existingSongs = await pool.query('SELECT id, url FROM songs');
+    const existingSong = existingSongs.rows.find(
+      song => getYouTubeVideoId(song.url) === youtubeVideoId
+    );
+
+    if (existingSong) {
+      return res.json({
+        success: false,
+        message: '⚠️ Bài hát này đã tồn tại trong danh sách!'
+      });
+    }
+
+    // Lấy tiêu đề YouTube
+    const title = await getYouTubeTitle(cleanUrl);
+
+    const result = await pool.query(
+      `
+        INSERT INTO songs (
+          url,
+          title,
+          user_name,
+          telegram_id
+        )
+        VALUES ($1, $2, $3, $4)
+        RETURNING
+          id,
+          url,
+          title,
+          user_name AS user,
+          telegram_id AS "telegramId",
+          created_at
+      `,
+      [
+        cleanUrl,
         title,
-        user_name,
-        telegram_id
-      )
-      VALUES ($1, $2, $3, $4)
-      RETURNING
-        id,
-        url,
-        title,
-        user_name AS user,
-        telegram_id AS "telegramId",
-        created_at
-    `,
-    [
-      url,
-      title,
-      userName,
-      String(telegramUser.id)
-    ]
-  );
+        userName,
+        String(telegramUser.id)
+      ]
+    );
 
     // Đồng bộ dữ liệu vừa lưu vào RAM
     songs.push(result.rows[0]);
@@ -453,7 +506,7 @@ try {
     broadcastState();
 
     console.log(
-      `🎵 Đã lưu bài hát #${result.rows[0].id} vào PostgreSQL: ${url}`
+      `🎵 Đã lưu bài hát #${result.rows[0].id} vào PostgreSQL: ${cleanUrl}`
     );
 
     res.json({
