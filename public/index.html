@@ -462,7 +462,7 @@ function getTelegramUserData() {
 
                 <!-- DELETE: CHỈ ADMIN -->
                 <button
-                  class="btn-delete-song admin-only"
+                  class="btn-delete-song ${window.isAdmin ? '' : 'admin-only'}"
                   onclick="deleteSong('${id}')"
                   title="Xóa bài hát"
                 >
