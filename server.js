@@ -6,10 +6,31 @@ const { Server } = require('socket.io');
 const path = require('path');
 const crypto = require('crypto');
 const { Telegraf, Markup } = require('telegraf');
+const { Pool } = require('pg');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
+
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+        rejectUnauthorized: false
+    }
+});
+async function initDatabase() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS songs (
+      id SERIAL PRIMARY KEY,
+      url TEXT NOT NULL,
+      user_name TEXT NOT NULL,
+      telegram_id TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  console.log('🗄️ PostgreSQL: Database ready');
+}
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEBAPP_URL = process.env.WEBAPP_URL || 'https://gems-music-game.onrender.com';
@@ -133,16 +154,36 @@ let isFormOpen = true;
 let songs = [];
 let lastWinner = null;
 
+async function loadSongsFromDatabase() {
+  const result = await pool.query(`
+    SELECT
+      id,
+      url,
+      user_name AS user,
+      telegram_id AS "telegramId",
+      created_at
+    FROM songs
+    ORDER BY id ASC
+  `);
+
+  songs = result.rows;
+
+  console.log(`🗄️ Đã tải ${songs.length} bài hát từ PostgreSQL`);
+}
+
 function broadcastState() {
   io.emit('stateUpdate', { isFormOpen, songs, lastWinner });
 }
 
-function performSpin() {
+async function performSpin() {
   if (lastWinner) {
-    const index = songs.findIndex(s => s.url === lastWinner.url && s.user === lastWinner.user);
-    if (index !== -1) {
-      songs.splice(index, 1);
-    }
+  await pool.query(
+      'DELETE FROM songs WHERE id = $1',
+      [lastWinner.id]
+    );
+
+    songs = songs.filter(song => song.id !== lastWinner.id);
+
     lastWinner = null;
   }
 
@@ -161,6 +202,7 @@ function performSpin() {
 }
 
   // --- CÁC LỆNH BOT TELEGRAM ---
+  if (bot) {
   const sendWebAppButton = (ctx) => {
     const miniAppUrl = 'https://gems-music-game.onrender.com';
 
@@ -180,8 +222,8 @@ function performSpin() {
   // Nhận lệnh /start và /musicgems
   bot.command(['start', 'musicgems'], sendWebAppButton);
 
-  bot.command('spin', (ctx) => {
-    const result = performSpin();
+  bot.command('spin', async (ctx) => {
+    const result = await performSpin();
     if (!result.success) {
       ctx.reply(`⚠️ ${result.message}`);
     } else {
@@ -195,12 +237,16 @@ function performSpin() {
     ctx.reply(`📢 Trạng thái form: ${isFormOpen ? '🟢 Đang MỞ' : '🔴 Đã ĐÓNG'}`);
   });
 
-  bot.command('reset', (ctx) => {
-    songs = [];
-    lastWinner = null;
-    broadcastState();
-    ctx.reply('🧹 Đã xóa sạch danh sách bài hát!');
-  });
+  bot.command('reset', async (ctx) => {
+  await pool.query('DELETE FROM songs');
+
+  songs = [];
+  lastWinner = null;
+
+  broadcastState();
+
+  ctx.reply('🧹 Đã xóa sạch danh sách bài hát!');
+});
 
   bot.command('list', (ctx) => {
     if (songs.length === 0) {
@@ -231,7 +277,7 @@ function performSpin() {
   bot.launch()
     .then(() => console.log('🤖 Bot Telegram đã khởi chạy thành công!'))
     .catch(err => console.error('Lỗi khởi chạy Bot:', err));
-
+  }
 // --- API HTTP & SOCKET.IO ---
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -308,13 +354,14 @@ function requireTelegramAdmin(req, res) {
   return { ok: true, user: auth.user };
 }
 
-app.post('/api/submit', (req, res) => {
+app.post('/api/submit', async (req, res) => {
   if (!isFormOpen) {
     return res.json({
       success: false,
       message: 'Form đã đóng, không thể gửi bài!'
     });
   }
+  
 
   const { url, initData } = req.body;
 
@@ -345,22 +392,37 @@ app.post('/api/submit', (req, res) => {
           .filter(Boolean)
           .join(' ') || 'Người dùng';
 
-  songs.push({
+  const result = await pool.query(
+  `
+    INSERT INTO songs (url, user_name, telegram_id)
+    VALUES ($1, $2, $3)
+    RETURNING
+      id,
+      url,
+      user_name AS user,
+      telegram_id AS "telegramId",
+      created_at
+  `,
+  [
     url,
-    user: userName,
-    telegramId: String(telegramUser.id)
-  });
+    userName,
+    String(telegramUser.id)
+  ]
+);
 
-  broadcastState();
+songs.push(result.rows[0]);
 
-  res.json({ success: true });
+broadcastState();
+
+res.json({ success: true });
+
 });
 
-app.post('/api/spin', (req, res) => {
+app.post('/api/spin', async (req, res) => {
   const auth = requireTelegramAdmin(req, res);
   if (!auth.ok) return;
 
-  const result = performSpin();
+  const result = await performSpin();
   res.json(result);
 });
 
@@ -373,17 +435,35 @@ app.post('/api/toggle-form', (req, res) => {
   res.json({ success: true, isFormOpen });
 });
 
-app.post('/api/reset', (req, res) => {
+app.post('/api/reset', async (req, res) => {
   const auth = requireTelegramAdmin(req, res);
   if (!auth.ok) return;
 
-  songs = [];
-  lastWinner = null;
-  broadcastState();
-  res.json({ success: true });
+await pool.query('DELETE FROM songs');
+
+songs = [];
+lastWinner = null;
+
+broadcastState();
+
+res.json({ success: true });
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+
+async function startServer() {
+  try {
+    await initDatabase();
+    await loadSongsFromDatabase();
+
+    server.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`🎵 Songs loaded: ${songs.length}`);
+    });
+  } catch (error) {
+    console.error('❌ Không thể khởi động server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
