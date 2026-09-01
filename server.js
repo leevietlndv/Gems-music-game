@@ -58,6 +58,7 @@ async function loadSongsFromDatabase() {
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEBAPP_URL = process.env.WEBAPP_URL || 'https://gems-music-game.onrender.com';
+const MAIN_MINI_APP_URL = 'https://t.me/GU3B_Radio_Bot/music3B';
 
 const ADMIN_IDS = new Set(
   (process.env.ADMIN_IDS || '')
@@ -209,47 +210,43 @@ async function performSpin() {
 }
 
   // --- CÁC LỆNH BOT TELEGRAM ---
-if (bot) {
+  if (bot) {
+  const sendWebAppButton = (ctx) => {
+    const miniAppUrl = 'https://t.me/GU3B_Radio_Bot/music3B';
 
-  const sendWebAppButton = async (ctx) => {
-    await ctx.reply(
-      '🎵 GEMS MUSIC GAME\n\nBấm nút bên dưới để tham gia cùng nhóm:',
+    ctx.reply(
+      '🎧 Bấm vào bên dưới để gửi nhạc',
       Markup.inlineKeyboard([
         [
           Markup.button.webApp(
-            '🎵 THAM GIA GAME',
-            WEBAPP_URL
+            '𝄞 Mở GEMS Radio',
+             MAIN_MINI_APP_URL
           )
         ]
       ])
     );
   };
 
-  // /start
-  // /musicgems
-  // /game
-  bot.command(['start', 'gumusic', 'radio'], sendWebAppButton);
+  // Nhận lệnh /start và /musicgems
+  bot.command(['start', 'radio', 'music'], sendWebAppButton);
 
-  // =========================
-  // INLINE MODE: @TênBot
-  // =========================
+  // Inline Mode: @TênBot
   bot.on('inline_query', async (ctx) => {
     try {
       await ctx.answerInlineQuery([
         {
           type: 'article',
           id: 'gems_music_game',
-          title: '🎵 Gems Radio',
-          description: 'Bấm để mở Mini App',
+          title: '𝄞 Mở GEMS Radio',
+          description: 'Mở Mini App để gửi nhạc',
           input_message_content: {
-            message_text:
-              '🎵 Bấm nút bên dưới để mở Mini App'
+            message_text: '🎧 Mở Mini App để gửi nhạc'
           },
           reply_markup: {
             inline_keyboard: [
               [
                 {
-                  text: '🎵 GEMS Radio',
+                  text: '𝄞 Mở GEMS Radio',
                   web_app: {
                     url: WEBAPP_URL
                   }
@@ -264,129 +261,63 @@ if (bot) {
     }
   });
 
-  // =========================
-  // ADMIN COMMANDS
-  // =========================
-
   bot.command('spin', async (ctx) => {
     const result = await performSpin();
-
     if (!result.success) {
-      return ctx.reply(`⚠️ ${result.message}`);
+      ctx.reply(`⚠️ ${result.message}`);
+    } else {
+      ctx.reply(`🎡 Đã quay! Bài trúng thưởng: ${result.winner.user} - ${result.winner.url}`);
     }
-
-    await ctx.reply(
-      `🎡 Đã quay!\n\nBài trúng thưởng:\n${result.winner.user} - ${result.winner.url}`
-    );
   });
 
   bot.command('toggle', (ctx) => {
     isFormOpen = !isFormOpen;
     broadcastState();
-
-    ctx.reply(
-      `📢 Trạng thái form: ${
-        isFormOpen ? '🟢 Đang MỞ' : '🔴 Đã ĐÓNG'
-      }`
-    );
+    ctx.reply(`📢 Trạng thái form: ${isFormOpen ? '🟢 Đang MỞ' : '🔴 Đã ĐÓNG'}`);
   });
 
   bot.command('reset', async (ctx) => {
-    await pool.query('DELETE FROM songs');
+  await pool.query('DELETE FROM songs');
 
-    songs = [];
-    lastWinner = null;
+  songs = [];
+  lastWinner = null;
 
-    broadcastState();
+  broadcastState();
 
-    ctx.reply('🧹 Đã xóa sạch danh sách bài hát!');
-  });
+  ctx.reply('🧹 Đã xóa sạch danh sách bài hát!');
+});
 
   bot.command('list', (ctx) => {
     if (songs.length === 0) {
       return ctx.reply('📋 Danh sách bài hát hiện đang trống.');
     }
-
-    const listStr = songs
-      .map((s, i) => `${i + 1}. ${s.user}: ${s.url}`)
-      .join('\n');
-
-    ctx.reply(
-      `📋 Danh sách bài hát (${songs.length}):\n\n${listStr}`
-    );
+    const listStr = songs.map((s, i) => `${i + 1}. ${s.user}: ${s.url}`).join('\n');
+    ctx.reply(`📋 **Danh sách bài hát (${songs.length}):**\n\n${listStr}`);
   });
 
-  // =========================
-  // MENU COMMANDS
-  // =========================
-
+  // Tự động đăng ký Menu lệnh
   bot.telegram.setMyCommands([
-    {
-      command: 'radio',
-      description: '🎵 Mở Gems Radio'
-    },
-    {
-      command: 'gumusic',
-      description: '🎵 Mở Gems Radio'
-    },
-    {
-      command: 'spin',
-      description: '🎡 Quay ngẫu nhiên bài hát'
-    },
-    {
-      command: 'toggle',
-      description: '📢 Bật/Tắt form gửi bài'
-    },
-    {
-      command: 'list',
-      description: '📋 Xem danh sách bài hát'
-    },
-    {
-      command: 'reset',
-      description: '🧹 Xóa toàn bộ danh sách'
-    }
-  ]).catch(err =>
-    console.error('Lỗi thiết lập menu lệnh:', err)
-  );
-
-  // =========================
-  // MENU BUTTON
-  // =========================
+    { command: 'radio', description: 'Mở Vòng Quay Nhạc' },
+    { command: 'music', description: 'Mở Vòng Quay Nhạc' },
+    { command: 'spin', description: 'Quay ngẫu nhiên bài hát' },
+    { command: 'toggle', description: 'Bật/Tắt form gửi bài' },
+    { command: 'list', description: 'Xem danh sách bài hát' },
+    { command: 'reset', description: 'Xóa toàn bộ danh sách' }
+  ]).catch(err => console.error('Lỗi thiết lập menu lệnh:', err));
 
   bot.telegram.setChatMenuButton({
     menu_button: {
       type: 'web_app',
-      text: '🎵 Mở Game Nhạc',
-      web_app: {
-        url: WEBAPP_URL
-      }
+      text: '𝄞 Mở GEMS Radio',
+      web_app: { url: WEBAPP_URL }
     }
-  })
-    .then(() =>
-      console.log(
-        '📱 Menu Telegram đã trỏ tới Mini App:',
-        WEBAPP_URL
-      )
-    )
-    .catch(err =>
-      console.error(
-        'Lỗi thiết lập Menu Mini App:',
-        err
-      )
-    );
-
-  // =========================
-  // KHỞI CHẠY BOT
-  // =========================
+  }).then(() => console.log('📱 Menu Telegram đã trỏ tới Mini App:', WEBAPP_URL))
+    .catch(err => console.error('Lỗi thiết lập Menu Mini App:', err));
 
   bot.launch()
-    .then(() =>
-      console.log('🤖 Bot Telegram đã khởi chạy thành công!')
-    )
-    .catch(err =>
-      console.error('❌ Lỗi khởi chạy Bot:', err)
-    );
-}
+    .then(() => console.log('🤖 Bot Telegram đã khởi chạy thành công!'))
+    .catch(err => console.error('Lỗi khởi chạy Bot:', err));
+  }
 // --- API HTTP & SOCKET.IO ---
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
