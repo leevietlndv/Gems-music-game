@@ -146,26 +146,38 @@
       justify-content: center;
 
       white-space: nowrap;
-  }
+    }
 
-  .btn-delete-song:hover {
-      background: #b71c1c;
-  }
+    .btn-delete-song:hover {
+        background: #b71c1c;
+    }
 
-  .btn-delete-song:active {
-      transform: scale(0.96);
-  }
+    .btn-delete-song:active {
+        transform: scale(0.96);
+    }
+
+    .song-title-row {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      gap: 10px;
+    }
 
     .song-title {
-        width: 80%;
-        min-width: 0;
+      width: 80%;
+      min-width: 0;
 
-        color: #cfd8dc;
-        font-size: 9px;
-        line-height: 1.4;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
 
-        overflow-wrap: anywhere;
-        word-break: break-word;
+      font-size: 18px;
+      color: white;
+    }
+
+    .song-title-row .btn-delete-song {
+      width: 20%;
+      flex-shrink: 0;
     }
     
     .player-wrapper { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px; background: #000; }
@@ -440,15 +452,6 @@ function getTelegramUserData() {
                       ▶
                     </button>
 
-                    <!-- DELETE: CHỈ ADMIN -->
-                    <button
-                      class="btn-delete-song ${window.isAdmin ? '' : 'admin-only'}"
-                      onclick="deleteSong('${id}')"
-                      title="Xóa bài hát"
-                    >
-                      ✖
-                    </button>
-
                   </div>
 
                 </div>
@@ -456,6 +459,15 @@ function getTelegramUserData() {
                 <div class="song-url">
                   ${title}
                 </div>
+
+                <!-- DELETE: CHỈ ADMIN -->
+                <button
+                  class="btn-delete-song admin-only"
+                  onclick="deleteSong('${id}')"
+                  title="Xóa bài hát"
+                >
+                  ✖
+                </button>
 
               </div>
             `;
