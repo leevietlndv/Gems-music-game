@@ -274,19 +274,21 @@ function getTelegramUserData() {
 
     // Cập nhật phân quyền từ Backend
     socket.on('adminStatus', (data) => {
-        console.log('👮 ADMIN STATUS:', data);
+      console.log('👮 ADMIN STATUS:', data);
 
-        isAdmin = data.isAdmin === true;
+      // Lưu trạng thái Admin để updateUI() biết có hiện nút Xóa hay không
+      window.isAdmin = data.isAdmin === true;
 
-        if (isAdmin) {
-            btnSpin.classList.remove('admin-only');
-            adminPanel.classList.remove('admin-only');
-        } else {
-            btnSpin.classList.add('admin-only');
-            adminPanel.classList.add('admin-only');
-        }
+      if (window.isAdmin) {
+        btnSpin.classList.remove('admin-only');
+        adminPanel.classList.remove('admin-only');
+      } else {
+        btnSpin.classList.add('admin-only');
+        adminPanel.classList.add('admin-only');
+      }
 
-        updateUI();
+      // Cập nhật lại danh sách để nút Xóa xuất hiện/biến mất
+      updateUI();
     });
 
     socket.on('stateUpdate', (data) => {
@@ -336,16 +338,22 @@ function getTelegramUserData() {
                 #${idx + 1} - ${escapeHtml(s.user)}
               </div>
 
-              <button
-                class="btn-delete-song admin-only"
-                onclick="deleteSong('${String(s.id)}')"
-              >
-                ✖️
-              </button>
+              ${
+                window.isAdmin
+                  ? `
+                    <button
+                      class="btn-delete-song"
+                      onclick="deleteSong('${String(s.id)}')"
+                    >
+                      ✖️
+                    </button>
+                  `
+                  : ''
+              }
 
             </div>
 
-            <div class="song-title">
+            <div class="song-url">
               ${escapeHtml(s.title || 'Đang cập nhật tiêu đề...')}
             </div>
 
@@ -361,12 +369,19 @@ function getTelegramUserData() {
     }
     
     async function deleteSong(songId) {
+      if (!window.isAdmin) {
+        alert('Bạn không có quyền Admin!');
+        return;
+      }
+
       if (!songId) {
         alert('Không xác định được bài hát cần xóa!');
         return;
       }
 
-      const song = songs.find(s => String(s.id) === String(songId));
+      const song = songs.find(
+        s => String(s.id) === String(songId)
+      );
 
       if (!song) {
         alert('Không tìm thấy bài hát!');
@@ -374,7 +389,7 @@ function getTelegramUserData() {
       }
 
       const confirmed = confirm(
-        `Bạn có chắc muốn xóa bài hát này?\n\n${song.user}\n${song.url}`
+        `Bạn có chắc muốn xóa bài hát này?\n\n${song.user}\n${song.title || song.url}`
       );
 
       if (!confirmed) return;
@@ -398,10 +413,11 @@ function getTelegramUserData() {
           return;
         }
 
-        // Server sẽ gửi stateUpdate mới,
-        // nên không cần tự sửa mảng songs ở đây.
+        // Server sẽ broadcast stateUpdate mới
+        // Không cần tự sửa mảng songs ở đây.
+
       } catch (error) {
-        console.error('Lỗi xóa bài hát:', error);
+        console.error('❌ Lỗi xóa bài hát:', error);
         alert('Lỗi kết nối đến server!');
       }
     }
