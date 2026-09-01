@@ -551,6 +551,81 @@ app.post('/api/play-song', async (req, res) => {
   }
 });
 
+// ==================== PLAY SONG ====================
+// Tất cả user đều được phép phát bài hát.
+// Người bấm Play sẽ nghe tiếng.
+// Các Mini App khác nhận sự kiện và phát ở chế độ mute.
+app.post('/api/play-song', async (req, res) => {
+  const { id, initData } = req.body;
+
+  if (!id) {
+    return res.status(400).json({
+      success: false,
+      message: 'Thiếu ID bài hát!'
+    });
+  }
+
+  // Xác thực Telegram user, KHÔNG yêu cầu Admin
+  const auth = validateTelegramInitData(initData);
+
+  if (!auth.valid) {
+    return res.status(401).json({
+      success: false,
+      message: 'Xác thực Telegram thất bại!'
+    });
+  }
+
+  try {
+    const result = await pool.query(
+      `
+        SELECT
+          id,
+          url,
+          title,
+          user_name AS user,
+          telegram_id AS "telegramId",
+          created_at
+        FROM songs
+        WHERE id = $1
+      `,
+      [id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy bài hát!'
+      });
+    }
+
+    const song = result.rows[0];
+
+    // Gửi cho TẤT CẢ client.
+    // Client nào là người bấm Play sẽ tự phát có tiếng.
+    // Các client còn lại sẽ phát mute.
+    io.emit('songPlayed', {
+      song
+    });
+
+    console.log(
+      `▶️ Phát bài hát #${song.id}: ${song.title}`
+    );
+
+    res.json({
+      success: true,
+      song
+    });
+
+  } catch (error) {
+    console.error('❌ Lỗi phát bài hát:', error);
+
+    res.status(500).json({
+      success: false,
+      message: 'Không thể phát bài hát!'
+    });
+  }
+});
+
 app.post('/api/spin', async (req, res) => {
   const auth = requireTelegramAdmin(req, res);
   if (!auth.ok) return;

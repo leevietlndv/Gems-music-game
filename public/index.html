@@ -364,6 +364,20 @@ function getTelegramUserData() {
       }
     });
 
+    // ==================== SONG PLAYED ====================
+    // Nhận yêu cầu phát bài hát từ một Mini App khác.
+    // Client nhận sự kiện sẽ phát ở chế độ MUTE.
+    socket.on('songPlayed', (data) => {
+      if (!data?.song) return;
+
+      const song = data.song;
+
+      console.log('▶️ Nhận bài hát được phát:', song);
+
+      // Phát bài hát nhưng KHÔNG có âm thanh
+      renderPlayer(song, false);
+    });
+
     socket.on('triggerSpin', (data) => {
       startSpinAnimation(data.selectedIndex, data.winner, isInitiator);
       isInitiator = false;
@@ -532,15 +546,15 @@ function getTelegramUserData() {
           return;
         }
 
-        // Server sẽ broadcast stateUpdate.
-        // Không tự sửa songs hoặc lastWinner ở đây.
+        // QUAN TRỌNG:
+        // Chính người bấm PLAY sẽ phát có âm thanh.
+        renderPlayer(data.song, true);
 
       } catch (error) {
         console.error('❌ Lỗi phát bài hát:', error);
         alert('Lỗi kết nối đến server!');
       }
     }
-
     async function deleteSong(songId) {
       if (!window.isAdmin) {
         alert('Bạn không có quyền Admin!');
