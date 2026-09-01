@@ -75,7 +75,7 @@
       width: 50px !important;
       min-width: 50px;
 
-      padding: 7px 3px;
+      padding: 3px 3px;
 
       border: none;
       border-radius: 6px;
@@ -128,7 +128,7 @@
       width: 50px !important;
       min-width: 50px;
 
-      padding: 7px 3px;
+      padding: 3px 3px;
 
       border: none;
       border-radius: 6px;
@@ -361,6 +361,16 @@ function getTelegramUserData() {
       isInitiator = false;
     });
 
+    function limitText(str, maxLength) {
+      str = String(str ?? '').trim();
+
+      if (str.length <= maxLength) {
+        return str;
+      }
+
+      return str.substring(0, maxLength) + '...';
+    }
+
     function updateUI() {
       if (isFormOpen) {
         statusBadge.textContent = '🟢 Đang mở form';
@@ -401,9 +411,12 @@ function getTelegramUserData() {
             // Bảo vệ trường hợp dữ liệu bài hát bị thiếu
             s = s || {};
 
-            const user = escapeHtml(s.user || 'Người dùng');
+            const user = escapeHtml(
+              limitText(s.user || 'Người dùng', 25)
+            );
+
             const title = escapeHtml(
-              s.title || 'Đang cập nhật tiêu đề...'
+              limitText(s.title || 'Đang cập nhật tiêu đề...', 30)
             );
             const id = String(s.id ?? '');
 
