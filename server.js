@@ -521,7 +521,7 @@ app.post('/api/play-song', async (req, res) => {
 
     lastWinner = song;
 
-    // Phát event trước stateUpdate để client vừa bấm Play giữ được âm thanh.
+    // Gửi sự kiện trước stateUpdate để client vừa bấm PLAY giữ được âm thanh.
     io.emit('songPlayed', {
       song,
       initiatorSocketId: socketId || null
@@ -540,6 +540,51 @@ app.post('/api/play-song', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Không thể phát bài hát!'
+    });
+  }
+});
+
+app.post('/api/spin', async (req, res) => {
+  const auth = requireTelegramAdmin(req, res);
+  if (!auth.ok) return;
+
+  const result = await performSpin();
+  res.json(result);
+});
+
+app.post('/api/toggle-form', (req, res) => {
+  const auth = requireTelegramAdmin(req, res);
+  if (!auth.ok) return;
+
+  isFormOpen = !isFormOpen;
+  broadcastState();
+  res.json({ success: true, isFormOpen });
+});
+
+app.post('/api/reset', async (req, res) => {
+  const auth = requireTelegramAdmin(req, res);
+  if (!auth.ok) return;
+
+  try {
+    await pool.query('DELETE FROM songs');
+
+    songs = [];
+    lastWinner = null;
+
+    broadcastState();
+
+    console.log('🧹 Đã xóa toàn bộ bài hát khỏi PostgreSQL');
+
+    res.json({
+      success: true
+    });
+
+  } catch (error) {
+    console.error('❌ Lỗi reset PostgreSQL:', error);
+
+    res.status(500).json({
+      success: false,
+      message: 'Không thể xóa danh sách bài hát!'
     });
   }
 });
