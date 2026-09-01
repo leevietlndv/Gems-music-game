@@ -75,7 +75,7 @@
       width: 50px !important;
       min-width: 50px;
 
-      padding: 7px 10px;
+      padding: 7px 5px;
 
       border: none;
       border-radius: 6px;
@@ -111,9 +111,16 @@
         color: #ffca28;
         font-size: 15px;
 
-        /* Không cho username bị ép từng chữ */
-        white-space: normal;
-        overflow-wrap: anywhere;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+
+    .song-url {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
     }
 
       /* Nút DELETE */
@@ -121,7 +128,7 @@
       width: 50px !important;
       min-width: 50px;
 
-      padding: 7px 10px;
+      padding: 7px 5px;
 
       border: none;
       border-radius: 6px;
@@ -379,7 +386,7 @@ function getTelegramUserData() {
             <div class="song-header">
 
               <div class="song-user">
-                #${idx + 1} - ${escapeHtml(s.user)}
+                  #${idx + 1} - ${escapeHtml(truncateText(s.user, 24))}
               </div>
 
               <div class="song-actions">
@@ -407,7 +414,12 @@ function getTelegramUserData() {
             </div>
 
             <div class="song-url">
-              ${escapeHtml(s.title || 'Đang cập nhật tiêu đề...')}
+                ${escapeHtml(
+                    truncateText(
+                        s.title || 'Đang cập nhật tiêu đề...',
+                        32
+                    )
+                )}
             </div>
 
           </div>
