@@ -32,6 +32,23 @@ async function initDatabase() {
   console.log('🗄️ PostgreSQL: Database ready');
 }
 
+async function loadSongsFromDatabase() {
+  const result = await pool.query(`
+    SELECT
+      id,
+      url,
+      user_name AS user,
+      telegram_id AS "telegramId",
+      created_at
+    FROM songs
+    ORDER BY id ASC
+  `);
+
+  songs = result.rows;
+
+  console.log(`🎵 Đã tải ${songs.length} bài hát từ PostgreSQL`);
+}
+
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEBAPP_URL = process.env.WEBAPP_URL || 'https://gems-music-game.onrender.com';
 
@@ -361,7 +378,6 @@ app.post('/api/submit', async (req, res) => {
       message: 'Form đã đóng, không thể gửi bài!'
     });
   }
-  
 
   const { url, initData } = req.body;
 
@@ -384,7 +400,7 @@ app.post('/api/submit', async (req, res) => {
 
   const telegramUser = auth.user;
 
-  // Tạo tên hiển thị từ dữ liệu Telegram đã xác thực
+  // Tạo tên hiển thị
   const userName =
     telegramUser.username
       ? `@${telegramUser.username}`
@@ -392,30 +408,47 @@ app.post('/api/submit', async (req, res) => {
           .filter(Boolean)
           .join(' ') || 'Người dùng';
 
-  const result = await pool.query(
-  `
-    INSERT INTO songs (url, user_name, telegram_id)
-    VALUES ($1, $2, $3)
-    RETURNING
-      id,
-      url,
-      user_name AS user,
-      telegram_id AS "telegramId",
-      created_at
-  `,
-  [
-    url,
-    userName,
-    String(telegramUser.id)
-  ]
-);
+  try {
+    // Lưu bài hát trực tiếp vào PostgreSQL
+    const result = await pool.query(
+      `
+      INSERT INTO songs (url, user_name, telegram_id)
+      VALUES ($1, $2, $3)
+      RETURNING
+        id,
+        url,
+        user_name AS user,
+        telegram_id AS "telegramId",
+        created_at
+      `,
+      [
+        url,
+        userName,
+        String(telegramUser.id)
+      ]
+    );
 
-songs.push(result.rows[0]);
+    // Đồng bộ dữ liệu vừa lưu vào RAM
+    songs.push(result.rows[0]);
 
-broadcastState();
+    broadcastState();
 
-res.json({ success: true });
+    console.log(
+      `🎵 Đã lưu bài hát #${result.rows[0].id} vào PostgreSQL: ${url}`
+    );
 
+    res.json({
+      success: true
+    });
+
+  } catch (error) {
+    console.error('❌ Lỗi lưu bài hát vào PostgreSQL:', error);
+
+    res.status(500).json({
+      success: false,
+      message: 'Không thể lưu bài hát vào cơ sở dữ liệu!'
+    });
+  }
 });
 
 app.post('/api/spin', async (req, res) => {
@@ -439,14 +472,83 @@ app.post('/api/reset', async (req, res) => {
   const auth = requireTelegramAdmin(req, res);
   if (!auth.ok) return;
 
-await pool.query('DELETE FROM songs');
+  try {
+    await pool.query('DELETE FROM songs');
 
-songs = [];
-lastWinner = null;
+    songs = [];
+    lastWinner = null;
 
-broadcastState();
+    broadcastState();
 
-res.json({ success: true });
+    console.log('🧹 Đã xóa toàn bộ bài hát khỏi PostgreSQL');
+
+    res.json({
+      success: true
+    });
+
+  } catch (error) {
+    console.error('❌ Lỗi reset PostgreSQL:', error);
+
+    res.status(500).json({
+      success: false,
+      message: 'Không thể xóa danh sách bài hát!'
+    });
+  }
+});
+
+// ==================== DELETE ONE SONG ====================
+
+app.post('/api/delete-song', async (req, res) => {
+  // Chỉ Admin mới được xóa bài hát
+  const auth = requireTelegramAdmin(req, res);
+  if (!auth.ok) return;
+
+  const { id } = req.body;
+
+  // Kiểm tra ID
+  if (!id) {
+    return res.status(400).json({
+      success: false,
+      message: 'Thiếu ID bài hát!'
+    });
+  }
+
+  try {
+    // Xóa bài hát trực tiếp trong PostgreSQL
+    const result = await pool.query(
+      'DELETE FROM songs WHERE id = $1 RETURNING id',
+      [id]
+    );
+
+    // Không tìm thấy bài hát
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy bài hát!'
+      });
+    }
+
+    // Xóa bài tương ứng khỏi bộ nhớ RAM
+    songs = songs.filter(song => String(song.id) !== String(id));
+
+    // Thông báo cho tất cả Mini App đang mở
+    broadcastState();
+
+    console.log(`🗑️ Admin đã xóa bài hát #${id}`);
+
+    res.json({
+      success: true,
+      message: 'Đã xóa bài hát!'
+    });
+
+  } catch (error) {
+    console.error('❌ Lỗi xóa bài hát:', error);
+
+    res.status(500).json({
+      success: false,
+      message: 'Không thể xóa bài hát!'
+    });
+  }
 });
 
 const PORT = process.env.PORT || 3000;
@@ -460,6 +562,7 @@ async function startServer() {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`🎵 Songs loaded: ${songs.length}`);
     });
+
   } catch (error) {
     console.error('❌ Không thể khởi động server:', error);
     process.exit(1);

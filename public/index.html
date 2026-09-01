@@ -238,13 +238,34 @@ function getTelegramUserData() {
       if (songs.length === 0) {
         songListEl.innerHTML = '<div style="text-align: center; color: #888; font-size: 13px; padding: 10px;">Chưa có bài hát nào được gửi.</div>';
       } else {
-        songListEl.innerHTML = songs.map((s, idx) => `
-          <div class="song-item">
-            <div class="song-user">#${idx + 1} - ${escapeHtml(s.user)}</div>
-            <div>${escapeHtml(s.url)}</div>
-          </div>
-        `).join('');
-      }
+    songListEl.innerHTML = songs.map((s, idx) => `
+        <div class="song-item">
+            <div class="song-user">
+                #${idx + 1} - ${escapeHtml(s.user)}
+            </div>
+
+            <div style="word-break: break-all;">
+                ${escapeHtml(s.url)}
+            </div>
+
+            <button
+                type="button"
+                onclick="deleteSong(${s.id})"
+                style="
+                    margin-top: 6px;
+                    background: #d32f2f;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    padding: 5px 10px;
+                    cursor: pointer;
+                "
+            >
+                🗑️ Xóa bài này
+            </button>
+        </div>
+    `).join('');
+}
 
       drawWheel();
     }
@@ -252,6 +273,63 @@ function getTelegramUserData() {
     function escapeHtml(str) {
       return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
+
+    async function deleteSong(songId) {
+  if (!songId) {
+    alert('Không xác định được bài hát cần xóa!');
+    return;
+  }
+
+  const song = songs.find(s => String(s.id) === String(songId));
+
+  if (!song) {
+    alert('Không tìm thấy bài hát!');
+    return;
+  }
+
+  const confirmed = confirm(
+    `Bạn có chắc muốn xóa bài hát này?\n\n${song.user}\n${song.url}`
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const res = await fetch('/api/delete-song', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        id: songId,
+        initData: telegramInitData
+      })
+    });
+
+    const data = await res.json();
+
+    if (!data.success) {
+      alert(data.message || 'Không thể xóa bài hát!');
+      return;
+    }
+
+    // Không cần tự sửa songs ở đây.
+    // Backend sẽ broadcastState() và updateUI() sẽ tự cập nhật.
+    
+  } catch (error) {
+    console.error('Lỗi xóa bài hát:', error);
+    alert('Lỗi kết nối khi xóa bài hát!');
+  }
+}
+
+    songListEl.addEventListener('click', (event) => {
+      const button = event.target.closest('.btn-delete-song');
+
+      if (!button) return;
+
+      const songId = button.dataset.songId;
+
+      deleteSong(songId);
+    });
 
     function drawWheel() {
       const numSlices = songs.length;
