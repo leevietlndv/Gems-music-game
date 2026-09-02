@@ -394,33 +394,6 @@ function requireTelegramAdmin(req, res) {
   return { ok: true, user: auth.user };
 }
 
-// ==================== YOUTUBE URL NORMALIZATION ====================
-// Lấy Video ID để nhận diện cùng một video dù dùng nhiều dạng URL.
-function getYouTubeVideoId(inputUrl) {
-  try {
-    const url = new URL(String(inputUrl).trim());
-    const hostname = url.hostname.toLowerCase().replace(/^www\./, '');
-
-    if (hostname === 'youtu.be') {
-      return url.pathname.split('/').filter(Boolean)[0] || null;
-    }
-
-    if (hostname === 'youtube.com' || hostname === 'm.youtube.com' || hostname === 'music.youtube.com') {
-      const videoId = url.searchParams.get('v');
-      if (videoId) return videoId;
-
-      const parts = url.pathname.split('/').filter(Boolean);
-      if (parts.length >= 2 && ['shorts', 'embed', 'live'].includes(parts[0])) {
-        return parts[1];
-      }
-    }
-
-    return null;
-  } catch (error) {
-    return null;
-  }
-}
-
 async function getYouTubeTitle(url) {
   try {
     const oembedUrl =
@@ -442,6 +415,55 @@ async function getYouTubeTitle(url) {
     return 'Bài hát YouTube';
   }
 }
+
+  // ==================== YOUTUBE URL VALIDATION ====================
+  function getYouTubeVideoId(inputUrl) {
+    try {
+      const url = new URL(String(inputUrl).trim());
+
+      const hostname = url.hostname
+        .toLowerCase()
+        .replace(/^www\./, '');
+
+      // https://youtu.be/VIDEO_ID
+      if (hostname === 'youtu.be') {
+        return url.pathname.split('/').filter(Boolean)[0] || null;
+      }
+
+      // https://youtube.com/watch?v=VIDEO_ID
+      // https://m.youtube.com/watch?v=VIDEO_ID
+      // https://music.youtube.com/watch?v=VIDEO_ID
+      if (
+        hostname === 'youtube.com' ||
+        hostname === 'm.youtube.com' ||
+        hostname === 'music.youtube.com'
+      ) {
+        const videoId = url.searchParams.get('v');
+
+        if (videoId) {
+          return videoId;
+        }
+
+        // /shorts/VIDEO_ID
+        // /embed/VIDEO_ID
+        // /live/VIDEO_ID
+        const parts = url.pathname
+          .split('/')
+          .filter(Boolean);
+
+        if (
+          parts.length >= 2 &&
+          ['shorts', 'embed', 'live'].includes(parts[0])
+        ) {
+          return parts[1];
+        }
+      }
+
+      return null;
+    } catch (error) {
+      return null;
+    }
+  }
 
 app.post('/api/submit', async (req, res) => {
   if (!isFormOpen) {
