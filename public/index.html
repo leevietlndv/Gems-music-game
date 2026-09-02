@@ -6,6 +6,7 @@
   <title>Vòng Quay Nhạc</title>
   <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
   <script src="/socket.io/socket.io.js"></script>
+  <script src="https://www.youtube.com/iframe_api"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
     body { background-color: #1c2333; color: #ffffff; padding: 16px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
@@ -27,7 +28,19 @@
     canvas { width: 300px; height: 300px; border-radius: 50%; box-shadow: 0 0 15px rgba(0,0,0,0.5); }
     .btn-spin { background: #ff9800; color: #111; font-size: 16px; font-weight: 700; margin-bottom: 12px; }
     .btn-spin:disabled { background: #78541c; color: #666; cursor: not-allowed; }
-    .admin-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; width: 100%; max-width: 480px; }
+    .admin-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 16px;
+      width: 100%;
+      max-width: 480px;
+    }
+
+    .btn-auto-play {
+      background: #37474f;
+      color: white;
+    }
     .btn-toggle { background: #37474f; color: white; }
     .btn-reset { background: #d32f2f; color: white; }
 
@@ -189,7 +202,7 @@
     .volume-icon { font-size:18px; flex:0 0 auto; }
     .am-luong { display: flex; justify-content: center; align-items: center; height:38px; background-color: #2e7d32; min-width: 50px; border-radius: 10px; }
     #volumeSlider { flex:1; width: 55%; min-width:80px; accent-color:#00aaff; cursor:pointer; }
-    #volumeValue { font-size:12px; font-weight: 700; color:#ddd; flex:0 0 auto; }
+    #volumeValue { font-size:14px; font-weight: 700; color:#ddd; flex:0 0 auto; }
     
     /* Utility class cho admin */
     .admin-only { display: none; }
@@ -240,8 +253,17 @@
     <button id="btnSpin" class="btn-spin admin-only">🎡 QUAY VÒNG QUAY</button>
     
     <div id="adminPanel" class="admin-actions admin-only">
-      <button id="btnToggleForm" class="btn-toggle">🔒 Đóng Form</button>
-      <button id="btnReset" class="btn-reset">🧹 Reset Game</button>
+      <button id="btnToggleForm" class="btn-toggle">
+        🔒 Đóng Form
+      </button>
+
+      <button id="btnAutoPlay" class="btn-auto-play">
+        ▶️ Tự động
+      </button>
+
+      <button id="btnReset" class="btn-reset">
+        🧹 Reset Game
+      </button>
     </div>
 
     <div class="card">
@@ -295,6 +317,7 @@ function getTelegramUserData() {
     const btnSubmit = document.getElementById('btnSubmit');
     const btnSpin = document.getElementById('btnSpin');
     const btnToggleForm = document.getElementById('btnToggleForm');
+    const btnAutoPlay = document.getElementById('btnAutoPlay');
     const btnReset = document.getElementById('btnReset');
     const adminPanel = document.getElementById('adminPanel');
     const songListEl = document.getElementById('songList');
@@ -320,6 +343,38 @@ function getTelegramUserData() {
     let currentAngle = 0;
     let isInitiator = false;
     let currentPlayingUrl = null;
+
+    let youtubeApiPlayer = null;
+    let youtubeApiReady = false;
+    let youtubeApiReadyCallbacks = [];
+
+    window.onYouTubeIframeAPIReady = function () {
+      youtubeApiReady = true;
+
+      console.log('🎬 YouTube IFrame API đã sẵn sàng');
+
+      youtubeApiReadyCallbacks.forEach(callback => {
+        try {
+          callback();
+        } catch (error) {
+          console.error('❌ Lỗi YouTube API callback:', error);
+        }
+      });
+
+      youtubeApiReadyCallbacks = [];
+    };
+
+    // ==================== AUTO PLAY ====================
+    // 0 = Tắt
+    // 1 = Tuần tự
+    // 2 = Ngẫu nhiên
+
+    let autoPlayMode = 0;
+    let autoPlayController = false;
+
+    // Chống gọi bài tiếp theo 2 lần khi YouTube
+    // gửi nhiều trạng thái ENDED.
+    let autoPlayNextBusy = false;
 
     const colors = ['#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9800', '#ff5722'];
 
@@ -395,10 +450,30 @@ function getTelegramUserData() {
 
       const song = data.song;
 
-      console.log('▶️ Nhận bài hát được phát:', song);
+      const shouldPlaySound =
+        data.initiatorSocketId === socket.id;
 
-      // Phát bài hát nhưng KHÔNG có âm thanh
-      renderPlayer(song, false);
+      console.log(
+        shouldPlaySound
+          ? '▶️ Bạn là người phát — có tiếng'
+          : '▶️ Client khác phát — mute',
+        song
+      );
+
+      renderPlayer(song, shouldPlaySound);
+    });
+
+    socket.on('autoPlayMode', (data) => {
+      if (!data) return;
+
+      autoPlayMode = Number(data.mode) || 0;
+
+      updateAutoPlayButton();
+
+      console.log(
+        '🎵 Nhận Auto Play Mode:',
+        autoPlayMode
+      );
     });
 
     socket.on('triggerSpin', (data) => {
@@ -547,9 +622,10 @@ function getTelegramUserData() {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            id: songId,
-            initData: telegramInitData
-          })
+          id: songId,
+          initData: telegramInitData,
+          socketId: socket.id
+        })
         });
 
         const data = await res.json();
@@ -561,7 +637,6 @@ function getTelegramUserData() {
 
         // QUAN TRỌNG:
         // Chính người bấm PLAY sẽ phát có âm thanh.
-        renderPlayer(data.song, true);
 
       } catch (error) {
         console.error('❌ Lỗi phát bài hát:', error);
@@ -666,6 +741,14 @@ function getTelegramUserData() {
         ctx.font = `bold ${fontSize}px Arial`;
         ctx.fillText(label, 134, fontSize / 3);
         ctx.restore();
+      }
+    }
+
+    function whenYouTubeApiReady(callback) {
+      if (youtubeApiReady) {
+        callback();
+      } else {
+        youtubeApiReadyCallbacks.push(callback);
       }
     }
 
@@ -789,6 +872,82 @@ function getTelegramUserData() {
       playerCard.style.display = 'block';
     }
 
+    function onYouTubePlayerStateChange(event) {
+      console.log('🎬 YouTube state:', event.data);
+
+      if (
+        typeof YT !== 'undefined' &&
+        event.data === YT.PlayerState.ENDED
+      ) {
+        console.log('🏁 BÀI HÁT ĐÃ KẾT THÚC');
+
+        handleAutoPlayEnded();
+      }
+    }
+
+    async function handleAutoPlayEnded() {
+      // Chỉ Admin mới được điều khiển Auto Play
+      if (!window.isAdmin) {
+        return;
+      }
+
+      // Auto Play đang tắt
+      if (autoPlayMode === 0) {
+        return;
+      }
+
+      // Đang xử lý bài tiếp theo
+      if (autoPlayNextBusy) {
+        console.log('⏳ Auto Play đang xử lý bài tiếp theo...');
+        return;
+      }
+
+      autoPlayNextBusy = true;
+
+      try {
+        const res = await fetch('/api/auto-play-next', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            initData: telegramInitData,
+            socketId: socket.id
+          })
+        });
+
+        const data = await res.json();
+
+        if (!data.success) {
+          console.log(
+            '⏹ Auto Play dừng:',
+            data.message
+          );
+
+          if (data.stopAutoPlay) {
+            autoPlayMode = 0;
+            autoPlayController = false;
+            updateAutoPlayButton();
+          }
+
+          return;
+        }
+
+        console.log(
+          '▶️ Auto Play chuyển bài:',
+          data.song
+        );
+
+      } catch (error) {
+        console.error(
+          '❌ Lỗi Auto Play:',
+          error
+        );
+      } finally {
+        autoPlayNextBusy = false;
+      }
+    }
+
     function isYouTubeUrl(inputUrl) {
       try {
         const url = new URL(inputUrl.trim());
@@ -828,6 +987,78 @@ function getTelegramUserData() {
         return false;
       }
     }
+    function updateAutoPlayButton() {
+      if (!btnAutoPlay) return;
+
+      if (autoPlayMode === 1) {
+        btnAutoPlay.textContent = '🔢 Tuần tự';
+        btnAutoPlay.style.background = '#2e7d32';
+      }
+
+      else if (autoPlayMode === 2) {
+        btnAutoPlay.textContent = '🔀 Ngẫu nhiên';
+        btnAutoPlay.style.background = '#00aaff';
+      }
+
+      else {
+        btnAutoPlay.textContent = '▶️ Tự động';
+        btnAutoPlay.style.background = '#37474f';
+      }
+    }
+    
+btnAutoPlay.addEventListener('click', async () => {
+  if (!window.isAdmin) {
+    alert('Bạn không có quyền Admin!');
+    return;
+  }
+
+  let nextMode;
+
+  if (autoPlayMode === 0) {
+    nextMode = 1;
+  } else if (autoPlayMode === 1) {
+    nextMode = 2;
+  } else {
+    nextMode = 0;
+  }
+
+  try {
+    const res = await fetch('/api/auto-play-mode', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        mode: nextMode,
+        initData: telegramInitData,
+        socketId: socket.id
+      })
+    });
+
+    const data = await res.json();
+
+    if (!data.success) {
+      alert(data.message || 'Không thể đổi chế độ Auto Play!');
+      return;
+    }
+
+    autoPlayMode = data.mode;
+    autoPlayController = data.controllerSocketId === socket.id;
+
+    updateAutoPlayButton();
+
+    console.log(
+      '🎵 Auto Play Mode:',
+      autoPlayMode
+    );
+
+  } catch (error) {
+    console.error('❌ Lỗi đổi Auto Play:', error);
+    alert('Lỗi kết nối!');
+  }
+});
+
+updateAutoPlayButton();
 
     function startSpinAnimation(targetIndex, winner, shouldPlaySound) {
       if (isSpinning) return;
