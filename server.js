@@ -804,7 +804,7 @@ app.post('/api/auto-play-mode', async (req, res) => {
 
 // ==================== API: AUTO PLAY NEXT ====================
 app.post('/api/auto-play-next', async (req, res) => {
-  const { socketId } = req.body;
+  const { socketId, expectedSongId } = req.body;
   const auth = requireTelegramAdmin(req, res);
   if (!auth.ok) return;
 
@@ -827,6 +827,17 @@ app.post('/api/auto-play-next', async (req, res) => {
     const currentId = lastWinner?.id != null
       ? String(lastWinner.id)
       : null;
+
+    // Bảo vệ khỏi race-condition: nếu một lệnh Auto Play cũ vừa gửi
+    // sau khi Admin/user đã bấm Play hoặc Spin, không được phép ghi đè
+    // bài mới. Client phải xác nhận đúng bài vừa kết thúc.
+    if (expectedSongId != null && currentId !== String(expectedSongId)) {
+      return res.json({
+        success: false,
+        stale: true,
+        message: 'Bỏ qua Auto Play cũ vì bài đang phát đã thay đổi.'
+      });
+    }
 
     const availableSongs = songs.filter(song =>
       !currentId || String(song.id) !== currentId
