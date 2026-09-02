@@ -273,7 +273,7 @@
       grid-template-columns: repeat(5, 1fr);
       gap: 5px;
       width: 100%;
-      height: 16px;
+      height: 12px;
     }
     .health-segment {
       border-radius: 5px;
@@ -396,8 +396,11 @@
     </div>
     
     <div style="font-size: 13px; color: #ddd; margin-bottom: 6px;">
-      Người gửi: <strong id="winnerUser" style="color: #64b5f6;">-</strong><span id="winnerAction" style="color: #ffca28; font-weight: bold;"></span>
+      Người gửi:
+      <strong id="winnerUser" style="color: #64b5f6;">-</strong>
+      <span id="winnerAction"></span>
     </div>
+    
     <div class="winner-interaction-row">
       <div class="health-box">
         <div id="healthStatus" class="health-title">❤️ Bạn có yêu thích bài hát này?</div>
@@ -1399,17 +1402,17 @@ function getTelegramUserData() {
       if (winnerAction) {
         if (currentAction?.type === 'spin' && currentAction.user) {
           winnerAction.innerHTML =
-            ` - <span class="action-label">Spin:</span> ` +
+            ` - <span class="action-label">Quay bởi:</span> ` +
             `<strong class="action-user">${escapeHtml(currentAction.user)}</strong>`;
 
         } else if (currentAction?.type === 'play' && currentAction.user) {
           winnerAction.innerHTML =
-            ` - <span class="action-label">Play:</span> ` +
+            ` - <span class="action-label">Play bởi:</span> ` +
             `<strong class="action-user">${escapeHtml(currentAction.user)}</strong>`;
 
         } else if (currentAction?.type === 'replace' && currentAction.title) {
           winnerAction.innerHTML =
-            ` - <span class="action-label">Replace:</span> ` +
+            ` - <span class="action-label">Thay thế:</span> ` +
             `<strong class="action-user">${escapeHtml(currentAction.title)}</strong>`;
 
         } else {
