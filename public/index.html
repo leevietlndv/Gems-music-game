@@ -204,7 +204,7 @@
       margin-bottom: 10px;
     }
     .health-box {
-      flex: 1 1 55%;
+      flex: 1 1 72%;
       min-width: 0;
       padding: 8px 10px;
       background: #182235;
@@ -215,6 +215,14 @@
       font-weight: 700;
       color: #ddd;
       margin-bottom: 6px;
+      line-height: 1.25;
+      min-height: 30px;
+      display: flex;
+      align-items: center;
+    }
+    .health-status-countdown {
+      color: #ffcc00;
+      font-weight: 800;
     }
     .health-bar {
       display: grid;
@@ -235,18 +243,24 @@
     .health-segment.active:nth-child(4) { background: #e85d23; }
     .health-segment.active:nth-child(5) { background: #d32f2f; }
     .vote-actions {
-      flex: 1 1 45%;
+      flex: 0 0 28%;
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 8px;
+      gap: 6px;
     }
     .vote-button {
       min-height: 54px;
-      padding: 6px 4px;
-      font-size: 13px;
+      padding: 5px 2px;
+      font-size: 12px;
       border-radius: 8px;
       color: #fff;
+      flex-direction: column;
+      gap: 1px;
+      line-height: 1.05;
     }
+    .vote-icon { font-size: 20px; line-height: 1; }
+    .vote-label { font-size: 11px; font-weight: 700; }
+    .vote-count { font-size: 12px; font-weight: 800; opacity: 0.95; }
     .vote-button.like { background: #2e7d32; }
     .vote-button.dislike { background: #d32f2f; }
     .vote-button.active { box-shadow: inset 0 0 0 3px #fff; transform: translateY(-1px); }
@@ -285,8 +299,8 @@
     </div>
     <div class="winner-interaction-row">
       <div class="health-box">
-        <div class="health-title">❤️ Máu bài hát</div>
-        <div id="healthBar" class="health-bar" aria-label="Thanh máu 0 trên 5">
+        <div id="healthStatus" class="health-title">❤️ Bạn có yêu thích bài hát này?</div>
+        <div id="healthBar" class="health-bar" aria-label="Thanh máu 5 trên 5">
           <span class="health-segment"></span>
           <span class="health-segment"></span>
           <span class="health-segment"></span>
@@ -295,8 +309,16 @@
         </div>
       </div>
       <div class="vote-actions">
-        <button id="btnLike" class="vote-button like" type="button" title="Like: trừ 1 mốc máu">👍 Like</button>
-        <button id="btnDislike" class="vote-button dislike" type="button" title="Dislike: cộng 1 mốc máu">👎 Dislike</button>
+        <button id="btnLike" class="vote-button like" type="button" title="Like: +1 điểm chênh lệch">
+          <span class="vote-icon">👍</span>
+          <span class="vote-label">Like</span>
+          <span id="likeCount" class="vote-count">0</span>
+        </button>
+        <button id="btnDislike" class="vote-button dislike" type="button" title="Dislike: -1 điểm chênh lệch">
+          <span class="vote-icon">👎</span>
+          <span class="vote-label">Dislike</span>
+          <span id="dislikeCount" class="vote-count">0</span>
+        </button>
       </div>
     </div>
     <div style="margin-bottom: 10px;">
@@ -399,6 +421,9 @@ function getTelegramUserData() {
     const winnerUser = document.getElementById('winnerUser');
     const winnerAction = document.getElementById('winnerAction');
     const healthBar = document.getElementById('healthBar');
+    const healthStatus = document.getElementById('healthStatus');
+    const likeCount = document.getElementById('likeCount');
+    const dislikeCount = document.getElementById('dislikeCount');
     const btnLike = document.getElementById('btnLike');
     const btnDislike = document.getElementById('btnDislike');
     const ytPlayer = document.getElementById('ytPlayer');
@@ -418,8 +443,11 @@ function getTelegramUserData() {
     let currentAngle = 0;
     let currentPlayingUrl = null;
     let currentAction = null;
-    let currentHealth = 0;
-    let currentVote = 0; // -1 = Like, 1 = Dislike, 0 = chưa vote
+    let currentHealth = 5;
+    let currentVote = 0; // 1 = Like, -1 = Dislike, 0 = chưa vote
+    let currentLikeCount = 0;
+    let currentDislikeCount = 0;
+    let replacementCountdown = null;
 
     let youtubeApiPlayer = null;
     let youtubeApiReady = false;
@@ -512,7 +540,10 @@ function getTelegramUserData() {
       isFormOpen = data.isFormOpen;
       songs = data.songs || [];
       currentAction = data.lastAction || null;
-      updateHealth(data.health || 0);
+      currentLikeCount = Number(data.likes) || 0;
+      currentDislikeCount = Number(data.dislikes) || 0;
+      replacementCountdown = Number.isFinite(Number(data.replacementCountdown)) ? Number(data.replacementCountdown) : null;
+      updateHealth(typeof data.health === 'number' ? data.health : 5);
 
       if (typeof data.autoPlayMode !== 'undefined') {
         autoPlayMode = Number(data.autoPlayMode) || 0;
@@ -538,7 +569,10 @@ function getTelegramUserData() {
 
       const song = data.song;
       currentAction = data.action || null;
-      updateHealth(data.health || 0);
+      currentLikeCount = Number(data.likes) || 0;
+      currentDislikeCount = Number(data.dislikes) || 0;
+      replacementCountdown = Number.isFinite(Number(data.replacementCountdown)) ? Number(data.replacementCountdown) : null;
+      updateHealth(typeof data.health === 'number' ? data.health : 5);
       currentVote = 0;
       updateVoteButtons();
 
@@ -1096,15 +1130,21 @@ function getTelegramUserData() {
 
       playerCard.style.display = 'none';
       currentAction = null;
-      currentHealth = 0;
+      currentHealth = 5;
+      currentLikeCount = 0;
+      currentDislikeCount = 0;
+      replacementCountdown = null;
       currentVote = 0;
-      updateHealth(0);
+      updateHealth(5);
       updateVoteButtons();
       if (winnerAction) winnerAction.textContent = '';
     }
 
-    function updateHealth(health) {
+    function updateHealth(health, likes = currentLikeCount, dislikes = currentDislikeCount, countdown = replacementCountdown) {
       currentHealth = Math.max(0, Math.min(5, Number(health) || 0));
+      currentLikeCount = Math.max(0, Number(likes) || 0);
+      currentDislikeCount = Math.max(0, Number(dislikes) || 0);
+      replacementCountdown = Number.isFinite(Number(countdown)) ? Number(countdown) : null;
 
       if (healthBar) {
         const segments = healthBar.querySelectorAll('.health-segment');
@@ -1117,6 +1157,20 @@ function getTelegramUserData() {
         );
       }
 
+      if (likeCount) likeCount.textContent = String(currentLikeCount);
+      if (dislikeCount) dislikeCount.textContent = String(currentDislikeCount);
+
+      if (healthStatus) {
+        if (currentHealth >= 2) {
+          healthStatus.innerHTML = '❤️ Bạn có yêu thích bài hát này?';
+        } else if (currentHealth === 1) {
+          healthStatus.innerHTML = '💔 Hình như không hợp thị hiếu';
+        } else {
+          const seconds = Math.max(0, Math.min(10, Number(replacementCountdown) || 0));
+          healthStatus.innerHTML = `⚠️ Bài hát sẽ được thay thế trong <span class="health-status-countdown">${seconds}</span>`;
+        }
+      }
+
       updateVoteButtons();
     }
 
@@ -1124,11 +1178,11 @@ function getTelegramUserData() {
       const hasSong = !!currentPlayingUrl;
       if (btnLike) {
         btnLike.disabled = !hasSong;
-        btnLike.classList.toggle('active', currentVote === -1);
+        btnLike.classList.toggle('active', currentVote === 1);
       }
       if (btnDislike) {
         btnDislike.disabled = !hasSong;
-        btnDislike.classList.toggle('active', currentVote === 1);
+        btnDislike.classList.toggle('active', currentVote === -1);
       }
     }
 
@@ -1140,7 +1194,12 @@ function getTelegramUserData() {
         return;
       }
 
-      updateHealth(data.health || 0);
+      updateHealth(
+        typeof data.health === 'number' ? data.health : currentHealth,
+        data.likes,
+        data.dislikes,
+        data.replacementCountdown
+      );
 
       if (
         data.telegramId != null &&
@@ -1150,6 +1209,21 @@ function getTelegramUserData() {
         currentVote = Number(data.userVote) || 0;
         updateVoteButtons();
       }
+    });
+
+    socket.on('replacementCountdown', (data) => {
+      if (!data) return;
+
+      const songId = lastWinnerId();
+      if (data.songId != null && songId != null && String(data.songId) !== String(songId)) {
+        return;
+      }
+
+      replacementCountdown = Number.isFinite(Number(data.countdown))
+        ? Number(data.countdown)
+        : null;
+
+      updateHealth(currentHealth, currentLikeCount, currentDislikeCount, replacementCountdown);
     });
 
     function lastWinnerId() {
@@ -1187,7 +1261,7 @@ function getTelegramUserData() {
           updateVoteButtons();
         } else {
           currentVote = Number(data.userVote) || 0;
-          updateHealth(data.health || 0);
+          updateHealth(data.health, data.likes, data.dislikes, data.replacementCountdown);
         }
       } catch (error) {
         console.error('❌ Lỗi Like/Dislike:', error);
@@ -1196,8 +1270,8 @@ function getTelegramUserData() {
       }
     }
 
-    btnLike?.addEventListener('click', () => sendVote(-1));
-    btnDislike?.addEventListener('click', () => sendVote(1));
+    btnLike?.addEventListener('click', () => sendVote(1));
+    btnDislike?.addEventListener('click', () => sendVote(-1));
 
     function renderPlayer(winner, shouldPlaySound, action = currentAction) {
       if (!winner?.url) return;

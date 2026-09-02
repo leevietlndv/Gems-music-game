@@ -45,6 +45,28 @@ async function initDatabase() {
     )
   `);
 
+  // Phiên bản vote mới: LIKE = +1, DISLIKE = -1.
+  // Bản health-v1 cũ dùng ngược dấu, nên chỉ đảo dấu đúng một lần.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS song_votes_meta (
+      key TEXT PRIMARY KEY,
+      version INTEGER NOT NULL
+    )
+  `);
+
+  const voteVersion = await pool.query(
+    `SELECT version FROM song_votes_meta WHERE key = 'vote_semantics'`
+  );
+
+  if (voteVersion.rowCount === 0) {
+    await pool.query('UPDATE song_votes SET vote = -vote');
+    await pool.query(`
+      INSERT INTO song_votes_meta (key, version)
+      VALUES ('vote_semantics', 2)
+    `);
+    console.log('🔄 Đã chuyển vote sang quy ước mới: Like +1 | Dislike -1');
+  }
+
   console.log('🗄️ PostgreSQL: Database ready');
 }
 
@@ -189,7 +211,12 @@ let isFormOpen = true;
 let songs = [];
 let lastWinner = null;
 let lastAction = null;
-let currentHealth = 0;
+let currentHealth = 5;
+let currentLikeCount = 0;
+let currentDislikeCount = 0;
+let replacementCountdown = null;
+let replacementTimer = null;
+let replacementInProgress = false;
 
 // Khóa xử lý vote để các lượt bấm đồng thời được xử lý tuần tự.
 let voteQueue = Promise.resolve();
@@ -198,13 +225,42 @@ function clampHealth(value) {
   return Math.max(0, Math.min(5, Number(value) || 0));
 }
 
-async function getSongHealth(songId) {
+async function getSongVoteStats(songId) {
   const result = await pool.query(`
-    SELECT COALESCE(SUM(vote), 0) AS score
+    SELECT
+      COUNT(*) FILTER (WHERE vote = 1) AS likes,
+      COUNT(*) FILTER (WHERE vote = -1) AS dislikes,
+      COALESCE(SUM(vote), 0) AS score
     FROM song_votes
     WHERE song_id = $1
   `, [songId]);
-  return clampHealth(result.rows[0]?.score);
+
+  const row = result.rows[0] || {};
+  const likes = Number(row.likes) || 0;
+  const dislikes = Number(row.dislikes) || 0;
+  const score = Number(row.score) || 0;
+
+  return {
+    likes,
+    dislikes,
+    score,
+    health: clampHealth(5 + score)
+  };
+}
+
+async function refreshCurrentSongHealth() {
+  if (!lastWinner) {
+    currentHealth = 5;
+    currentLikeCount = 0;
+    currentDislikeCount = 0;
+    return { likes: 0, dislikes: 0, score: 0, health: 5 };
+  }
+
+  const stats = await getSongVoteStats(lastWinner.id);
+  currentHealth = stats.health;
+  currentLikeCount = stats.likes;
+  currentDislikeCount = stats.dislikes;
+  return stats;
 }
 
 async function getUserVote(songId, telegramId) {
@@ -215,11 +271,107 @@ async function getUserVote(songId, telegramId) {
   return result.rowCount ? Number(result.rows[0].vote) : 0;
 }
 
-async function broadcastHealthOnly() {
+async function broadcastHealthOnly(userVote = null) {
   io.emit('songHealth', {
     songId: lastWinner?.id || null,
-    health: currentHealth
+    health: currentHealth,
+    likes: currentLikeCount,
+    dislikes: currentDislikeCount,
+    replacementCountdown,
+    ...(userVote === null ? {} : { userVote })
   });
+}
+
+function clearReplacementCountdown() {
+  if (replacementTimer) {
+    clearInterval(replacementTimer);
+    replacementTimer = null;
+  }
+  replacementCountdown = null;
+}
+
+function broadcastReplacementCountdown() {
+  io.emit('replacementCountdown', {
+    songId: lastWinner?.id || null,
+    countdown: replacementCountdown
+  });
+}
+
+async function replaceCurrentSongDueToHealth() {
+  if (replacementInProgress || !lastWinner || currentHealth !== 0) return false;
+
+  replacementInProgress = true;
+  try {
+    const previousSong = lastWinner;
+    const previousTitle = previousSong.title || previousSong.url || 'bài hát trước đó';
+    const availableSongs = songs.filter(song => String(song.id) !== String(previousSong.id));
+
+    clearReplacementCountdown();
+
+    if (availableSongs.length === 0) {
+      currentHealth = 0;
+      await broadcastHealthOnly();
+      return false;
+    }
+
+    const nextSong = availableSongs[Math.floor(Math.random() * availableSongs.length)];
+
+    await pool.query('DELETE FROM song_votes WHERE song_id = $1', [previousSong.id]);
+    await pool.query('DELETE FROM songs WHERE id = $1', [previousSong.id]);
+    songs = songs.filter(song => String(song.id) !== String(previousSong.id));
+
+    lastWinner = nextSong;
+    currentHealth = 5;
+    currentLikeCount = 0;
+    currentDislikeCount = 0;
+    lastAction = { type: 'replace', title: previousTitle };
+
+    io.emit('songPlayed', {
+      song: nextSong,
+      initiatorSocketId: null,
+      action: lastAction,
+      health: 5,
+      likes: 0,
+      dislikes: 0,
+      replacementCountdown: null
+    });
+    broadcastState();
+
+    console.log(`❤️ Máu về 0 quá 10 giây → thay #${previousSong.id} bằng #${nextSong.id}: ${nextSong.title || nextSong.url}`);
+    return true;
+  } catch (error) {
+    console.error('❌ Lỗi tự động thay bài do máu:', error);
+    return false;
+  } finally {
+    replacementInProgress = false;
+  }
+}
+
+function startReplacementCountdown() {
+  if (replacementTimer || !lastWinner || currentHealth !== 0) return;
+
+  replacementCountdown = 10;
+  broadcastReplacementCountdown();
+
+  replacementTimer = setInterval(async () => {
+    if (!lastWinner || currentHealth !== 0) {
+      clearReplacementCountdown();
+      broadcastReplacementCountdown();
+      return;
+    }
+
+    replacementCountdown -= 1;
+
+    if (replacementCountdown <= 0) {
+      clearReplacementCountdown();
+      const run = voteQueue.then(() => replaceCurrentSongDueToHealth(), () => replaceCurrentSongDueToHealth());
+      voteQueue = run.catch(() => {});
+      await run;
+      return;
+    }
+
+    broadcastReplacementCountdown();
+  }, 1000);
 }
 
 async function performSpin(initiatorSocketId = null, actionUser = null) {
@@ -233,7 +385,10 @@ async function performSpin(initiatorSocketId = null, actionUser = null) {
 
     lastWinner = null;
     lastAction = null;
-    currentHealth = 0;
+    currentHealth = 5;
+    currentLikeCount = 0;
+    currentDislikeCount = 0;
+    clearReplacementCountdown();
   }
 
   if (songs.length === 0) {
@@ -244,7 +399,10 @@ async function performSpin(initiatorSocketId = null, actionUser = null) {
   const selectedIndex = Math.floor(Math.random() * songs.length);
   const winner = songs[selectedIndex];
   lastWinner = winner;
-  currentHealth = 0;
+  currentHealth = 5;
+  currentLikeCount = 0;
+  currentDislikeCount = 0;
+  clearReplacementCountdown();
   lastAction = actionUser ? { type: 'spin', user: actionUser } : null;
 
   io.emit('triggerSpin', {
@@ -480,6 +638,9 @@ function broadcastState() {
     lastWinner,
     lastAction,
     health: currentHealth,
+    likes: currentLikeCount,
+    dislikes: currentDislikeCount,
+    replacementCountdown,
     autoPlayMode,
     controllerSocketId: autoPlayControllerSocketId
   });
@@ -709,14 +870,20 @@ app.post('/api/auto-play-next', async (req, res) => {
     }
 
     lastWinner = nextSong;
-    currentHealth = 0;
+    currentHealth = 5;
+    currentLikeCount = 0;
+    currentDislikeCount = 0;
     lastAction = null;
+    clearReplacementCountdown();
 
     io.emit('songPlayed', {
       song: nextSong,
       initiatorSocketId: autoPlayControllerSocketId,
       action: null,
-      health: 0
+      health: 5,
+      likes: 0,
+      dislikes: 0,
+      replacementCountdown: null
     });
 
     broadcastState();
@@ -791,7 +958,10 @@ app.post('/api/play-song', async (req, res) => {
     }
 
     lastWinner = song;
-    currentHealth = 0;
+    currentHealth = 5;
+    currentLikeCount = 0;
+    currentDislikeCount = 0;
+    clearReplacementCountdown();
 
     const userName =
       [auth.user.first_name, auth.user.last_name]
@@ -807,7 +977,10 @@ app.post('/api/play-song', async (req, res) => {
       song,
       initiatorSocketId: socketId || null,
       action: lastAction,
-      health: 0
+      health: 5,
+      likes: 0,
+      dislikes: 0,
+      replacementCountdown: null
     });
 
     broadcastState();
@@ -833,17 +1006,27 @@ app.post('/api/song-vote', async (req, res) => {
   const auth = validateTelegramInitData(req.body?.initData || '');
 
   if (!auth.valid) {
-    return res.status(401).json({ success: false, message: `Xác thực Telegram thất bại: ${auth.message}` });
+    return res.status(401).json({
+      success: false,
+      message: `Xác thực Telegram thất bại: ${auth.message}`
+    });
   }
 
   const requestedVote = Number(vote);
   if (![1, -1].includes(requestedVote)) {
-    return res.status(400).json({ success: false, message: 'Loại vote không hợp lệ!' });
+    return res.status(400).json({
+      success: false,
+      message: 'Loại vote không hợp lệ!'
+    });
   }
 
   const runVote = async () => {
     if (!lastWinner) {
-      return { success: false, status: 400, message: 'Hiện chưa có bài hát đang phát.' };
+      return {
+        success: false,
+        status: 400,
+        message: 'Hiện chưa có bài hát đang phát.'
+      };
     }
 
     const songId = lastWinner.id;
@@ -851,6 +1034,7 @@ app.post('/api/song-vote', async (req, res) => {
     const previousVote = await getUserVote(songId, telegramId);
     let newVote = requestedVote;
 
+    // LIKE = +1 | DISLIKE = -1.
     // Mỗi Telegram user chỉ có một vote cho bài hiện tại.
     // Bấm lại cùng nút = bỏ vote; bấm nút đối diện = đổi vote.
     if (previousVote === requestedVote) {
@@ -868,55 +1052,33 @@ app.post('/api/song-vote', async (req, res) => {
       `, [songId, telegramId, requestedVote]);
     }
 
-    currentHealth = await getSongHealth(songId);
+    const stats = await refreshCurrentSongHealth();
 
-    if (currentHealth >= 5) {
-      const previousSong = lastWinner;
-      const previousTitle = previousSong.title || previousSong.url || 'bài hát trước đó';
-      const availableSongs = songs.filter(song => String(song.id) !== String(previousSong.id));
-
-      if (availableSongs.length === 0) {
-        currentHealth = 5;
-        await broadcastHealthOnly();
-        return {
-          success: false,
-          status: 409,
-          health: 5,
-          message: 'Đã đủ 5 mốc máu nhưng không còn bài hát khác để thay thế.'
-        };
+    // Máu trở lại trên 0 → hủy đếm ngược thay bài.
+    if (currentHealth > 0) {
+      if (replacementTimer) {
+        clearReplacementCountdown();
+        broadcastReplacementCountdown();
       }
-
-      const nextSong = availableSongs[Math.floor(Math.random() * availableSongs.length)];
-
-      await pool.query('DELETE FROM songs WHERE id = $1', [previousSong.id]);
-      songs = songs.filter(song => String(song.id) !== String(previousSong.id));
-
-      lastWinner = nextSong;
-      currentHealth = 0;
-      lastAction = { type: 'replace', title: previousTitle };
-
-      io.emit('songPlayed', {
-        song: nextSong,
-        initiatorSocketId: null,
-        action: lastAction,
-        health: 0
-      });
-      broadcastState();
-
-      console.log(`❤️ Đủ 5 mốc máu → thay #${previousSong.id} bằng #${nextSong.id}: ${nextSong.title || nextSong.url}`);
-
-      return { success: true, replaced: true, health: 0, song: nextSong, action: lastAction };
     }
 
-    io.emit('songHealth', {
-      songId,
-      health: currentHealth,
-      telegramId,
-      userVote: newVote
-    });
+    // Máu chạm 0 → bắt đầu đếm ngược 10 giây.
+    if (currentHealth === 0) {
+      startReplacementCountdown();
+    }
 
+    await broadcastHealthOnly(newVote);
     broadcastState();
-    return { success: true, replaced: false, health: currentHealth, userVote: newVote };
+
+    return {
+      success: true,
+      replaced: false,
+      health: currentHealth,
+      likes: currentLikeCount,
+      dislikes: currentDislikeCount,
+      replacementCountdown,
+      userVote: newVote
+    };
   };
 
   const run = voteQueue.then(runVote, runVote);
@@ -972,7 +1134,10 @@ app.post('/api/reset', async (req, res) => {
     songs = [];
     lastWinner = null;
     lastAction = null;
-    currentHealth = 0;
+    currentHealth = 5;
+    currentLikeCount = 0;
+    currentDislikeCount = 0;
+    clearReplacementCountdown();
 
     // Reset cũng tắt Auto Play để không tự phát lại sau khi reset.
     setAutoPlayState(0);
@@ -1024,7 +1189,10 @@ app.post('/api/delete-song', async (req, res) => {
     if (lastWinner && String(lastWinner.id) === String(id)) {
       lastWinner = null;
       lastAction = null;
-      currentHealth = 0;
+      currentHealth = 5;
+      currentLikeCount = 0;
+      currentDislikeCount = 0;
+      clearReplacementCountdown();
     }
 
     broadcastState();
@@ -1095,7 +1263,7 @@ io.on('connection', (socket) => {
 
     (async () => {
       if (!lastWinner) {
-        socket.emit('songHealth', { songId: null, health: 0, userVote: 0 });
+        socket.emit('songHealth', { songId: null, health: 5, likes: 0, dislikes: 0, replacementCountdown: null, userVote: 0 });
         return;
       }
       try {
@@ -1103,6 +1271,9 @@ io.on('connection', (socket) => {
         socket.emit('songHealth', {
           songId: lastWinner.id,
           health: currentHealth,
+          likes: currentLikeCount,
+          dislikes: currentDislikeCount,
+          replacementCountdown,
           userVote
         });
       } catch (error) {
