@@ -30,8 +30,8 @@
     .btn-spin:disabled { background: #78541c; color: #666; cursor: not-allowed; }
     .admin-actions {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 10px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: clamp(7px, 2vw, 10px);
       margin-bottom: 16px;
       width: 100%;
       max-width: 480px;
@@ -43,6 +43,41 @@
     }
     .btn-toggle { background: #37474f; color: white; }
     .btn-reset { background: #d32f2f; color: white; }
+
+    /* ===== 3 NÚT ADMIN ===== */
+    .admin-actions button {
+      min-width: 0;
+      width: 100%;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      gap: 8px;
+
+      padding: 14px 8px;
+
+      font-size: clamp(13px, 2vw, 20px);
+      font-weight: 700;
+      line-height: 1.1;
+
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Icon và phần chữ không bị co méo */
+    .admin-actions button .button-icon {
+      flex: 0 0 auto;
+      line-height: 1;
+    }
+
+    .admin-actions button .button-text {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
 
     .song-list {
         max-height: 240px;
@@ -258,7 +293,7 @@
       gap: 1px;
       line-height: 1.05;
     }
-    .vote-icon { font-size: 20px; line-height: 1; }
+    .vote-icon { font-size: 20px; line-height: 1; margin-bottom: 3px;}
     .vote-label { font-size: 11px; font-weight: 700; }
     .vote-count { font-size: 12px; font-weight: 800; opacity: 0.95; }
     .vote-button.like { background: #2e7d32; }
@@ -275,6 +310,50 @@
     
     /* Utility class cho admin */
     .admin-only { display: none; }
+    /* =========================================================
+   RESPONSIVE ADMIN BUTTONS
+   Màn hình hẹp: icon trên - text dưới
+   ========================================================= */
+
+    @media (max-width: 600px) {
+
+      .admin-actions {
+        gap: clamp(7px, 2.5vw, 10px);
+      }
+
+      .admin-actions button {
+        flex-direction: column;
+
+        gap: 4px;
+
+        padding: clamp(10px, 2.5vw, 13px)
+                clamp(4px, 1.5vw, 8px);
+
+        font-size: clamp(12px, 3.8vw, 16px);
+
+        line-height: 1.05;
+
+        white-space: nowrap;
+      }
+
+    }
+
+    @media (max-width: 380px) {
+
+      .admin-actions {
+        gap: 6px;
+      }
+
+      .admin-actions button {
+        padding: 9px 3px;
+        gap: 3px;
+
+        font-size: 12px;
+        border-radius: 9px;
+      }
+
+    }
+
   </style>
 </head>
 <body>
@@ -293,9 +372,12 @@
   </div>
 
   <div class="card" id="playerCard" style="display: none; border: 2px solid #ffca28;">
-    <div class="card-title" style="color: #ffca28;">🎉 ĐANG PHÁT BÀI HÁT TRÚNG THƯỞNG</div>
+    <div class="card-title" id="playerTitle" style="color: #ffca28;">
+  🎉 ĐANG PHÁT: -
+    </div>
+    
     <div style="font-size: 13px; color: #ddd; margin-bottom: 6px;">
-      Người gửi: <strong id="winnerUser" style="color: #64b5f6;">-</strong><span id="winnerAction" style="color: #ddd;"></span>
+      Người gửi: <strong id="winnerUser" style="color: #64b5f6;">-</strong><span id="winnerAction" style="color: #ffca28; font-weight: bold;"></span>
     </div>
     <div class="winner-interaction-row">
       <div class="health-box">
@@ -1294,6 +1376,7 @@ function getTelegramUserData() {
       currentPlayingUrl = winner.url;
       currentAction = action || null;
       winnerUser.textContent = winner.user || 'Người dùng';
+      playerTitle.textContent = `🎉 ĐANG PHÁT: ${winner.title || '-'}`;
       if (winnerAction) {
         if (currentAction?.type === 'spin' && currentAction.user) {
           winnerAction.textContent = ` - Người quay: ${currentAction.user}`;
