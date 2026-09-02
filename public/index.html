@@ -524,6 +524,12 @@ function getTelegramUserData() {
       // Lưu trạng thái Admin để updateUI() biết có hiện nút Xóa hay không
       window.isAdmin = data.isAdmin === true;
 
+      // Đồng bộ lại quyền Controller sau khi trạng thái Admin được xác thực.
+      // Điều này tránh trường hợp event autoPlayMode đến trước adminStatus.
+      autoPlayController = window.isAdmin &&
+        autoPlayControllerSocketId === socket.id;
+      updateAutoPlayButton();
+
       if (window.isAdmin) {
         btnSpin.classList.remove('admin-only');
         adminPanel.classList.remove('admin-only');
@@ -548,7 +554,10 @@ function getTelegramUserData() {
       if (typeof data.autoPlayMode !== 'undefined') {
         autoPlayMode = Number(data.autoPlayMode) || 0;
         autoPlayControllerSocketId = data.controllerSocketId || null;
-        autoPlayController = autoPlayControllerSocketId === socket.id;
+        autoPlayController = window.isAdmin === true &&
+          autoPlayControllerSocketId === socket.id;
+        autoPlayNextBusy = false;
+        if (btnAutoPlay) btnAutoPlay.disabled = false;
         updateAutoPlayButton();
       }
 
@@ -594,7 +603,10 @@ function getTelegramUserData() {
 
       autoPlayMode = Number(data.mode) || 0;
       autoPlayControllerSocketId = data.controllerSocketId || null;
-      autoPlayController = autoPlayControllerSocketId === socket.id;
+      autoPlayController = window.isAdmin === true &&
+        autoPlayControllerSocketId === socket.id;
+      autoPlayNextBusy = false;
+      if (btnAutoPlay) btnAutoPlay.disabled = false;
 
       updateAutoPlayButton();
 
