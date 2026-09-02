@@ -226,7 +226,7 @@
   <div class="card" id="playerCard" style="display: none; border: 2px solid #ffca28;">
     <div class="card-title" style="color: #ffca28;">🎉 ĐANG PHÁT BÀI HÁT TRÚNG THƯỞNG</div>
     <div style="font-size: 13px; color: #ddd; margin-bottom: 6px;">
-      Người gửi: <strong id="winnerUser" style="color: #64b5f6;">-</strong>
+      Người gửi: <strong id="winnerUser" style="color: #64b5f6;">-</strong><span id="winnerAction" style="color: #ddd;"></span>
     </div>
     <div style="margin-bottom: 10px;">
       <span id="audioNotice" class="audio-notice"></span>
@@ -326,6 +326,7 @@ function getTelegramUserData() {
     const ctx = canvas.getContext('2d');
     const playerCard = document.getElementById('playerCard');
     const winnerUser = document.getElementById('winnerUser');
+    const winnerAction = document.getElementById('winnerAction');
     const ytPlayer = document.getElementById('ytPlayer');
     const audioNotice = document.getElementById('audioNotice');
     const btnAudioToggle = document.getElementById('btnAudioToggle');
@@ -341,8 +342,8 @@ function getTelegramUserData() {
     let isSpinning = false;
     let isAdmin = false;
     let currentAngle = 0;
-    let isInitiator = false;
     let currentPlayingUrl = null;
+    let currentAction = null;
 
     let youtubeApiPlayer = null;
     let youtubeApiReady = false;
@@ -434,6 +435,7 @@ function getTelegramUserData() {
     socket.on('stateUpdate', (data) => {
       isFormOpen = data.isFormOpen;
       songs = data.songs || [];
+      currentAction = data.lastAction || null;
 
       if (typeof data.autoPlayMode !== 'undefined') {
         autoPlayMode = Number(data.autoPlayMode) || 0;
@@ -458,6 +460,7 @@ function getTelegramUserData() {
       if (!data?.song) return;
 
       const song = data.song;
+      currentAction = data.action || null;
 
       const shouldPlaySound =
         data.initiatorSocketId === socket.id;
@@ -491,7 +494,8 @@ function getTelegramUserData() {
 
     socket.on('triggerSpin', (data) => {
       const shouldPlaySound = data?.initiatorSocketId === socket.id;
-      startSpinAnimation(data.selectedIndex, data.winner, shouldPlaySound);
+      currentAction = data?.action || null;
+      startSpinAnimation(data.selectedIndex, data.winner, shouldPlaySound, data?.action || null);
     });
 
     function updateUI() {
@@ -1011,16 +1015,28 @@ function getTelegramUserData() {
       }
 
       playerCard.style.display = 'none';
+      currentAction = null;
+      if (winnerAction) winnerAction.textContent = '';
     }
 
-    function renderPlayer(winner, shouldPlaySound) {
+    function renderPlayer(winner, shouldPlaySound, action = currentAction) {
       if (!winner?.url) return;
 
       const videoId = extractYouTubeId(winner.url);
       if (!videoId) return;
 
       currentPlayingUrl = winner.url;
+      currentAction = action || null;
       winnerUser.textContent = winner.user || 'Người dùng';
+      if (winnerAction) {
+        if (currentAction?.type === 'spin' && currentAction.user) {
+          winnerAction.textContent = ` - Người quay: ${currentAction.user}`;
+        } else if (currentAction?.type === 'play' && currentAction.user) {
+          winnerAction.textContent = ` - Người play: ${currentAction.user}`;
+        } else {
+          winnerAction.textContent = '';
+        }
+      }
       playerCard.style.display = 'block';
 
       const effectiveSound = getEffectiveSound(shouldPlaySound);
@@ -1236,7 +1252,7 @@ btnAutoPlay.addEventListener('click', async () => {
 
 updateAutoPlayButton();
 
-    function startSpinAnimation(targetIndex, winner, shouldPlaySound) {
+    function startSpinAnimation(targetIndex, winner, shouldPlaySound, action = currentAction) {
       if (isSpinning) return;
       isSpinning = true;
       btnSpin.disabled = true;
@@ -1268,7 +1284,7 @@ updateAutoPlayButton();
         } else {
           isSpinning = false;
           btnSpin.disabled = songs.length === 0;
-          renderPlayer(winner, shouldPlaySound);
+          renderPlayer(winner, shouldPlaySound, action);
           playerCard.scrollIntoView({ behavior: 'smooth' });
         }
       }
@@ -1343,7 +1359,8 @@ updateAutoPlayButton();
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            initData: telegramInitData
+            initData: telegramInitData,
+            socketId: socket.id
           })
         });
       }

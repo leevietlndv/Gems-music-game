@@ -178,9 +178,10 @@ function validateTelegramInitData(initData) {
 let isFormOpen = true;
 let songs = [];
 let lastWinner = null;
+let lastAction = null;
 
 
-async function performSpin(initiatorSocketId = null) {
+async function performSpin(initiatorSocketId = null, actionUserName = null) {
   if (lastWinner) {
   await pool.query(
       'DELETE FROM songs WHERE id = $1',
@@ -200,13 +201,15 @@ async function performSpin(initiatorSocketId = null) {
   const selectedIndex = Math.floor(Math.random() * songs.length);
   const winner = songs[selectedIndex];
   lastWinner = winner;
+  lastAction = actionUserName
+    ? { type: 'spin', user: actionUserName }
+    : null;
 
-  // Gửi sự kiện quay trước stateUpdate để các client đặt isSpinning=true
-  // trước khi nhận lastWinner, tránh render video sớm rồi bị clearPlayer().
   io.emit('triggerSpin', {
     selectedIndex,
     winner,
-    initiatorSocketId
+    initiatorSocketId,
+    action: lastAction
   });
   broadcastState();
   return { success: true, winner };
@@ -433,6 +436,7 @@ function broadcastState() {
     isFormOpen,
     songs,
     lastWinner,
+    lastAction,
     autoPlayMode,
     controllerSocketId: autoPlayControllerSocketId
   });
@@ -662,10 +666,13 @@ app.post('/api/auto-play-next', async (req, res) => {
     }
 
     lastWinner = nextSong;
+    // Auto Play không phải hành động Spin/Play thủ công, nên không ghi người điều khiển.
+    lastAction = null;
 
     io.emit('songPlayed', {
       song: nextSong,
-      initiatorSocketId: autoPlayControllerSocketId
+      initiatorSocketId: autoPlayControllerSocketId,
+      action: null
     });
 
     broadcastState();
@@ -740,12 +747,19 @@ app.post('/api/play-song', async (req, res) => {
     }
 
     lastWinner = song;
+    const playUserName =
+      [auth.user.first_name, auth.user.last_name]
+        .filter(Boolean)
+        .join(' ')
+        .trim() || 'Người dùng';
+    lastAction = { type: 'play', user: playUserName };
 
     // Nếu Admin đang bật Auto Play thì vẫn giữ mode,
     // nhưng bài Play thủ công thay thế bài đang phát hiện tại.
     io.emit('songPlayed', {
       song,
-      initiatorSocketId: socketId || null
+      initiatorSocketId: socketId || null,
+      action: lastAction
     });
 
     broadcastState();
@@ -770,9 +784,15 @@ app.post('/api/spin', async (req, res) => {
   const auth = requireTelegramAdmin(req, res);
   if (!auth.ok) return;
 
+  const { socketId } = req.body || {};
+  const spinUserName =
+    [auth.user.first_name, auth.user.last_name]
+      .filter(Boolean)
+      .join(' ')
+      .trim() || 'Người dùng';
+
   try {
-    const { socketId } = req.body || {};
-    const result = await performSpin(socketId || null);
+    const result = await performSpin(socketId || null, spinUserName);
     res.json(result);
   } catch (error) {
     console.error('❌ Lỗi Spin:', error);
@@ -803,6 +823,7 @@ app.post('/api/reset', async (req, res) => {
 
     songs = [];
     lastWinner = null;
+    lastAction = null;
 
     // Reset cũng tắt Auto Play để không tự phát lại sau khi reset.
     setAutoPlayState(0);
@@ -853,6 +874,7 @@ app.post('/api/delete-song', async (req, res) => {
     // Nếu xóa chính bài đang phát, xóa luôn trạng thái current winner.
     if (lastWinner && String(lastWinner.id) === String(id)) {
       lastWinner = null;
+      lastAction = null;
     }
 
     broadcastState();
@@ -881,6 +903,7 @@ io.on('connection', (socket) => {
     isFormOpen,
     songs,
     lastWinner,
+    lastAction,
     autoPlayMode,
     controllerSocketId: autoPlayControllerSocketId
   });
