@@ -1295,6 +1295,11 @@ function getTelegramUserData() {
       }
       playerCard.style.display = 'block';
 
+      // renderPlayer() cũng được gọi sau khi Spin kết thúc.
+      // clearPlayer() trước đó đã disable Like/Dislike vì chưa có bài,
+      // nên phải cập nhật lại trạng thái nút ngay khi bài mới được gán.
+      updateVoteButtons();
+
       const effectiveSound = getEffectiveSound(shouldPlaySound);
       updateAudioNotice(effectiveSound && savedVolume > 0);
       updateAudioControls();
