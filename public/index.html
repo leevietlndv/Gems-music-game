@@ -28,6 +28,15 @@
     canvas { width: 300px; height: 300px; border-radius: 50%; box-shadow: 0 0 15px rgba(0,0,0,0.5); }
     .btn-spin { background: #ff9800; color: #111; font-size: 16px; font-weight: 700; margin-bottom: 12px; }
     .btn-spin:disabled { background: #78541c; color: #666; cursor: not-allowed; }
+    .player-label {
+      color: #ddd;
+      font-weight: 400;
+    }
+
+    #playerTitleText {
+      color: #ffca28;
+      font-weight: 700;
+    }
     .admin-actions {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -264,7 +273,7 @@
       grid-template-columns: repeat(5, 1fr);
       gap: 5px;
       width: 100%;
-      height: 22px;
+      height: 16px;
     }
     .health-segment {
       border-radius: 5px;
@@ -292,6 +301,15 @@
       flex-direction: column;
       gap: 1px;
       line-height: 1.05;
+    }
+    .action-label {
+      color: #ddd;
+      font-weight: 400;
+    }
+
+    .action-user {
+      color: #64b5f6;
+      font-weight: 700;
     }
     .vote-icon { font-size: 20px; line-height: 1; margin-bottom: 3px;}
     .vote-label { font-size: 11px; font-weight: 700; }
@@ -372,8 +390,9 @@
   </div>
 
   <div class="card" id="playerCard" style="display: none; border: 2px solid #ffca28;">
-    <div class="card-title" id="playerTitle" style="color: #ffca28;">
-  🎉 ĐANG PHÁT: -
+    <div class="card-title" id="playerTitle">
+      <span class="player-label">🎉 ĐANG PHÁT:</span>
+      <strong id="playerTitleText">-</strong>
     </div>
     
     <div style="font-size: 13px; color: #ddd; margin-bottom: 6px;">
@@ -1376,16 +1395,25 @@ function getTelegramUserData() {
       currentPlayingUrl = winner.url;
       currentAction = action || null;
       winnerUser.textContent = winner.user || 'Người dùng';
-      playerTitle.textContent = `🎉 ĐANG PHÁT: ${winner.title || '-'}`;
+      playerTitleText.textContent = winner.title || '-';
       if (winnerAction) {
         if (currentAction?.type === 'spin' && currentAction.user) {
-          winnerAction.textContent = ` - Người quay: ${currentAction.user}`;
+          winnerAction.innerHTML =
+            ` - <span class="action-label">Spin:</span> ` +
+            `<strong class="action-user">${escapeHtml(currentAction.user)}</strong>`;
+
         } else if (currentAction?.type === 'play' && currentAction.user) {
-          winnerAction.textContent = ` - Người play: ${currentAction.user}`;
+          winnerAction.innerHTML =
+            ` - <span class="action-label">Play:</span> ` +
+            `<strong class="action-user">${escapeHtml(currentAction.user)}</strong>`;
+
         } else if (currentAction?.type === 'replace' && currentAction.title) {
-          winnerAction.textContent = ` - Thay thế: ${currentAction.title}`;
+          winnerAction.innerHTML =
+            ` - <span class="action-label">Replace:</span> ` +
+            `<strong class="action-user">${escapeHtml(currentAction.title)}</strong>`;
+
         } else {
-          winnerAction.textContent = '';
+          winnerAction.innerHTML = '';
         }
       }
       playerCard.style.display = 'block';
