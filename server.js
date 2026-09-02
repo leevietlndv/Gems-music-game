@@ -180,7 +180,7 @@ let songs = [];
 let lastWinner = null;
 
 
-async function performSpin() {
+async function performSpin(initiatorSocketId = null) {
   if (lastWinner) {
   await pool.query(
       'DELETE FROM songs WHERE id = $1',
@@ -201,8 +201,14 @@ async function performSpin() {
   const winner = songs[selectedIndex];
   lastWinner = winner;
 
+  // Gửi sự kiện quay trước stateUpdate để các client đặt isSpinning=true
+  // trước khi nhận lastWinner, tránh render video sớm rồi bị clearPlayer().
+  io.emit('triggerSpin', {
+    selectedIndex,
+    winner,
+    initiatorSocketId
+  });
   broadcastState();
-  io.emit('triggerSpin', { selectedIndex, winner });
   return { success: true, winner };
 }
 
@@ -765,7 +771,8 @@ app.post('/api/spin', async (req, res) => {
   if (!auth.ok) return;
 
   try {
-    const result = await performSpin();
+    const { socketId } = req.body || {};
+    const result = await performSpin(socketId || null);
     res.json(result);
   } catch (error) {
     console.error('❌ Lỗi Spin:', error);

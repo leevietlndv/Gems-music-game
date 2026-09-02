@@ -232,7 +232,7 @@
       <span id="audioNotice" class="audio-notice"></span>
     </div>
     <div class="player-wrapper">
-      <iframe id="ytPlayer" allow="autoplay; accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+      <div id="ytPlayer"></div>
     </div>
 
     <div class="audio-controls">
@@ -348,21 +348,23 @@ function getTelegramUserData() {
     let youtubeApiReady = false;
     let youtubeApiReadyCallbacks = [];
 
-    window.onYouTubeIframeAPIReady = function () {
+    function flushYouTubeApiCallbacks() {
       youtubeApiReady = true;
-
       console.log('🎬 YouTube IFrame API đã sẵn sàng');
 
-      youtubeApiReadyCallbacks.forEach(callback => {
+      const callbacks = youtubeApiReadyCallbacks.splice(0);
+      callbacks.forEach(callback => {
         try {
           callback();
         } catch (error) {
           console.error('❌ Lỗi YouTube API callback:', error);
         }
       });
+    }
 
-      youtubeApiReadyCallbacks = [];
-    };
+    // YouTube API có thể tải rất nhanh trước khi callback được gán.
+    // Vì vậy luôn kiểm tra window.YT ở nhiều thời điểm.
+    window.onYouTubeIframeAPIReady = flushYouTubeApiCallbacks;
 
     // ==================== AUTO PLAY ====================
     // 0 = Tắt
@@ -488,8 +490,8 @@ function getTelegramUserData() {
     });
 
     socket.on('triggerSpin', (data) => {
-      startSpinAnimation(data.selectedIndex, data.winner, isInitiator);
-      isInitiator = false;
+      const shouldPlaySound = data?.initiatorSocketId === socket.id;
+      startSpinAnimation(data.selectedIndex, data.winner, shouldPlaySound);
     });
 
     function updateUI() {
@@ -769,8 +771,10 @@ function getTelegramUserData() {
     let youtubePlayerReady = false;
 
     function initYouTubePlayer() {
-      if (!youtubeApiReady || youtubeApiPlayer) return;
+      if (youtubeApiPlayer) return;
+      if (!window.YT || !window.YT.Player) return;
 
+      youtubeApiReady = true;
       youtubeApiPlayer = new YT.Player('ytPlayer', {
         playerVars: {
           autoplay: 0,
@@ -802,12 +806,28 @@ function getTelegramUserData() {
       });
     }
 
-    // API có thể được load trước hoặc sau script này.
+    // API có thể đã tải trước khi callback được đăng ký.
+    function ensureYouTubePlayerReady() {
+      if (window.YT && window.YT.Player) {
+        if (!youtubeApiReady) flushYouTubeApiCallbacks();
+        initYouTubePlayer();
+        return true;
+      }
+      return false;
+    }
+
+    ensureYouTubePlayerReady();
     whenYouTubeApiReady(initYouTubePlayer);
 
     window.addEventListener('load', () => {
-      whenYouTubeApiReady(initYouTubePlayer);
+      ensureYouTubePlayerReady();
     });
+
+    const youtubeReadyPoll = setInterval(() => {
+      if (ensureYouTubePlayerReady()) {
+        clearInterval(youtubeReadyPoll);
+      }
+    }, 100);
 
     // ==================== CÁ NHÂN HÓA ÂM THANH ====================
     // null = chưa từng chọn, true = luôn bật, false = luôn mute.
@@ -1288,23 +1308,20 @@ updateAutoPlayButton();
 
     btnSpin.addEventListener('click', async () => {
       if (isSpinning || songs.length === 0) return;
-      isInitiator = true;
-
       try {
         const res = await fetch('/api/spin', { 
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            initData: telegramInitData
+            initData: telegramInitData,
+            socketId: socket.id
           })
         });
         const data = await res.json();
         if (!data.success) {
-          isInitiator = false;
           alert(data.message);
         }
       } catch (e) {
-        isInitiator = false;
         alert('Lỗi khi quay!');
       }
     });
