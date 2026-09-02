@@ -371,6 +371,7 @@ function getTelegramUserData() {
 
     let autoPlayMode = 0;
     let autoPlayController = false;
+    let autoPlayControllerSocketId = null;
 
     // Chống gọi bài tiếp theo 2 lần khi YouTube
     // gửi nhiều trạng thái ENDED.
@@ -431,14 +432,20 @@ function getTelegramUserData() {
     socket.on('stateUpdate', (data) => {
       isFormOpen = data.isFormOpen;
       songs = data.songs || [];
+
+      if (typeof data.autoPlayMode !== 'undefined') {
+        autoPlayMode = Number(data.autoPlayMode) || 0;
+        autoPlayControllerSocketId = data.controllerSocketId || null;
+        autoPlayController = autoPlayControllerSocketId === socket.id;
+        updateAutoPlayButton();
+      }
+
       updateUI();
 
       if (data.lastWinner && !isSpinning && currentPlayingUrl !== data.lastWinner.url) {
         renderPlayer(data.lastWinner, false);
       } else if (!data.lastWinner && !isSpinning) {
-        ytPlayer.src = '';
-        playerCard.style.display = 'none';
-        currentPlayingUrl = null;
+        clearPlayer();
       }
     });
 
@@ -467,12 +474,16 @@ function getTelegramUserData() {
       if (!data) return;
 
       autoPlayMode = Number(data.mode) || 0;
+      autoPlayControllerSocketId = data.controllerSocketId || null;
+      autoPlayController = autoPlayControllerSocketId === socket.id;
 
       updateAutoPlayButton();
 
       console.log(
         '🎵 Nhận Auto Play Mode:',
-        autoPlayMode
+        autoPlayMode,
+        '| controller:',
+        autoPlayControllerSocketId
       );
     });
 
@@ -752,6 +763,52 @@ function getTelegramUserData() {
       }
     }
 
+    // ==================== YOUTUBE PLAYER API ====================
+    let pendingPlayerSong = null;
+    let pendingPlayerSound = false;
+    let youtubePlayerReady = false;
+
+    function initYouTubePlayer() {
+      if (!youtubeApiReady || youtubeApiPlayer) return;
+
+      youtubeApiPlayer = new YT.Player('ytPlayer', {
+        playerVars: {
+          autoplay: 0,
+          controls: 1,
+          rel: 0,
+          playsinline: 1,
+          enablejsapi: 1,
+          origin: window.location.origin
+        },
+        events: {
+          onReady: (event) => {
+            youtubePlayerReady = true;
+            console.log('🎬 YouTube Player đã sẵn sàng');
+            updateAudioControls();
+
+            if (pendingPlayerSong) {
+              const song = pendingPlayerSong;
+              const sound = pendingPlayerSound;
+              pendingPlayerSong = null;
+              pendingPlayerSound = false;
+              loadSongIntoPlayer(song, sound);
+            }
+          },
+          onStateChange: onYouTubePlayerStateChange,
+          onError: (event) => {
+            console.warn('⚠️ YouTube Player error:', event.data);
+          }
+        }
+      });
+    }
+
+    // API có thể được load trước hoặc sau script này.
+    whenYouTubeApiReady(initYouTubePlayer);
+
+    window.addEventListener('load', () => {
+      whenYouTubeApiReady(initYouTubePlayer);
+    });
+
     // ==================== CÁ NHÂN HÓA ÂM THANH ====================
     // null = chưa từng chọn, true = luôn bật, false = luôn mute.
     // Volume được lưu trên thiết bị/trình duyệt của từng user.
@@ -763,27 +820,46 @@ function getTelegramUserData() {
       if (storedPreference === 'true') savedAudioPreference = true;
       if (storedPreference === 'false') savedAudioPreference = false;
       const storedVolume = Number(localStorage.getItem(VOLUME_PREF_KEY));
-      if (Number.isFinite(storedVolume)) savedVolume = Math.max(0, Math.min(100, storedVolume));
+      if (Number.isFinite(storedVolume)) {
+        savedVolume = Math.max(0, Math.min(100, storedVolume));
+      }
     } catch (error) {
       console.warn('⚠️ Không đọc được thiết lập âm thanh:', error);
     }
 
     function saveAudioPreference(value) {
       savedAudioPreference = value;
-      try { localStorage.setItem(MUSIC_PREF_KEY, String(value)); } catch (error) {}
+      try {
+        localStorage.setItem(MUSIC_PREF_KEY, String(value));
+      } catch (error) {}
       updateAudioControls();
     }
 
     function saveVolume(value) {
       savedVolume = Math.max(0, Math.min(100, Number(value) || 0));
-      try { localStorage.setItem(VOLUME_PREF_KEY, String(savedVolume)); } catch (error) {}
+      try {
+        localStorage.setItem(VOLUME_PREF_KEY, String(savedVolume));
+      } catch (error) {}
       updateAudioControls();
     }
 
     function sendYouTubeCommand(func, args = []) {
-      if (!ytPlayer || !ytPlayer.contentWindow) return;
+      if (!youtubeApiPlayer || !youtubePlayerReady) return;
+
       try {
-        ytPlayer.contentWindow.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
+        if (func === 'setVolume') {
+          youtubeApiPlayer.setVolume(Number(args[0]) || 0);
+        } else if (func === 'mute') {
+          youtubeApiPlayer.mute();
+        } else if (func === 'unMute') {
+          youtubeApiPlayer.unMute();
+        } else if (func === 'playVideo') {
+          youtubeApiPlayer.playVideo();
+        } else if (func === 'pauseVideo') {
+          youtubeApiPlayer.pauseVideo();
+        } else if (func === 'stopVideo') {
+          youtubeApiPlayer.stopVideo();
+        }
       } catch (error) {
         console.warn(`⚠️ Không gửi được lệnh YouTube ${func}:`, error);
       }
@@ -793,25 +869,33 @@ function getTelegramUserData() {
       const muted = savedAudioPreference === false || savedVolume === 0;
       btnAudioToggle.textContent = muted ? '🔇 Bật nhạc' : '🔊 Tắt nhạc';
       btnAudioToggle.classList.toggle('enabled', !muted);
-      volumeIcon.textContent = muted ? '🔇' : (savedVolume < 50 ? '🔉' : '🔊');
+      volumeIcon.textContent = muted
+        ? '🔇'
+        : (savedVolume < 50 ? '🔉' : '🔊');
       volumeSlider.value = String(savedVolume);
       volumeValue.textContent = savedVolume;
     }
 
     function applyAudioSettings(playAfterUnmute = false) {
-      if (!ytPlayer || !ytPlayer.src) return;
-      sendYouTubeCommand('setVolume', [savedVolume]);
-      if (savedAudioPreference === false) {
-        sendYouTubeCommand('mute');
+      if (!youtubeApiPlayer || !youtubePlayerReady) return;
+
+      youtubeApiPlayer.setVolume(savedVolume);
+
+      if (savedAudioPreference === false || savedVolume === 0) {
+        youtubeApiPlayer.mute();
       } else {
-        sendYouTubeCommand('unMute');
-        if (playAfterUnmute) sendYouTubeCommand('playVideo');
+        youtubeApiPlayer.unMute();
+        if (playAfterUnmute) {
+          youtubeApiPlayer.playVideo();
+        }
       }
+
       updateAudioControls();
     }
 
     btnAudioToggle.addEventListener('click', () => {
       const muted = savedAudioPreference === false || savedVolume === 0;
+
       if (muted) {
         if (savedVolume === 0) saveVolume(70);
         saveAudioPreference(true);
@@ -829,6 +913,7 @@ function getTelegramUserData() {
     volumeSlider.addEventListener('input', () => {
       const value = Number(volumeSlider.value);
       saveVolume(value);
+
       if (value === 0) {
         saveAudioPreference(false);
         sendYouTubeCommand('mute');
@@ -837,27 +922,19 @@ function getTelegramUserData() {
         sendYouTubeCommand('setVolume', [value]);
         sendYouTubeCommand('unMute');
       }
+
       updateAudioControls();
     });
 
     updateAudioControls();
 
-    function renderPlayer(winner, shouldPlaySound) {
-      const videoId = extractYouTubeId(winner.url);
-      if (!videoId) return;
+    function getEffectiveSound(shouldPlaySound) {
+      return savedAudioPreference === null
+        ? shouldPlaySound
+        : savedAudioPreference;
+    }
 
-      currentPlayingUrl = winner.url;
-      winnerUser.textContent = winner.user;
-
-      // Nếu user đã chọn trước đó thì giữ lựa chọn cá nhân qua mọi bài hát.
-      // Nếu chưa chọn, giữ hành vi cũ: người phát nghe tiếng, client khác mute.
-      const effectiveSound = savedAudioPreference === null ? shouldPlaySound : savedAudioPreference;
-      const muteParam = effectiveSound ? 0 : 1;
-      const originParam = encodeURIComponent(window.location.origin);
-
-      ytPlayer.onload = () => applyAudioSettings(false);
-      ytPlayer.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=${muteParam}&enablejsapi=1&origin=${originParam}`;
-
+    function updateAudioNotice(effectiveSound) {
       if (effectiveSound) {
         audioNotice.textContent = '🔊 Âm thanh: Đang Bật';
         audioNotice.className = 'audio-notice unmuted';
@@ -867,9 +944,70 @@ function getTelegramUserData() {
           : '🔇 Âm thanh: Tắt (Bấm "Bật nhạc" để nghe)';
         audioNotice.className = 'audio-notice muted';
       }
+    }
 
+    function loadSongIntoPlayer(song, shouldPlaySound) {
+      const videoId = extractYouTubeId(song.url);
+      if (!videoId) return;
+
+      if (!youtubeApiPlayer || !youtubePlayerReady) {
+        pendingPlayerSong = song;
+        pendingPlayerSound = shouldPlaySound;
+        return;
+      }
+
+      const effectiveSound = getEffectiveSound(shouldPlaySound);
+
+      youtubeApiPlayer.loadVideoById(videoId);
+
+      // Đặt mute/volume sau khi load. Với người vừa bấm Play,
+      // thao tác loadVideoById nằm ngay sau user gesture nên có cơ hội autoplay có tiếng.
+      youtubeApiPlayer.setVolume(savedVolume);
+
+      if (effectiveSound && savedVolume > 0) {
+        youtubeApiPlayer.unMute();
+        youtubeApiPlayer.playVideo();
+      } else {
+        youtubeApiPlayer.mute();
+        youtubeApiPlayer.playVideo();
+      }
+
+      updateAudioNotice(effectiveSound && savedVolume > 0);
       updateAudioControls();
+    }
+
+    function clearPlayer() {
+      pendingPlayerSong = null;
+      pendingPlayerSound = false;
+      currentPlayingUrl = null;
+
+      if (youtubeApiPlayer && youtubePlayerReady) {
+        try {
+          youtubeApiPlayer.stopVideo();
+          youtubeApiPlayer.clearVideo();
+        } catch (error) {
+          console.warn('⚠️ Không thể dừng YouTube Player:', error);
+        }
+      }
+
+      playerCard.style.display = 'none';
+    }
+
+    function renderPlayer(winner, shouldPlaySound) {
+      if (!winner?.url) return;
+
+      const videoId = extractYouTubeId(winner.url);
+      if (!videoId) return;
+
+      currentPlayingUrl = winner.url;
+      winnerUser.textContent = winner.user || 'Người dùng';
       playerCard.style.display = 'block';
+
+      const effectiveSound = getEffectiveSound(shouldPlaySound);
+      updateAudioNotice(effectiveSound && savedVolume > 0);
+      updateAudioControls();
+
+      loadSongIntoPlayer(winner, shouldPlaySound);
     }
 
     function onYouTubePlayerStateChange(event) {
@@ -880,23 +1018,20 @@ function getTelegramUserData() {
         event.data === YT.PlayerState.ENDED
       ) {
         console.log('🏁 BÀI HÁT ĐÃ KẾT THÚC');
-
         handleAutoPlayEnded();
       }
     }
 
     async function handleAutoPlayEnded() {
-      // Chỉ Admin mới được điều khiển Auto Play
-      if (!window.isAdmin) {
+      // Chỉ đúng Admin đang giữ quyền điều khiển Auto Play mới được chuyển bài.
+      if (!window.isAdmin || !autoPlayController) {
         return;
       }
 
-      // Auto Play đang tắt
       if (autoPlayMode === 0) {
         return;
       }
 
-      // Đang xử lý bài tiếp theo
       if (autoPlayNextBusy) {
         console.log('⏳ Auto Play đang xử lý bài tiếp theo...');
         return;
@@ -919,30 +1054,21 @@ function getTelegramUserData() {
         const data = await res.json();
 
         if (!data.success) {
-          console.log(
-            '⏹ Auto Play dừng:',
-            data.message
-          );
+          console.log('⏹ Auto Play dừng:', data.message);
 
           if (data.stopAutoPlay) {
             autoPlayMode = 0;
             autoPlayController = false;
+            autoPlayControllerSocketId = null;
             updateAutoPlayButton();
           }
 
           return;
         }
 
-        console.log(
-          '▶️ Auto Play chuyển bài:',
-          data.song
-        );
-
+        console.log('▶️ Auto Play chuyển bài:', data.song);
       } catch (error) {
-        console.error(
-          '❌ Lỗi Auto Play:',
-          error
-        );
+        console.error('❌ Lỗi Auto Play:', error);
       } finally {
         autoPlayNextBusy = false;
       }
@@ -1022,6 +1148,8 @@ btnAutoPlay.addEventListener('click', async () => {
     nextMode = 0;
   }
 
+  btnAutoPlay.disabled = true;
+
   try {
     const res = await fetch('/api/auto-play-mode', {
       method: 'POST',
@@ -1042,19 +1170,47 @@ btnAutoPlay.addEventListener('click', async () => {
       return;
     }
 
-    autoPlayMode = data.mode;
-    autoPlayController = data.controllerSocketId === socket.id;
+    autoPlayMode = Number(data.mode) || 0;
+    autoPlayControllerSocketId = data.controllerSocketId || null;
+    autoPlayController = autoPlayControllerSocketId === socket.id;
 
     updateAutoPlayButton();
 
     console.log(
       '🎵 Auto Play Mode:',
-      autoPlayMode
+      autoPlayMode,
+      '| controller:',
+      autoPlayControllerSocketId
     );
 
+    // Nếu vừa bật Auto Play mà chưa có bài đang phát,
+    // yêu cầu server chọn bài đầu tiên ngay lập tức.
+    if (autoPlayMode !== 0 && !data.hasCurrentSong && autoPlayController) {
+      const nextRes = await fetch('/api/auto-play-next', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          initData: telegramInitData,
+          socketId: socket.id
+        })
+      });
+
+      const nextData = await nextRes.json();
+
+      if (!nextData.success && nextData.stopAutoPlay) {
+        autoPlayMode = 0;
+        autoPlayController = false;
+        autoPlayControllerSocketId = null;
+        updateAutoPlayButton();
+      }
+    }
   } catch (error) {
     console.error('❌ Lỗi đổi Auto Play:', error);
     alert('Lỗi kết nối!');
+  } finally {
+    btnAutoPlay.disabled = false;
   }
 });
 
@@ -1065,8 +1221,7 @@ updateAutoPlayButton();
       isSpinning = true;
       btnSpin.disabled = true;
 
-      ytPlayer.src = '';
-      playerCard.style.display = 'none';
+      clearPlayer();
 
       const numSlices = songs.length;
       const sliceAngle = (2 * Math.PI) / numSlices;
@@ -1166,9 +1321,7 @@ updateAutoPlayButton();
 
     btnReset.addEventListener('click', () => {
       if (confirm('Xóa tất cả bài hát?')) {
-        ytPlayer.src = '';
-        playerCard.style.display = 'none';
-        currentPlayingUrl = null;
+        clearPlayer();
         fetch('/api/reset', { 
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

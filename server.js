@@ -179,9 +179,6 @@ let isFormOpen = true;
 let songs = [];
 let lastWinner = null;
 
-function broadcastState() {
-  io.emit('stateUpdate', { isFormOpen, songs, lastWinner });
-}
 
 async function performSpin() {
   if (lastWinner) {
@@ -277,15 +274,17 @@ async function performSpin() {
   });
 
   bot.command('reset', async (ctx) => {
-  await pool.query('DELETE FROM songs');
+    await pool.query('DELETE FROM songs');
 
-  songs = [];
-  lastWinner = null;
+    songs = [];
+    lastWinner = null;
 
-  broadcastState();
+    setAutoPlayState(0);
+    broadcastAutoPlayState();
+    broadcastState();
 
-  ctx.reply('🧹 Đã xóa sạch danh sách bài hát!');
-});
+    ctx.reply('🧹 Đã xóa sạch danh sách bài hát!');
+  });
 
   bot.command('list', (ctx) => {
     if (songs.length === 0) {
@@ -322,172 +321,119 @@ async function performSpin() {
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-io.on('connection', (socket) => {
-  console.log(`🔌 Socket connected: ${socket.id}`);
 
-  socket.emit('stateUpdate', {
-    isFormOpen,
-    songs,
-    lastWinner
-  });
+// ==================== ADMIN AUTH HELPER ====================
+function requireTelegramAdmin(req, res) {
+  const initData = req.body?.initData || '';
+  const auth = validateTelegramInitData(initData);
 
-  socket.on('authenticate', (payload = {}) => {
-    const initData = payload.initData || '';
-    console.log(`🔑 Authenticate received: socket=${socket.id}, initDataLength=${initData.length}`);
-
-    const auth = validateTelegramInitData(initData);
-
-    if (!auth.valid) {
-      console.log('❌ Telegram authentication failed:', auth.message);
-
-      socket.emit('adminStatus', {
-        isAdmin: false,
-        authenticated: false,
-        message: auth.message
-      });
-
-      return;
-    }
-
-    const telegramId = String(auth.user.id);
-    const admin = isAdmin(telegramId);
-
-    console.log(`🔐 Telegram ID: ${telegramId} | Admin: ${admin}`);
-
-    socket.emit('adminStatus', {
-      isAdmin: admin,
-      authenticated: true,
-      telegramId
+  if (!auth.valid) {
+    res.status(401).json({
+      success: false,
+      message: `Xác thực Telegram thất bại: ${auth.message}`
     });
-  });
-
-  socket.on('disconnect', (reason) => {
-    console.log(
-      `🔌 Socket disconnected: ${socket.id} | ${reason}`
-    );
-
-    if (socket.id === autoPlayControllerSocketId) {
-      autoPlayMode = 0;
-      autoPlayControllerSocketId = null;
-
-      io.emit('autoPlayMode', {
-        mode: 0
-      });
-
-      console.log(
-        '⏹ Auto Play tự tắt vì Admin điều khiển đã thoát.'
-      );
-    }
-  });
-
-  
-
-  function requireTelegramAdmin(req, res) {
-    // ==================== AUTO PLAY STATE ====================
-    // 0 = Tắt
-    // 1 = Tuần tự
-    // 2 = Ngẫu nhiên
-
-    let autoPlayMode = 0;
-    let autoPlayControllerSocketId = null;
-    const initData = req.body?.initData || '';
-    const auth = validateTelegramInitData(initData);
-
-    if (!auth.valid) {
-      return {
-        ok: false,
-        response: res.status(401).json({
-          success: false,
-          message: `Xác thực Telegram thất bại: ${auth.message}`
-        })
-      };
-    }
-
-    const telegramId = String(auth.user.id);
-    if (!isAdmin(telegramId)) {
-      return {
-        ok: false,
-        response: res.status(403).json({
-          success: false,
-          message: 'Bạn không có quyền Admin.'
-        })
-      };
-    }
-
-    return { ok: true, user: auth.user };
+    return { ok: false };
   }
 
-  async function getYouTubeTitle(url) {
-    try {
-      const oembedUrl =
-        `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
+  const telegramId = String(auth.user.id);
+  if (!isAdmin(telegramId)) {
+    res.status(403).json({
+      success: false,
+      message: 'Bạn không có quyền Admin.'
+    });
+    return { ok: false };
+  }
 
-      const response = await fetch(oembedUrl);
+  return { ok: true, user: auth.user };
+}
 
-      if (!response.ok) {
-        console.warn(`⚠️ Không lấy được YouTube title: HTTP ${response.status}`);
-        return 'Bài hát YouTube';
-      }
+// ==================== YOUTUBE TITLE ====================
+async function getYouTubeTitle(url) {
+  try {
+    const oembedUrl =
+      `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
 
-      const data = await response.json();
+    const response = await fetch(oembedUrl);
 
-      return data.title || 'Bài hát YouTube';
-
-    } catch (error) {
-      console.error('❌ Lỗi lấy YouTube title:', error);
+    if (!response.ok) {
+      console.warn(`⚠️ Không lấy được YouTube title: HTTP ${response.status}`);
       return 'Bài hát YouTube';
     }
+
+    const data = await response.json();
+    return data.title || 'Bài hát YouTube';
+  } catch (error) {
+    console.error('❌ Lỗi lấy YouTube title:', error);
+    return 'Bài hát YouTube';
   }
+}
 
-  // ==================== YOUTUBE URL VALIDATION ====================
-  function getYouTubeVideoId(inputUrl) {
-    try {
-      const url = new URL(String(inputUrl).trim());
+// ==================== YOUTUBE URL VALIDATION ====================
+function getYouTubeVideoId(inputUrl) {
+  try {
+    const url = new URL(String(inputUrl).trim());
+    const hostname = url.hostname
+      .toLowerCase()
+      .replace(/^www\./, '');
 
-      const hostname = url.hostname
-        .toLowerCase()
-        .replace(/^www\./, '');
-
-      // https://youtu.be/VIDEO_ID
-      if (hostname === 'youtu.be') {
-        return url.pathname.split('/').filter(Boolean)[0] || null;
-      }
-
-      // https://youtube.com/watch?v=VIDEO_ID
-      // https://m.youtube.com/watch?v=VIDEO_ID
-      // https://music.youtube.com/watch?v=VIDEO_ID
-      if (
-        hostname === 'youtube.com' ||
-        hostname === 'm.youtube.com' ||
-        hostname === 'music.youtube.com'
-      ) {
-        const videoId = url.searchParams.get('v');
-
-        if (videoId) {
-          return videoId;
-        }
-
-        // /shorts/VIDEO_ID
-        // /embed/VIDEO_ID
-        // /live/VIDEO_ID
-        const parts = url.pathname
-          .split('/')
-          .filter(Boolean);
-
-        if (
-          parts.length >= 2 &&
-          ['shorts', 'embed', 'live'].includes(parts[0])
-        ) {
-          return parts[1];
-        }
-      }
-
-      return null;
-    } catch (error) {
-      return null;
+    if (hostname === 'youtu.be') {
+      return url.pathname.split('/').filter(Boolean)[0] || null;
     }
-  }
 
+    if (
+      hostname === 'youtube.com' ||
+      hostname === 'm.youtube.com' ||
+      hostname === 'music.youtube.com'
+    ) {
+      const videoId = url.searchParams.get('v');
+      if (videoId) return videoId;
+
+      const parts = url.pathname.split('/').filter(Boolean);
+      if (
+        parts.length >= 2 &&
+        ['shorts', 'embed', 'live'].includes(parts[0])
+      ) {
+        return parts[1];
+      }
+    }
+
+    return null;
+  } catch (error) {
+    return null;
+  }
+}
+
+// ==================== AUTO PLAY STATE ====================
+// 0 = Tắt | 1 = Tuần tự | 2 = Ngẫu nhiên
+let autoPlayMode = 0;
+let autoPlayControllerSocketId = null;
+
+function setAutoPlayState(mode, controllerSocketId = null) {
+  autoPlayMode = Number(mode) || 0;
+  autoPlayControllerSocketId = autoPlayMode === 0
+    ? null
+    : (controllerSocketId || null);
+}
+
+function broadcastAutoPlayState() {
+  io.emit('autoPlayMode', {
+    mode: autoPlayMode,
+    controllerSocketId: autoPlayControllerSocketId
+  });
+}
+
+function broadcastState() {
+  io.emit('stateUpdate', {
+    isFormOpen,
+    songs,
+    lastWinner,
+    autoPlayMode,
+    controllerSocketId: autoPlayControllerSocketId
+  });
+}
+
+
+// ==================== API: SUBMIT SONG ====================
 app.post('/api/submit', async (req, res) => {
   if (!isFormOpen) {
     return res.json({
@@ -505,9 +451,7 @@ app.post('/api/submit', async (req, res) => {
     });
   }
 
-  // Xác thực người dùng bằng dữ liệu có chữ ký của Telegram
   const auth = validateTelegramInitData(initData);
-
   if (!auth.valid) {
     return res.status(401).json({
       success: false,
@@ -516,8 +460,6 @@ app.post('/api/submit', async (req, res) => {
   }
 
   const telegramUser = auth.user;
-
-  // Lấy Name Telegram, không dùng @username
   const userName =
     [telegramUser.first_name, telegramUser.last_name]
       .filter(Boolean)
@@ -535,9 +477,6 @@ app.post('/api/submit', async (req, res) => {
   }
 
   try {
-    // Kiểm tra trùng theo Video ID, không chỉ so sánh chuỗi URL.
-    // watch?v=..., youtu.be/..., shorts/... và embed/... của cùng video
-    // đều được xem là một bài hát.
     const existingSongs = await pool.query('SELECT id, url FROM songs');
     const existingSong = existingSongs.rows.find(
       song => getYouTubeVideoId(song.url) === youtubeVideoId
@@ -550,7 +489,6 @@ app.post('/api/submit', async (req, res) => {
       });
     }
 
-    // Lấy tiêu đề YouTube
     const title = await getYouTubeTitle(cleanUrl);
 
     const result = await pool.query(
@@ -578,22 +516,17 @@ app.post('/api/submit', async (req, res) => {
       ]
     );
 
-    // Đồng bộ dữ liệu vừa lưu vào RAM
     songs.push(result.rows[0]);
-
+    songs.sort((a, b) => Number(a.id) - Number(b.id));
     broadcastState();
 
     console.log(
       `🎵 Đã lưu bài hát #${result.rows[0].id} vào PostgreSQL: ${cleanUrl}`
     );
 
-    res.json({
-      success: true
-    });
-
+    res.json({ success: true });
   } catch (error) {
     console.error('❌ Lỗi lưu bài hát vào PostgreSQL:', error);
-
     res.status(500).json({
       success: false,
       message: 'Không thể lưu bài hát vào cơ sở dữ liệu!'
@@ -601,203 +534,157 @@ app.post('/api/submit', async (req, res) => {
   }
 });
 
-// ==================== AUTO PLAY MODE ====================
+// ==================== API: AUTO PLAY MODE ====================
+app.post('/api/auto-play-mode', async (req, res) => {
+  const { mode, socketId } = req.body;
+  const auth = requireTelegramAdmin(req, res);
+  if (!auth.ok) return;
 
-  app.post('/api/auto-play-mode', (req, res) => {
-    const { mode, initData, socketId } = req.body;
+  const newMode = Number(mode);
 
-    const auth = requireTelegramAdmin(req, res);
-    if (!auth.ok) return;
+  if (![0, 1, 2].includes(newMode)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Chế độ Auto Play không hợp lệ!'
+    });
+  }
 
-    const newMode = Number(mode);
+  if (newMode === 0) {
+    setAutoPlayState(0);
+    broadcastAutoPlayState();
+    broadcastState();
 
-    if (![0, 1, 2].includes(newMode)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Chế độ Auto Play không hợp lệ!'
-      });
-    }
+    console.log('⏹ Admin đã tắt Auto Play');
 
-    // Tắt Auto Play
-    if (newMode === 0) {
-      autoPlayMode = 0;
-      autoPlayControllerSocketId = null;
+    return res.json({
+      success: true,
+      mode: 0,
+      controllerSocketId: null
+    });
+  }
 
-      io.emit('autoPlayMode', {
-        mode: 0
-      });
+  if (!socketId || typeof socketId !== 'string') {
+    return res.status(400).json({
+      success: false,
+      message: 'Thiếu socketId của thiết bị điều khiển.'
+    });
+  }
 
-      console.log('⏹ Admin đã tắt Auto Play');
+  setAutoPlayState(newMode, socketId);
+  broadcastAutoPlayState();
+  broadcastState();
+
+  console.log(
+    autoPlayMode === 1
+      ? `🔢 Admin bật Auto Play TUẦN TỰ | controller=${socketId}`
+      : `🔀 Admin bật Auto Play NGẪU NHIÊN | controller=${socketId}`
+  );
+
+  res.json({
+    success: true,
+    mode: autoPlayMode,
+    controllerSocketId: autoPlayControllerSocketId,
+    hasCurrentSong: !!lastWinner
+  });
+});
+
+// ==================== API: AUTO PLAY NEXT ====================
+app.post('/api/auto-play-next', async (req, res) => {
+  const { socketId } = req.body;
+  const auth = requireTelegramAdmin(req, res);
+  if (!auth.ok) return;
+
+  if (autoPlayMode === 0) {
+    return res.json({
+      success: false,
+      stopAutoPlay: true,
+      message: 'Auto Play đang tắt.'
+    });
+  }
+
+  if (!socketId || socketId !== autoPlayControllerSocketId) {
+    return res.status(403).json({
+      success: false,
+      message: 'Không phải thiết bị Admin đang điều khiển Auto Play.'
+    });
+  }
+
+  try {
+    const currentId = lastWinner?.id != null
+      ? String(lastWinner.id)
+      : null;
+
+    const availableSongs = songs.filter(song =>
+      !currentId || String(song.id) !== currentId
+    );
+
+    if (availableSongs.length === 0) {
+      setAutoPlayState(0);
+      broadcastAutoPlayState();
+      broadcastState();
+
+      console.log('⏹ Auto Play dừng: không còn bài tiếp theo.');
 
       return res.json({
-        success: true,
-        mode: 0,
-        controllerSocketId: null
+        success: false,
+        stopAutoPlay: true,
+        message: 'Không còn bài hát tiếp theo.'
       });
     }
 
-    // Bật / chuyển chế độ
-    autoPlayMode = newMode;
-    autoPlayControllerSocketId = socketId || null;
+    let nextSong;
 
-    io.emit('autoPlayMode', {
-      mode: autoPlayMode
+    if (autoPlayMode === 1) {
+      // Tuần tự: songs được giữ theo id ASC, nên lấy bài đầu tiên còn lại.
+      nextSong = availableSongs[0];
+    } else {
+      const randomIndex = Math.floor(Math.random() * availableSongs.length);
+      nextSong = availableSongs[randomIndex];
+    }
+
+    if (!nextSong) {
+      return res.status(500).json({
+        success: false,
+        message: 'Không tìm được bài hát tiếp theo.'
+      });
+    }
+
+    if (lastWinner && String(lastWinner.id) !== String(nextSong.id)) {
+      await pool.query('DELETE FROM songs WHERE id = $1', [lastWinner.id]);
+      songs = songs.filter(song => String(song.id) !== String(lastWinner.id));
+      console.log(`🗑️ Auto Play xóa bài cũ #${lastWinner.id}`);
+    }
+
+    lastWinner = nextSong;
+
+    io.emit('songPlayed', {
+      song: nextSong,
+      initiatorSocketId: autoPlayControllerSocketId
     });
+
+    broadcastState();
 
     console.log(
       autoPlayMode === 1
-        ? '🔢 Admin bật Auto Play TUẦN TỰ'
-        : '🔀 Admin bật Auto Play NGẪU NHIÊN'
+        ? `🔢 Auto tuần tự → #${nextSong.id}`
+        : `🔀 Auto ngẫu nhiên → #${nextSong.id}`
     );
 
     res.json({
       success: true,
-      mode: autoPlayMode,
-      controllerSocketId: autoPlayControllerSocketId
+      song: nextSong,
+      mode: autoPlayMode
     });
-  });
+  } catch (error) {
+    console.error('❌ Lỗi Auto Play Next:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Không thể phát bài tiếp theo.'
+    });
+  }
+});
 
-  // ==================== AUTO PLAY NEXT ====================
-
-  app.post('/api/auto-play-next', async (req, res) => {
-    const { initData, socketId } = req.body;
-
-    const auth = requireTelegramAdmin(req, res);
-    if (!auth.ok) return;
-
-    // Auto Play đã tắt
-    if (autoPlayMode === 0) {
-      return res.json({
-        success: false,
-        stopAutoPlay: true,
-        message: 'Auto Play đang tắt.'
-      });
-    }
-
-    // Chỉ đúng Admin/controller mới được chuyển bài
-    if (
-      autoPlayControllerSocketId &&
-      socketId !== autoPlayControllerSocketId
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: 'Không phải thiết bị Admin đang điều khiển Auto Play.'
-      });
-    }
-
-    try {
-      const currentId = lastWinner?.id
-        ? String(lastWinner.id)
-        : null;
-
-      // Không lấy bài đang phát
-      const availableSongs = songs.filter(song => {
-        if (!currentId) return true;
-
-        return String(song.id) !== currentId;
-      });
-
-      // Không còn bài tiếp theo
-      if (availableSongs.length === 0) {
-        autoPlayMode = 0;
-        autoPlayControllerSocketId = null;
-
-        io.emit('autoPlayMode', {
-          mode: 0
-        });
-
-        console.log(
-          '⏹ Auto Play dừng: không còn bài tiếp theo.'
-        );
-
-        return res.json({
-          success: false,
-          stopAutoPlay: true,
-          message: 'Không còn bài hát tiếp theo.'
-        });
-      }
-
-      let nextSong;
-
-      // ==================== TUẦN TỰ ====================
-      if (autoPlayMode === 1) {
-        // songs luôn được load theo id ASC.
-        // Vì bài đang phát sẽ bị xóa khi chọn bài mới,
-        // bài đầu tiên còn lại chính là bài kế tiếp.
-        nextSong = availableSongs[0];
-      }
-
-      // ==================== NGẪU NHIÊN ====================
-      else {
-        const randomIndex = Math.floor(
-          Math.random() * availableSongs.length
-        );
-
-        nextSong = availableSongs[randomIndex];
-      }
-
-      if (!nextSong) {
-        return res.json({
-          success: false,
-          message: 'Không tìm được bài hát tiếp theo.'
-        });
-      }
-
-      // Xóa bài đang phát cũ
-      if (
-        lastWinner &&
-        String(lastWinner.id) !== String(nextSong.id)
-      ) {
-        await pool.query(
-          'DELETE FROM songs WHERE id = $1',
-          [lastWinner.id]
-        );
-
-        songs = songs.filter(
-          song =>
-            String(song.id) !== String(lastWinner.id)
-        );
-
-        console.log(
-          `🗑️ Auto Play xóa bài cũ #${lastWinner.id}`
-        );
-      }
-
-      lastWinner = nextSong;
-
-      io.emit('songPlayed', {
-        song: nextSong,
-        initiatorSocketId: autoPlayControllerSocketId
-      });
-
-      broadcastState();
-
-      console.log(
-        autoPlayMode === 1
-          ? `🔢 Auto tuần tự → #${nextSong.id}`
-          : `🔀 Auto ngẫu nhiên → #${nextSong.id}`
-      );
-
-      return res.json({
-        success: true,
-        song: nextSong,
-        mode: autoPlayMode
-      });
-
-    } catch (error) {
-      console.error(
-        '❌ Lỗi Auto Play Next:',
-        error
-      );
-
-      return res.status(500).json({
-        success: false,
-        message: 'Không thể phát bài tiếp theo.'
-      });
-    }
-  });
-
-// ==================== PLAY ONE SONG ====================
+// ==================== API: PLAY ONE SONG ====================
 // Tất cả user đều được phép phát.
 // Người bấm Play nghe tiếng; các client khác phát mute.
 app.post('/api/play-song', async (req, res) => {
@@ -848,7 +735,8 @@ app.post('/api/play-song', async (req, res) => {
 
     lastWinner = song;
 
-    // Gửi sự kiện trước stateUpdate để client vừa bấm PLAY giữ được âm thanh.
+    // Nếu Admin đang bật Auto Play thì vẫn giữ mode,
+    // nhưng bài Play thủ công thay thế bài đang phát hiện tại.
     io.emit('songPlayed', {
       song,
       initiatorSocketId: socketId || null
@@ -871,14 +759,24 @@ app.post('/api/play-song', async (req, res) => {
   }
 });
 
+// ==================== API: SPIN ====================
 app.post('/api/spin', async (req, res) => {
   const auth = requireTelegramAdmin(req, res);
   if (!auth.ok) return;
 
-  const result = await performSpin();
-  res.json(result);
+  try {
+    const result = await performSpin();
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Lỗi Spin:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Không thể quay vòng quay!'
+    });
+  }
 });
 
+// ==================== API: TOGGLE FORM ====================
 app.post('/api/toggle-form', (req, res) => {
   const auth = requireTelegramAdmin(req, res);
   if (!auth.ok) return;
@@ -888,6 +786,7 @@ app.post('/api/toggle-form', (req, res) => {
   res.json({ success: true, isFormOpen });
 });
 
+// ==================== API: RESET ====================
 app.post('/api/reset', async (req, res) => {
   const auth = requireTelegramAdmin(req, res);
   if (!auth.ok) return;
@@ -898,17 +797,16 @@ app.post('/api/reset', async (req, res) => {
     songs = [];
     lastWinner = null;
 
+    // Reset cũng tắt Auto Play để không tự phát lại sau khi reset.
+    setAutoPlayState(0);
+    broadcastAutoPlayState();
     broadcastState();
 
     console.log('🧹 Đã xóa toàn bộ bài hát khỏi PostgreSQL');
 
-    res.json({
-      success: true
-    });
-
+    res.json({ success: true });
   } catch (error) {
     console.error('❌ Lỗi reset PostgreSQL:', error);
-
     res.status(500).json({
       success: false,
       message: 'Không thể xóa danh sách bài hát!'
@@ -916,16 +814,13 @@ app.post('/api/reset', async (req, res) => {
   }
 });
 
-// ==================== DELETE ONE SONG ====================
-
+// ==================== API: DELETE ONE SONG ====================
 app.post('/api/delete-song', async (req, res) => {
-  // Chỉ Admin mới được xóa bài hát
   const auth = requireTelegramAdmin(req, res);
   if (!auth.ok) return;
 
   const { id } = req.body;
 
-  // Kiểm tra ID
   if (!id) {
     return res.status(400).json({
       success: false,
@@ -934,13 +829,11 @@ app.post('/api/delete-song', async (req, res) => {
   }
 
   try {
-    // Xóa bài hát trực tiếp trong PostgreSQL
     const result = await pool.query(
       'DELETE FROM songs WHERE id = $1 RETURNING id',
       [id]
     );
 
-    // Không tìm thấy bài hát
     if (result.rowCount === 0) {
       return res.status(404).json({
         success: false,
@@ -948,10 +841,13 @@ app.post('/api/delete-song', async (req, res) => {
       });
     }
 
-    // Xóa bài tương ứng khỏi bộ nhớ RAM
     songs = songs.filter(song => String(song.id) !== String(id));
 
-    // Thông báo cho tất cả Mini App đang mở
+    // Nếu xóa chính bài đang phát, xóa luôn trạng thái current winner.
+    if (lastWinner && String(lastWinner.id) === String(id)) {
+      lastWinner = null;
+    }
+
     broadcastState();
 
     console.log(`🗑️ Admin đã xóa bài hát #${id}`);
@@ -960,16 +856,76 @@ app.post('/api/delete-song', async (req, res) => {
       success: true,
       message: 'Đã xóa bài hát!'
     });
-
   } catch (error) {
     console.error('❌ Lỗi xóa bài hát:', error);
-
     res.status(500).json({
       success: false,
       message: 'Không thể xóa bài hát!'
     });
   }
 });
+
+
+// ==================== SOCKET.IO ====================
+io.on('connection', (socket) => {
+  console.log(`🔌 Socket connected: ${socket.id}`);
+
+  socket.emit('stateUpdate', {
+    isFormOpen,
+    songs,
+    lastWinner,
+    autoPlayMode,
+    controllerSocketId: autoPlayControllerSocketId
+  });
+
+  socket.emit('autoPlayMode', {
+    mode: autoPlayMode,
+    controllerSocketId: autoPlayControllerSocketId
+  });
+
+  socket.on('authenticate', (payload = {}) => {
+    const initData = payload.initData || '';
+    console.log(
+      `🔑 Authenticate received: socket=${socket.id}, initDataLength=${initData.length}`
+    );
+
+    const auth = validateTelegramInitData(initData);
+
+    if (!auth.valid) {
+      console.log('❌ Telegram authentication failed:', auth.message);
+      socket.emit('adminStatus', {
+        isAdmin: false,
+        authenticated: false,
+        message: auth.message
+      });
+      return;
+    }
+
+    const telegramId = String(auth.user.id);
+    const admin = isAdmin(telegramId);
+
+    console.log(`🔐 Telegram ID: ${telegramId} | Admin: ${admin}`);
+
+    socket.emit('adminStatus', {
+      isAdmin: admin,
+      authenticated: true,
+      telegramId
+    });
+  });
+
+  socket.on('disconnect', (reason) => {
+    console.log(`🔌 Socket disconnected: ${socket.id} | ${reason}`);
+
+    if (socket.id === autoPlayControllerSocketId) {
+      setAutoPlayState(0);
+      broadcastAutoPlayState();
+      broadcastState();
+
+      console.log('⏹ Auto Play tự tắt vì Admin điều khiển đã thoát.');
+    }
+  });
+});
+
 
 const PORT = process.env.PORT || 3000;
 
@@ -982,7 +938,6 @@ async function startServer() {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`🎵 Songs loaded: ${songs.length}`);
     });
-
   } catch (error) {
     console.error('❌ Không thể khởi động server:', error);
     process.exit(1);
