@@ -196,6 +196,61 @@
     .audio-notice { font-size: 12px; padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 4px; font-weight: 600; }
     .audio-notice.unmuted { background: #1b5e20; color: #a5d6a7; }
     .audio-notice.muted { background: #4a148c; color: #e1bee7; }
+
+    .winner-interaction-row {
+      display: flex;
+      align-items: stretch;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .health-box {
+      flex: 1 1 55%;
+      min-width: 0;
+      padding: 8px 10px;
+      background: #182235;
+      border-radius: 8px;
+    }
+    .health-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #ddd;
+      margin-bottom: 6px;
+    }
+    .health-bar {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 5px;
+      width: 100%;
+      height: 22px;
+    }
+    .health-segment {
+      border-radius: 5px;
+      background: #37474f;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+    .health-segment.active:nth-child(1) { background: #2e7d32; }
+    .health-segment.active:nth-child(2) { background: #8caf2f; }
+    .health-segment.active:nth-child(3) { background: #ff9800; }
+    .health-segment.active:nth-child(4) { background: #e85d23; }
+    .health-segment.active:nth-child(5) { background: #d32f2f; }
+    .vote-actions {
+      flex: 1 1 45%;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .vote-button {
+      min-height: 54px;
+      padding: 6px 4px;
+      font-size: 13px;
+      border-radius: 8px;
+      color: #fff;
+    }
+    .vote-button.like { background: #2e7d32; }
+    .vote-button.dislike { background: #d32f2f; }
+    .vote-button.active { box-shadow: inset 0 0 0 3px #fff; transform: translateY(-1px); }
+    .vote-button:disabled { opacity: 0.45; cursor: not-allowed; }
     .audio-controls { display:flex; align-items:center; gap:10px; margin-top:10px; padding:10px 12px; background:#182235; border-radius:10px; }
     .btn-audio-toggle { width:auto; min-width:100px; height:38px; padding:7px 12px; background:#37474f; color:#fff; flex:0 0 auto; }
     .btn-audio-toggle.enabled { background:#2e7d32; }
@@ -227,6 +282,22 @@
     <div class="card-title" style="color: #ffca28;">🎉 ĐANG PHÁT BÀI HÁT TRÚNG THƯỞNG</div>
     <div style="font-size: 13px; color: #ddd; margin-bottom: 6px;">
       Người gửi: <strong id="winnerUser" style="color: #64b5f6;">-</strong><span id="winnerAction" style="color: #ddd;"></span>
+    </div>
+    <div class="winner-interaction-row">
+      <div class="health-box">
+        <div class="health-title">❤️ Máu bài hát</div>
+        <div id="healthBar" class="health-bar" aria-label="Thanh máu 0 trên 5">
+          <span class="health-segment"></span>
+          <span class="health-segment"></span>
+          <span class="health-segment"></span>
+          <span class="health-segment"></span>
+          <span class="health-segment"></span>
+        </div>
+      </div>
+      <div class="vote-actions">
+        <button id="btnLike" class="vote-button like" type="button" title="Like: trừ 1 mốc máu">👍 Like</button>
+        <button id="btnDislike" class="vote-button dislike" type="button" title="Dislike: cộng 1 mốc máu">👎 Dislike</button>
+      </div>
     </div>
     <div style="margin-bottom: 10px;">
       <span id="audioNotice" class="audio-notice"></span>
@@ -327,6 +398,9 @@ function getTelegramUserData() {
     const playerCard = document.getElementById('playerCard');
     const winnerUser = document.getElementById('winnerUser');
     const winnerAction = document.getElementById('winnerAction');
+    const healthBar = document.getElementById('healthBar');
+    const btnLike = document.getElementById('btnLike');
+    const btnDislike = document.getElementById('btnDislike');
     const ytPlayer = document.getElementById('ytPlayer');
     const audioNotice = document.getElementById('audioNotice');
     const btnAudioToggle = document.getElementById('btnAudioToggle');
@@ -344,6 +418,8 @@ function getTelegramUserData() {
     let currentAngle = 0;
     let currentPlayingUrl = null;
     let currentAction = null;
+    let currentHealth = 0;
+    let currentVote = 0; // -1 = Like, 1 = Dislike, 0 = chưa vote
 
     let youtubeApiPlayer = null;
     let youtubeApiReady = false;
@@ -436,6 +512,7 @@ function getTelegramUserData() {
       isFormOpen = data.isFormOpen;
       songs = data.songs || [];
       currentAction = data.lastAction || null;
+      updateHealth(data.health || 0);
 
       if (typeof data.autoPlayMode !== 'undefined') {
         autoPlayMode = Number(data.autoPlayMode) || 0;
@@ -461,6 +538,9 @@ function getTelegramUserData() {
 
       const song = data.song;
       currentAction = data.action || null;
+      updateHealth(data.health || 0);
+      currentVote = 0;
+      updateVoteButtons();
 
       const shouldPlaySound =
         data.initiatorSocketId === socket.id;
@@ -1016,8 +1096,108 @@ function getTelegramUserData() {
 
       playerCard.style.display = 'none';
       currentAction = null;
+      currentHealth = 0;
+      currentVote = 0;
+      updateHealth(0);
+      updateVoteButtons();
       if (winnerAction) winnerAction.textContent = '';
     }
+
+    function updateHealth(health) {
+      currentHealth = Math.max(0, Math.min(5, Number(health) || 0));
+
+      if (healthBar) {
+        const segments = healthBar.querySelectorAll('.health-segment');
+        segments.forEach((segment, index) => {
+          segment.classList.toggle('active', index < currentHealth);
+        });
+        healthBar.setAttribute(
+          'aria-label',
+          `Thanh máu ${currentHealth} trên 5`
+        );
+      }
+
+      updateVoteButtons();
+    }
+
+    function updateVoteButtons() {
+      const hasSong = !!currentPlayingUrl;
+      if (btnLike) {
+        btnLike.disabled = !hasSong;
+        btnLike.classList.toggle('active', currentVote === -1);
+      }
+      if (btnDislike) {
+        btnDislike.disabled = !hasSong;
+        btnDislike.classList.toggle('active', currentVote === 1);
+      }
+    }
+
+    socket.on('songHealth', (data) => {
+      if (!data) return;
+
+      const songId = lastWinnerId();
+      if (data.songId != null && songId != null && String(data.songId) !== String(songId)) {
+        return;
+      }
+
+      updateHealth(data.health || 0);
+
+      if (
+        data.telegramId != null &&
+        userData.id != null &&
+        String(data.telegramId) === String(userData.id)
+      ) {
+        currentVote = Number(data.userVote) || 0;
+        updateVoteButtons();
+      }
+    });
+
+    function lastWinnerId() {
+      if (!currentPlayingUrl) return null;
+      const currentSong = songs.find(song => song.url === currentPlayingUrl);
+      return currentSong?.id ?? null;
+    }
+
+    async function sendVote(vote) {
+      if (!currentPlayingUrl) return;
+
+      btnLike.disabled = true;
+      btnDislike.disabled = true;
+
+      try {
+        const res = await fetch('/api/song-vote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            vote,
+            initData: telegramInitData
+          })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.success && !data.replaced) {
+          if (data.message) console.log('❤️ Vote:', data.message);
+          return;
+        }
+
+        if (data.replaced) {
+          // songPlayed/stateUpdate sẽ cập nhật bài mới + dòng "Thay thế".
+          currentVote = 0;
+          updateVoteButtons();
+        } else {
+          currentVote = Number(data.userVote) || 0;
+          updateHealth(data.health || 0);
+        }
+      } catch (error) {
+        console.error('❌ Lỗi Like/Dislike:', error);
+      } finally {
+        updateVoteButtons();
+      }
+    }
+
+    btnLike?.addEventListener('click', () => sendVote(-1));
+    btnDislike?.addEventListener('click', () => sendVote(1));
 
     function renderPlayer(winner, shouldPlaySound, action = currentAction) {
       if (!winner?.url) return;
@@ -1033,6 +1213,8 @@ function getTelegramUserData() {
           winnerAction.textContent = ` - Người quay: ${currentAction.user}`;
         } else if (currentAction?.type === 'play' && currentAction.user) {
           winnerAction.textContent = ` - Người play: ${currentAction.user}`;
+        } else if (currentAction?.type === 'replace' && currentAction.title) {
+          winnerAction.textContent = ` - Thay thế: ${currentAction.title}`;
         } else {
           winnerAction.textContent = '';
         }

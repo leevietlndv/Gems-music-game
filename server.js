@@ -35,6 +35,16 @@ async function initDatabase() {
   ADD COLUMN IF NOT EXISTS title TEXT
 `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS song_votes (
+      song_id INTEGER NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+      telegram_id TEXT NOT NULL,
+      vote SMALLINT NOT NULL CHECK (vote IN (-1, 1)),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (song_id, telegram_id)
+    )
+  `);
+
   console.log('🗄️ PostgreSQL: Database ready');
 }
 
@@ -179,18 +189,51 @@ let isFormOpen = true;
 let songs = [];
 let lastWinner = null;
 let lastAction = null;
+let currentHealth = 0;
 
+// Khóa xử lý vote để các lượt bấm đồng thời được xử lý tuần tự.
+let voteQueue = Promise.resolve();
 
-async function performSpin(initiatorSocketId = null, actionUserName = null) {
+function clampHealth(value) {
+  return Math.max(0, Math.min(5, Number(value) || 0));
+}
+
+async function getSongHealth(songId) {
+  const result = await pool.query(`
+    SELECT COALESCE(SUM(vote), 0) AS score
+    FROM song_votes
+    WHERE song_id = $1
+  `, [songId]);
+  return clampHealth(result.rows[0]?.score);
+}
+
+async function getUserVote(songId, telegramId) {
+  const result = await pool.query(`
+    SELECT vote FROM song_votes
+    WHERE song_id = $1 AND telegram_id = $2
+  `, [songId, String(telegramId)]);
+  return result.rowCount ? Number(result.rows[0].vote) : 0;
+}
+
+async function broadcastHealthOnly() {
+  io.emit('songHealth', {
+    songId: lastWinner?.id || null,
+    health: currentHealth
+  });
+}
+
+async function performSpin(initiatorSocketId = null, actionUser = null) {
   if (lastWinner) {
   await pool.query(
       'DELETE FROM songs WHERE id = $1',
       [lastWinner.id]
     );
 
-    songs = songs.filter(song => song.id !== lastWinner.id);
+    songs = songs.filter(song => String(song.id) !== String(lastWinner.id));
 
     lastWinner = null;
+    lastAction = null;
+    currentHealth = 0;
   }
 
   if (songs.length === 0) {
@@ -201,9 +244,8 @@ async function performSpin(initiatorSocketId = null, actionUserName = null) {
   const selectedIndex = Math.floor(Math.random() * songs.length);
   const winner = songs[selectedIndex];
   lastWinner = winner;
-  lastAction = actionUserName
-    ? { type: 'spin', user: actionUserName }
-    : null;
+  currentHealth = 0;
+  lastAction = actionUser ? { type: 'spin', user: actionUser } : null;
 
   io.emit('triggerSpin', {
     selectedIndex,
@@ -437,6 +479,7 @@ function broadcastState() {
     songs,
     lastWinner,
     lastAction,
+    health: currentHealth,
     autoPlayMode,
     controllerSocketId: autoPlayControllerSocketId
   });
@@ -666,13 +709,14 @@ app.post('/api/auto-play-next', async (req, res) => {
     }
 
     lastWinner = nextSong;
-    // Auto Play không phải hành động Spin/Play thủ công, nên không ghi người điều khiển.
+    currentHealth = 0;
     lastAction = null;
 
     io.emit('songPlayed', {
       song: nextSong,
       initiatorSocketId: autoPlayControllerSocketId,
-      action: null
+      action: null,
+      health: 0
     });
 
     broadcastState();
@@ -747,19 +791,23 @@ app.post('/api/play-song', async (req, res) => {
     }
 
     lastWinner = song;
-    const playUserName =
+    currentHealth = 0;
+
+    const userName =
       [auth.user.first_name, auth.user.last_name]
         .filter(Boolean)
         .join(' ')
         .trim() || 'Người dùng';
-    lastAction = { type: 'play', user: playUserName };
+
+    lastAction = { type: 'play', user: userName };
 
     // Nếu Admin đang bật Auto Play thì vẫn giữ mode,
     // nhưng bài Play thủ công thay thế bài đang phát hiện tại.
     io.emit('songPlayed', {
       song,
       initiatorSocketId: socketId || null,
-      action: lastAction
+      action: lastAction,
+      health: 0
     });
 
     broadcastState();
@@ -779,20 +827,120 @@ app.post('/api/play-song', async (req, res) => {
   }
 });
 
+// ==================== API: SONG HEALTH / LIKE / DISLIKE ====================
+app.post('/api/song-vote', async (req, res) => {
+  const { vote } = req.body || {};
+  const auth = validateTelegramInitData(req.body?.initData || '');
+
+  if (!auth.valid) {
+    return res.status(401).json({ success: false, message: `Xác thực Telegram thất bại: ${auth.message}` });
+  }
+
+  const requestedVote = Number(vote);
+  if (![1, -1].includes(requestedVote)) {
+    return res.status(400).json({ success: false, message: 'Loại vote không hợp lệ!' });
+  }
+
+  const runVote = async () => {
+    if (!lastWinner) {
+      return { success: false, status: 400, message: 'Hiện chưa có bài hát đang phát.' };
+    }
+
+    const songId = lastWinner.id;
+    const telegramId = String(auth.user.id);
+    const previousVote = await getUserVote(songId, telegramId);
+    let newVote = requestedVote;
+
+    // Mỗi Telegram user chỉ có một vote cho bài hiện tại.
+    // Bấm lại cùng nút = bỏ vote; bấm nút đối diện = đổi vote.
+    if (previousVote === requestedVote) {
+      await pool.query(
+        'DELETE FROM song_votes WHERE song_id = $1 AND telegram_id = $2',
+        [songId, telegramId]
+      );
+      newVote = 0;
+    } else {
+      await pool.query(`
+        INSERT INTO song_votes (song_id, telegram_id, vote)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (song_id, telegram_id)
+        DO UPDATE SET vote = EXCLUDED.vote
+      `, [songId, telegramId, requestedVote]);
+    }
+
+    currentHealth = await getSongHealth(songId);
+
+    if (currentHealth >= 5) {
+      const previousSong = lastWinner;
+      const previousTitle = previousSong.title || previousSong.url || 'bài hát trước đó';
+      const availableSongs = songs.filter(song => String(song.id) !== String(previousSong.id));
+
+      if (availableSongs.length === 0) {
+        currentHealth = 5;
+        await broadcastHealthOnly();
+        return {
+          success: false,
+          status: 409,
+          health: 5,
+          message: 'Đã đủ 5 mốc máu nhưng không còn bài hát khác để thay thế.'
+        };
+      }
+
+      const nextSong = availableSongs[Math.floor(Math.random() * availableSongs.length)];
+
+      await pool.query('DELETE FROM songs WHERE id = $1', [previousSong.id]);
+      songs = songs.filter(song => String(song.id) !== String(previousSong.id));
+
+      lastWinner = nextSong;
+      currentHealth = 0;
+      lastAction = { type: 'replace', title: previousTitle };
+
+      io.emit('songPlayed', {
+        song: nextSong,
+        initiatorSocketId: null,
+        action: lastAction,
+        health: 0
+      });
+      broadcastState();
+
+      console.log(`❤️ Đủ 5 mốc máu → thay #${previousSong.id} bằng #${nextSong.id}: ${nextSong.title || nextSong.url}`);
+
+      return { success: true, replaced: true, health: 0, song: nextSong, action: lastAction };
+    }
+
+    io.emit('songHealth', {
+      songId,
+      health: currentHealth,
+      telegramId,
+      userVote: newVote
+    });
+
+    broadcastState();
+    return { success: true, replaced: false, health: currentHealth, userVote: newVote };
+  };
+
+  const run = voteQueue.then(runVote, runVote);
+  voteQueue = run.catch(() => {});
+  const result = await run;
+
+  if (result.status) return res.status(result.status).json(result);
+  return res.json(result);
+});
+
 // ==================== API: SPIN ====================
 app.post('/api/spin', async (req, res) => {
   const auth = requireTelegramAdmin(req, res);
   if (!auth.ok) return;
 
   const { socketId } = req.body || {};
-  const spinUserName =
+  const userName =
     [auth.user.first_name, auth.user.last_name]
       .filter(Boolean)
       .join(' ')
       .trim() || 'Người dùng';
 
   try {
-    const result = await performSpin(socketId || null, spinUserName);
+    const result = await performSpin(socketId || null, userName);
     res.json(result);
   } catch (error) {
     console.error('❌ Lỗi Spin:', error);
@@ -824,6 +972,7 @@ app.post('/api/reset', async (req, res) => {
     songs = [];
     lastWinner = null;
     lastAction = null;
+    currentHealth = 0;
 
     // Reset cũng tắt Auto Play để không tự phát lại sau khi reset.
     setAutoPlayState(0);
@@ -875,6 +1024,7 @@ app.post('/api/delete-song', async (req, res) => {
     if (lastWinner && String(lastWinner.id) === String(id)) {
       lastWinner = null;
       lastAction = null;
+      currentHealth = 0;
     }
 
     broadcastState();
@@ -904,6 +1054,7 @@ io.on('connection', (socket) => {
     songs,
     lastWinner,
     lastAction,
+    health: currentHealth,
     autoPlayMode,
     controllerSocketId: autoPlayControllerSocketId
   });
@@ -941,6 +1092,23 @@ io.on('connection', (socket) => {
       authenticated: true,
       telegramId
     });
+
+    (async () => {
+      if (!lastWinner) {
+        socket.emit('songHealth', { songId: null, health: 0, userVote: 0 });
+        return;
+      }
+      try {
+        const userVote = await getUserVote(lastWinner.id, telegramId);
+        socket.emit('songHealth', {
+          songId: lastWinner.id,
+          health: currentHealth,
+          userVote
+        });
+      } catch (error) {
+        console.error('❌ Lỗi lấy vote hiện tại:', error);
+      }
+    })();
   });
 
   socket.on('disconnect', (reason) => {
