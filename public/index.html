@@ -458,23 +458,42 @@
       overflow: hidden;
     }
 
-    .btn-audio-toggle {
-      width: auto;
-      min-width: 0;
-      max-width: 140px;
+    .audio-action-buttons {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex: 0 0 auto;
+    }
+
+    .btn-audio-toggle,
+    .btn-playback-toggle {
+      width: 42px;
+      min-width: 42px;
       height: 38px;
-      padding: 7px clamp(7px, 2vw, 12px);
-      background: #37474f;
+      padding: 0;
+      border-radius: 9px;
       color: #fff;
-      flex: 0 1 auto;
-      font-size: clamp(12px, 3.5vw, 15px);
+      flex: 0 0 auto;
+      font-size: 19px;
       line-height: 1;
-      white-space: nowrap;
-      overflow: hidden;
       box-sizing: border-box;
     }
 
+    .btn-audio-toggle { background: #37474f; }
     .btn-audio-toggle.enabled { background: #2e7d32; }
+
+    .btn-playback-toggle {
+      background: #2b384e;
+    }
+
+    .btn-playback-toggle.admin-enabled {
+      background: #1565c0;
+    }
+
+    .btn-playback-toggle:disabled {
+      opacity: 0.42;
+      cursor: not-allowed;
+    }
 
     .volume-icon {
       font-size: clamp(16px, 4vw, 18px);
@@ -507,7 +526,7 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-width: 24px;
+      min-width: 26px;
       font-size: clamp(12px, 3.5vw, 14px);
       font-weight: 700;
       color: #ddd;
@@ -521,10 +540,16 @@
         padding: 8px 6px;
       }
 
-      .btn-audio-toggle {
+      .btn-audio-toggle,
+      .btn-playback-toggle {
+        width: 38px;
+        min-width: 38px;
         height: 36px;
-        padding: 6px 7px;
-        font-size: 12px;
+        font-size: 17px;
+      }
+
+      .audio-action-buttons {
+        gap: 3px;
       }
 
       .volume-icon {
@@ -675,7 +700,10 @@
     </div>
 
     <div class="audio-controls">
-      <button id="btnAudioToggle" class="btn-audio-toggle" type="button">🔇 Bật nhạc</button>
+      <div class="audio-action-buttons">
+        <button id="btnAudioToggle" class="btn-audio-toggle" type="button" title="Bật / tắt âm thanh" aria-label="Bật / tắt âm thanh">🔇</button>
+        <button id="btnPlaybackToggle" class="btn-playback-toggle" type="button" title="Chỉ Admin được điều khiển phát / tạm dừng" aria-label="Phát / tạm dừng">▶️</button>
+      </div>
       <span id="volumeIcon" class="volume-icon">🔊</span>
       <input id="volumeSlider" type="range" min="0" max="100" value="70" aria-label="Âm lượng">
       <div class="am-luong"><span id="volumeValue">70</span></div>
@@ -780,6 +808,7 @@ function getTelegramUserData() {
     const ytPlayer = document.getElementById('ytPlayer');
     const audioNotice = document.getElementById('audioNotice');
     const btnAudioToggle = document.getElementById('btnAudioToggle');
+    const btnPlaybackToggle = document.getElementById('btnPlaybackToggle');
     const volumeSlider = document.getElementById('volumeSlider');
     const volumeValue = document.getElementById('volumeValue');
     const volumeIcon = document.getElementById('volumeIcon');
@@ -806,9 +835,18 @@ function getTelegramUserData() {
     let currentDislikeCount = 0;
     let replacementCountdown = null;
 
+    // Trạng thái khóa thao tác chọn bài dùng chung cho toàn bộ Mini App.
+    // Server là nguồn sự thật; mọi client chỉ phản ánh trạng thái này.
+    let songActionLock = { active: false, type: null, until: 0, version: 0 };
+    let latestSongActionVersion = 0;
+
     let youtubeApiPlayer = null;
     let youtubeApiReady = false;
     let youtubeApiReadyCallbacks = [];
+    let currentPlayback = { songId: null, status: 'stopped', position: 0, serverTime: 0, version: 0, authoritySocketId: null, startAt: null, controlLockUntil: 0 };
+    let pendingPlayback = null;
+    let playbackSyncTimer = null;
+    let playbackSyncBusy = false;
 
     function flushYouTubeApiCallbacks() {
       youtubeApiReady = true;
@@ -973,6 +1011,7 @@ function getTelegramUserData() {
       autoPlayController = window.isAdmin &&
         autoPlayControllerSocketId === socket.id;
       updateAutoPlayButton();
+      updatePlaybackToggle();
 
       if (window.isAdmin) {
         btnSpin.classList.remove('admin-only');
@@ -995,6 +1034,13 @@ function getTelegramUserData() {
       replacementCountdown = Number.isFinite(Number(data.replacementCountdown)) ? Number(data.replacementCountdown) : null;
       updateOnlineSummary(data.online || {});
       updateHealth(typeof data.health === 'number' ? data.health : 5);
+      if (data.playback) {
+        applyPlaybackState(data.playback, { fromState: true });
+      }
+
+      if (data.songAction) {
+        updateSongActionLock(data.songAction);
+      }
 
       if (typeof data.autoPlayMode !== 'undefined') {
         autoPlayMode = Number(data.autoPlayMode) || 0;
@@ -1021,6 +1067,13 @@ function getTelegramUserData() {
     socket.on('songPlayed', (data) => {
       if (!data?.song) return;
 
+      const incomingActionVersion = Number(data.actionVersion) || 0;
+      if (incomingActionVersion && incomingActionVersion < latestSongActionVersion) {
+        console.log('⏭️ Bỏ qua songPlayed cũ:', incomingActionVersion, 'latest=', latestSongActionVersion);
+        return;
+      }
+      if (incomingActionVersion) latestSongActionVersion = incomingActionVersion;
+
       const song = data.song;
       currentAction = data.action || null;
       currentLikeCount = Number(data.likes) || 0;
@@ -1033,6 +1086,10 @@ function getTelegramUserData() {
       const shouldPlaySound =
         data.initiatorSocketId === socket.id;
 
+      if (data.playback) {
+        currentPlayback = normalizePlaybackState(data.playback);
+      }
+
       console.log(
         shouldPlaySound
           ? '▶️ Bạn là người phát — có tiếng'
@@ -1040,7 +1097,7 @@ function getTelegramUserData() {
         song
       );
 
-      renderPlayer(song, shouldPlaySound);
+      renderPlayer(song, shouldPlaySound, currentAction, currentPlayback);
     });
 
     socket.on('autoPlayMode', (data) => {
@@ -1064,10 +1121,36 @@ function getTelegramUserData() {
     });
 
     socket.on('triggerSpin', (data) => {
+      const incomingActionVersion = Number(data?.actionVersion) || 0;
+      if (incomingActionVersion && incomingActionVersion < latestSongActionVersion) {
+        console.log('⏭️ Bỏ qua triggerSpin cũ:', incomingActionVersion, 'latest=', latestSongActionVersion);
+        return;
+      }
+      if (incomingActionVersion) latestSongActionVersion = incomingActionVersion;
+
       const shouldPlaySound = data?.initiatorSocketId === socket.id;
       currentAction = data?.action || null;
       startSpinAnimation(data.selectedIndex, data.winner, shouldPlaySound, data?.action || null);
     });
+
+    socket.on('songActionLock', (payload) => {
+      updateSongActionLock(payload || {});
+    });
+
+    function updateSongActionLock(payload = {}) {
+      const version = Number(payload.version) || 0;
+      if (version < latestSongActionVersion) return;
+
+      latestSongActionVersion = Math.max(latestSongActionVersion, version);
+      songActionLock = {
+        active: payload.active === true,
+        type: payload.type || null,
+        until: Number(payload.until) || 0,
+        version
+      };
+
+      updateUI();
+    }
 
     function updateUI() {
       if (isFormOpen) {
@@ -1088,7 +1171,7 @@ function getTelegramUserData() {
         songs = [];
       }
 
-      btnSpin.disabled = isSpinning || songs.length === 0;
+      btnSpin.disabled = isSpinning || songs.length === 0 || songActionLock.active;
 
       listTitleEl.textContent = `📋 Danh sách bài hát (${songs.length})`;
 
@@ -1129,6 +1212,7 @@ function getTelegramUserData() {
 
                   <button
                     class="btn-play-song"
+                    ${songActionLock.active ? 'disabled' : ''}
                     onclick="playSong('${id}')"
                     title="Phát bài hát"
                   >
@@ -1189,6 +1273,11 @@ function getTelegramUserData() {
     }
     
     async function playSong(songId) {
+      if (songActionLock.active) {
+        console.log('⏳ Không thể Play: đang có thao tác', songActionLock.type);
+        return;
+      }
+
       if (!songId) {
         alert('Không xác định được bài hát cần phát!');
         return;
@@ -1353,7 +1442,8 @@ function getTelegramUserData() {
       youtubeApiPlayer = new YT.Player('ytPlayer', {
         playerVars: {
           autoplay: 0,
-          controls: 1,
+          controls: 0,
+          disablekb: 1,
           rel: 0,
           playsinline: 1,
           enablejsapi: 1,
@@ -1370,7 +1460,8 @@ function getTelegramUserData() {
               const sound = pendingPlayerSound;
               pendingPlayerSong = null;
               pendingPlayerSound = false;
-              loadSongIntoPlayer(song, sound);
+              loadSongIntoPlayer(song, sound, pendingPlayback);
+              pendingPlayback = null;
             }
           },
           onStateChange: onYouTubePlayerStateChange,
@@ -1452,6 +1543,8 @@ function getTelegramUserData() {
           youtubeApiPlayer.playVideo();
         } else if (func === 'pauseVideo') {
           youtubeApiPlayer.pauseVideo();
+        } else if (func === 'seekTo') {
+          youtubeApiPlayer.seekTo(Number(args[0]) || 0, args[1] !== false);
         } else if (func === 'stopVideo') {
           youtubeApiPlayer.stopVideo();
         }
@@ -1462,7 +1555,8 @@ function getTelegramUserData() {
 
     function updateAudioControls() {
       const muted = savedAudioPreference === false || savedVolume === 0;
-      btnAudioToggle.textContent = muted ? '🔇 Bật nhạc' : '🔊 Tắt nhạc';
+      btnAudioToggle.textContent = muted ? '🔇' : '🔊';
+      btnAudioToggle.setAttribute('aria-label', muted ? 'Bật nhạc' : 'Tắt nhạc');
       btnAudioToggle.classList.toggle('enabled', !muted);
       volumeIcon.textContent = muted
         ? '🔇'
@@ -1480,7 +1574,7 @@ function getTelegramUserData() {
         youtubeApiPlayer.mute();
       } else {
         youtubeApiPlayer.unMute();
-        if (playAfterUnmute) {
+        if (playAfterUnmute && currentPlayback.status === 'playing') {
           youtubeApiPlayer.playVideo();
         }
       }
@@ -1541,40 +1635,60 @@ function getTelegramUserData() {
       }
     }
 
-    function loadSongIntoPlayer(song, shouldPlaySound) {
+    function loadSongIntoPlayer(song, shouldPlaySound, playback = currentPlayback) {
       const videoId = extractYouTubeId(song.url);
       if (!videoId) return;
 
       if (!youtubeApiPlayer || !youtubePlayerReady) {
         pendingPlayerSong = song;
         pendingPlayerSound = shouldPlaySound;
+        pendingPlayback = playback || null;
         return;
       }
 
       const effectiveSound = getEffectiveSound(shouldPlaySound);
+      const playbackState = normalizePlaybackState(playback || currentPlayback);
 
-      youtubeApiPlayer.loadVideoById(videoId);
-
-      // Đặt mute/volume sau khi load. Với người vừa bấm Play,
-      // thao tác loadVideoById nằm ngay sau user gesture nên có cơ hội autoplay có tiếng.
       youtubeApiPlayer.setVolume(savedVolume);
+      if (effectiveSound && savedVolume > 0) youtubeApiPlayer.unMute();
+      else youtubeApiPlayer.mute();
 
-      if (effectiveSound && savedVolume > 0) {
-        youtubeApiPlayer.unMute();
-        youtubeApiPlayer.playVideo();
+      currentPlayback = playbackState;
+
+      const targetPosition = getPlaybackTargetPosition(playbackState);
+      const shouldStartPaused = playbackState.status === 'paused';
+      const scheduledStart = playbackState.status === 'playing' && Number(playbackState.startAt) > Date.now();
+
+      if (scheduledStart) {
+        youtubeApiPlayer.cueVideoById(videoId, targetPosition);
+        const delay = Math.max(0, Number(playbackState.startAt) - Date.now());
+        window.setTimeout(() => {
+          if (!isSamePlaybackSong(playbackState.songId)) return;
+          sendYouTubeCommand('seekTo', [getPlaybackTargetPosition(currentPlayback), true]);
+          sendYouTubeCommand('playVideo');
+        }, delay);
       } else {
-        youtubeApiPlayer.mute();
-        youtubeApiPlayer.playVideo();
+        youtubeApiPlayer.loadVideoById(videoId, targetPosition);
+        youtubeApiPlayer.seekTo(targetPosition, true);
+        if (shouldStartPaused) {
+          youtubeApiPlayer.pauseVideo();
+        } else {
+          youtubeApiPlayer.playVideo();
+        }
       }
 
       updateAudioNotice(effectiveSound && savedVolume > 0);
       updateAudioControls();
+      updatePlaybackToggle();
     }
 
     function clearPlayer() {
       pendingPlayerSong = null;
       pendingPlayerSound = false;
       currentPlayingUrl = null;
+      currentPlayback = normalizePlaybackState({ songId: null, status: 'stopped', position: 0, version: currentPlayback.version + 1 });
+      pendingPlayback = null;
+      updatePlaybackToggle();
 
       if (youtubeApiPlayer && youtubePlayerReady) {
         try {
@@ -1730,7 +1844,7 @@ function getTelegramUserData() {
     btnLike?.addEventListener('click', () => sendVote(1));
     btnDislike?.addEventListener('click', () => sendVote(-1));
 
-    function renderPlayer(winner, shouldPlaySound, action = currentAction) {
+    function renderPlayer(winner, shouldPlaySound, action = currentAction, playback = currentPlayback) {
       if (!winner?.url) return;
 
       const videoId = extractYouTubeId(winner.url);
@@ -1771,11 +1885,160 @@ function getTelegramUserData() {
       updateAudioNotice(effectiveSound && savedVolume > 0);
       updateAudioControls();
 
-      loadSongIntoPlayer(winner, shouldPlaySound);
+      loadSongIntoPlayer(winner, shouldPlaySound, playback);
     }
+
+    function normalizePlaybackState(state = {}) {
+      return {
+        songId: state.songId != null ? String(state.songId) : null,
+        status: ['playing', 'paused', 'stopped', 'scheduled'].includes(state.status) ? state.status : 'stopped',
+        position: Math.max(0, Number(state.position) || 0),
+        serverTime: Number(state.serverTime) || Date.now(),
+        version: Number(state.version) || 0,
+        authoritySocketId: state.authoritySocketId || null,
+        startAt: Number.isFinite(Number(state.startAt)) ? Number(state.startAt) : null,
+        controlLockUntil: Number(state.controlLockUntil) || 0
+      };
+    }
+
+    function isSamePlaybackSong(songId) {
+      if (songId == null) return false;
+      const currentSong = songs.find(song => String(song.id) === String(songId));
+      return !!currentSong && currentPlayingUrl === currentSong.url;
+    }
+
+    function getPlaybackTargetPosition(state = currentPlayback) {
+      const normalized = normalizePlaybackState(state);
+      let position = normalized.position;
+      if (normalized.status === 'playing') {
+        const now = Date.now();
+        if (normalized.startAt) {
+          if (now >= normalized.startAt) {
+            position += Math.max(0, now - normalized.startAt) / 1000;
+          }
+        } else {
+          position += Math.max(0, now - normalized.serverTime) / 1000;
+        }
+      }
+      return Math.max(0, position);
+    }
+
+    function applyPlaybackState(state, options = {}) {
+      const next = normalizePlaybackState(state);
+      currentPlayback = next;
+      updatePlaybackToggle();
+
+      if (!youtubeApiPlayer || !youtubePlayerReady || !currentPlayingUrl || !next.songId) {
+        return;
+      }
+
+      if (!isSamePlaybackSong(next.songId)) return;
+
+      const target = getPlaybackTargetPosition(next);
+      try {
+        const local = Number(youtubeApiPlayer.getCurrentTime?.() || 0);
+        const drift = Math.abs(local - target);
+
+        if (drift > 1.25 || options.forceSeek) {
+          youtubeApiPlayer.seekTo(target, true);
+        }
+
+        if (next.status === 'paused') {
+          youtubeApiPlayer.pauseVideo();
+        } else if (next.status === 'playing') {
+          youtubeApiPlayer.playVideo();
+        }
+      } catch (error) {
+        console.warn('⚠️ Không thể đồng bộ timeline:', error);
+      }
+    }
+
+    function updatePlaybackToggle() {
+      if (!btnPlaybackToggle) return;
+
+      const isPlaying = currentPlayback.status === 'playing';
+      btnPlaybackToggle.textContent = isPlaying ? '⏸️' : '▶️';
+      btnPlaybackToggle.setAttribute('aria-label', isPlaying ? 'Tạm dừng' : 'Phát');
+      btnPlaybackToggle.setAttribute('title', isAdmin ? (isPlaying ? 'Tạm dừng cho tất cả' : 'Phát cho tất cả') : 'Chỉ Admin được điều khiển');
+      btnPlaybackToggle.disabled = !isAdmin || !currentPlayingUrl;
+      btnPlaybackToggle.classList.toggle('admin-enabled', isAdmin && !!currentPlayingUrl);
+    }
+
+    async function sendPlaybackControl(action) {
+      if (!isAdmin || !currentPlayingUrl || !socket.connected) return;
+
+      btnPlaybackToggle.disabled = true;
+      try {
+        const res = await fetch('/api/playback-control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action,
+            initData: telegramInitData,
+            socketId: socket.id,
+            expectedSongId: lastWinnerId()
+          })
+        });
+        const data = await res.json();
+        if (!data.success && data.message) {
+          console.log('🎬 Playback control:', data.message);
+        }
+        if (data.playback) {
+          applyPlaybackState(data.playback, { forceSeek: true });
+        }
+      } catch (error) {
+        console.error('❌ Lỗi điều khiển playback:', error);
+      } finally {
+        updatePlaybackToggle();
+      }
+    }
+
+    btnPlaybackToggle?.addEventListener('click', () => {
+      if (!isAdmin) return;
+      const nextAction = currentPlayback.status === 'playing' ? 'pause' : 'play';
+      sendPlaybackControl(nextAction);
+    });
+
+    socket.on('playbackState', (state) => {
+      applyPlaybackState(state, { forceSeek: true });
+    });
+
+    socket.on('playbackSync', (state) => {
+      applyPlaybackState(state);
+    });
+
+    function reportPlaybackPosition() {
+      if (playbackSyncBusy || !youtubeApiPlayer || !youtubePlayerReady) return;
+      if (!currentPlayback.songId || !currentPlayingUrl) return;
+      if (currentPlayback.authoritySocketId !== socket.id) return;
+      if (currentPlayback.status !== 'playing' && currentPlayback.status !== 'paused') return;
+
+      playbackSyncBusy = true;
+      try {
+        const position = Number(youtubeApiPlayer.getCurrentTime?.() || 0);
+        socket.emit('playbackReport', {
+          songId: currentPlayback.songId,
+          position,
+          status: currentPlayback.status,
+          version: currentPlayback.version
+        });
+      } catch (error) {
+        console.warn('⚠️ Không lấy được vị trí YouTube:', error);
+      } finally {
+        playbackSyncBusy = false;
+      }
+    }
+
+    playbackSyncTimer = window.setInterval(reportPlaybackPosition, 2000);
 
     function onYouTubePlayerStateChange(event) {
       console.log('🎬 YouTube state:', event.data);
+
+      if (typeof YT !== 'undefined' && event.data === YT.PlayerState.PLAYING) {
+        reportPlaybackPosition();
+      } else if (typeof YT !== 'undefined' && event.data === YT.PlayerState.PAUSED) {
+        reportPlaybackPosition();
+      }
 
       if (
         typeof YT !== 'undefined' &&
@@ -2053,7 +2316,7 @@ updateAutoPlayButton();
     });
 
     btnSpin.addEventListener('click', async () => {
-      if (isSpinning || songs.length === 0) return;
+      if (isSpinning || songs.length === 0 || songActionLock.active) return;
       try {
         const res = await fetch('/api/spin', { 
           method: 'POST',
