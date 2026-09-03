@@ -1719,9 +1719,12 @@ function getTelegramUserData() {
     updateAudioControls();
 
     function getEffectiveSound(shouldPlaySound) {
-      return savedAudioPreference === null
-        ? shouldPlaySound
-        : savedAudioPreference;
+      // Chỉ thiết bị vừa thực hiện hành động Play/Spin mới được tự động
+      // phát có tiếng. Client vào sau/reload luôn bắt đầu mute để tránh
+      // autoplay có tiếng bị WebView/YouTube chặn. Người dùng vẫn có thể
+      // tự bật âm thanh bằng nút loa.
+      if (shouldPlaySound !== true) return false;
+      return savedAudioPreference === false ? false : true;
     }
 
     function updateAudioNotice(effectiveSound) {
@@ -1779,6 +1782,11 @@ function getTelegramUserData() {
           seekAuthoritative();
           sendYouTubeCommand('playVideo');
         }, delay);
+      } else if (shouldStartPaused) {
+        // Nếu trạng thái authoritative đang Pause, chỉ cue video; không
+        // cho YouTube tự phát rồi mới pause vì điều đó dễ gây race với
+        // trạng thái playback và autoplay policy của WebView.
+        youtubeApiPlayer.cueVideoById(videoId, targetPosition);
       } else {
         youtubeApiPlayer.loadVideoById(videoId, targetPosition);
 
@@ -1793,8 +1801,7 @@ function getTelegramUserData() {
 
         window.setTimeout(() => {
           if (loadToken !== playerLoadToken || !isSamePlaybackSong(playbackState.songId)) return;
-          if (shouldStartPaused) youtubeApiPlayer.pauseVideo();
-          else youtubeApiPlayer.playVideo();
+          youtubeApiPlayer.playVideo();
         }, 150);
       }
 
@@ -2337,6 +2344,13 @@ function getTelegramUserData() {
 
     playbackTimeline?.addEventListener('pointerup', async (event) => {
       try { playbackTimeline.releasePointerCapture?.(event.pointerId); } catch (_) {}
+      await finishTimelineSeek();
+    });
+
+    // Một số WebView/thiết bị không luôn phát pointerup đúng với input range.
+    // change là fallback chuẩn của <input type=range> sau khi người dùng nhả tay.
+    playbackTimeline?.addEventListener('change', async () => {
+      if (!timelineSeekOwner || !timelineSeekDragging) return;
       await finishTimelineSeek();
     });
 

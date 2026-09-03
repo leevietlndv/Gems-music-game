@@ -1797,6 +1797,10 @@ io.on('connection', (socket) => {
       songAction: getSongActionPayload(),
       playbackSeekLock: getPlaybackSeekLockPayload()
     });
+    // Gửi playbackState riêng ngay sau snapshot để client mới có một kênh
+    // authoritative dành riêng cho timeline. Event này giúp tránh trường hợp
+    // stateUpdate và việc khởi tạo YouTube Player chạy lệch thứ tự trên WebView.
+    socket.emit('playbackState', playbackSnapshot);
     socket.emit('autoPlayMode', {
       mode: autoPlayMode,
       controllerSocketId: autoPlayControllerSocketId,
