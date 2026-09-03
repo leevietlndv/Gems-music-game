@@ -318,13 +318,61 @@
     .vote-button.dislike { background: #d32f2f; }
     .vote-button.active { box-shadow: inset 0 0 0 3px #fff; transform: translateY(-1px); }
     .vote-button:disabled { opacity: 0.45; cursor: not-allowed; }
-    .audio-controls { display:flex; align-items:center; gap:10px; margin-top:10px; padding:10px 12px; background:#182235; border-radius:10px; }
-    .btn-audio-toggle { width:auto; min-width:100px; height:38px; padding:7px 12px; background:#37474f; color:#fff; flex:0 0 auto; }
+    .audio-controls {
+        display: flex;
+        align-items: center;
+        gap: clamp(5px, 2vw, 10px);
+        margin-top: 10px;
+        padding: 10px clamp(7px, 2vw, 12px);
+        background: #182235;
+        border-radius: 10px;
+        box-sizing: border-box;
+        width: 100%;
+        min-width: 0;
+    }
+
+    .btn-audio-toggle {
+        width: auto;
+        min-width: 100px;
+        height: 38px;
+        padding: 7px 12px;
+        background: #37474f;
+        color: #fff;
+        flex: 0 1 auto;
+        min-width: 0;
+    }
     .btn-audio-toggle.enabled { background:#2e7d32; }
-    .volume-icon { font-size:18px; flex:0 0 auto; }
-    .am-luong { display: flex; justify-content: center; align-items: center; height:38px; background-color: #2e7d32; min-width: 50px; border-radius: 10px; }
-    #volumeSlider { flex:1; width: 55%; min-width:80px; accent-color:#00aaff; cursor:pointer; }
-    #volumeValue { font-size:14px; font-weight: 700; color:#ddd; flex:0 0 auto; }
+    .volume-icon {
+    font-size: clamp(16px, 4vw, 18px);
+    flex: 0 0 auto;
+    }
+    .am-luong {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 38px;
+        min-width: 50px;
+        padding: 0 8px;
+        background-color: #2e7d32;
+        border-radius: 10px;
+        flex: 0 0 auto;
+        box-sizing: border-box;
+    }
+
+    #volumeSlider {
+        flex: 1 1 auto;
+        width: auto;
+        min-width: 0;
+        accent-color: #00aaff;
+        cursor: pointer;
+    }
+
+    #volumeValue {
+        font-size: 14px;
+        font-weight: 700;
+        color: #ddd;
+        white-space: nowrap;
+    }
     
     /* Utility class cho admin */
     .admin-only { display: none; }
@@ -370,6 +418,29 @@
         border-radius: 9px;
       }
 
+      .audio-controls {
+        gap: 5px;
+        padding: 8px 6px;
+      }
+
+      .btn-audio-toggle {
+          min-width: 0;
+          padding: 7px 8px;
+          font-size: 13px;
+      }
+
+      .volume-icon {
+          font-size: 16px;
+      }
+
+      .am-luong {
+          min-width: 44px;
+          padding: 0 6px;
+      }
+
+      #volumeValue {
+          font-size: 13px;
+      }
     }
 
   </style>
