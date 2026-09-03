@@ -1749,6 +1749,27 @@ app.post('/api/delete-song', async (req, res) => {
 io.on('connection', (socket) => {
   console.log(`🔌 Socket connected: ${socket.id}`);
 
+  socket.emit('stateUpdate', {
+    isFormOpen,
+    songs,
+    lastWinner,
+    lastAction,
+    health: currentHealth,
+    autoPlayMode,
+    controllerSocketId: autoPlayControllerSocketId,
+    playback: getPlaybackPayload(),
+    songAction: getSongActionPayload()
+  });
+
+  socket.emit('autoPlayMode', {
+    mode: autoPlayMode,
+    controllerSocketId: autoPlayControllerSocketId,
+    playback: getPlaybackPayload()
+  });
+
+  socket.emit('songActionLock', getSongActionPayload());
+  socket.emit('playbackSeekLock', getPlaybackSeekLockPayload());
+
   socket.on('authenticate', (payload = {}) => {
     const initData = payload.initData || '';
     const deviceInfo = payload.deviceInfo || {};
@@ -1779,36 +1800,6 @@ io.on('connection', (socket) => {
       telegramId
     });
 
-    // Gửi snapshot sau khi Telegram đã xác thực, tránh race khi reload.
-    const playbackSnapshot = getPlaybackPayload();
-    socket.emit('stateUpdate', {
-      isFormOpen,
-      songs,
-      lastWinner,
-      lastAction,
-      health: currentHealth,
-      likes: currentLikeCount,
-      dislikes: currentDislikeCount,
-      replacementCountdown,
-      autoPlayMode,
-      controllerSocketId: autoPlayControllerSocketId,
-      online: getOnlineSummary(),
-      playback: playbackSnapshot,
-      songAction: getSongActionPayload(),
-      playbackSeekLock: getPlaybackSeekLockPayload()
-    });
-    // Gửi playbackState riêng ngay sau snapshot để client mới có một kênh
-    // authoritative dành riêng cho timeline. Event này giúp tránh trường hợp
-    // stateUpdate và việc khởi tạo YouTube Player chạy lệch thứ tự trên WebView.
-    socket.emit('playbackState', playbackSnapshot);
-    socket.emit('autoPlayMode', {
-      mode: autoPlayMode,
-      controllerSocketId: autoPlayControllerSocketId,
-      playback: playbackSnapshot
-    });
-    socket.emit('songActionLock', getSongActionPayload());
-    socket.emit('playbackSeekLock', getPlaybackSeekLockPayload());
-
     addOnlineUser(socket, auth.user, deviceInfo);
     broadcastOnlineSummary();
 
@@ -1831,29 +1822,6 @@ io.on('connection', (socket) => {
         console.error('❌ Lỗi lấy vote hiện tại:', error);
       }
     })();
-  });
-
-  socket.on('requestPlaybackState', () => {
-    const authState = socketAuth.get(socket.id);
-    if (!authState?.telegramId) return;
-
-    const playbackSnapshot = getPlaybackPayload();
-    socket.emit('stateUpdate', {
-      isFormOpen,
-      songs,
-      lastWinner,
-      lastAction,
-      health: currentHealth,
-      likes: currentLikeCount,
-      dislikes: currentDislikeCount,
-      replacementCountdown,
-      autoPlayMode,
-      controllerSocketId: autoPlayControllerSocketId,
-      online: getOnlineSummary(),
-      playback: playbackSnapshot,
-      songAction: getSongActionPayload(),
-      playbackSeekLock: getPlaybackSeekLockPayload()
-    });
   });
 
   socket.on('playbackReport', (payload = {}) => {

@@ -362,7 +362,7 @@
     }
     
     .player-wrapper { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px; background: #000; }
-    .player-wrapper iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; pointer-events: auto; }
+    .player-wrapper iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
     .audio-notice { font-size: 12px; padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 4px; font-weight: 600; }
     .audio-notice.unmuted { background: #1b5e20; color: #a5d6a7; }
     .audio-notice.muted { background: #4a148c; color: #e1bee7; }
@@ -928,8 +928,10 @@ function getTelegramUserData() {
     let currentPlayback = { songId: null, status: 'stopped', position: 0, serverTime: 0, version: 0, authoritySocketId: null, startAt: null, controlLockUntil: 0 };
     let pendingPlayback = null;
     let playbackSyncTimer = null;
+    let playbackReconcileTimer = null;
     let playbackSyncBusy = false;
     let playbackTimelineFrame = null;
+    let pendingLoadSeek = null;
 
     // Quyền tua timeline: chỉ Admin mới được kéo. Server cấp lock tạm thời
     // cho đúng một Admin; sau khi nhả, tất cả Admin khác phải chờ thêm 500ms.
@@ -1116,11 +1118,6 @@ function getTelegramUserData() {
 
       // Cập nhật lại danh sách để nút Xóa xuất hiện/biến mất
       updateUI();
-
-      // Xin snapshot authoritative lần nữa sau khi Telegram auth hoàn tất.
-      if (data.authenticated === true) {
-        socket.emit('requestPlaybackState');
-      }
     });
 
     socket.on('stateUpdate', (data) => {
@@ -1543,8 +1540,8 @@ function getTelegramUserData() {
       youtubeApiPlayer = new YT.Player('ytPlayer', {
         playerVars: {
           autoplay: 0,
-          controls: 1,
-          disablekb: 0,
+          controls: 0,
+          disablekb: 1,
           rel: 0,
           playsinline: 1,
           enablejsapi: 1,
@@ -1719,12 +1716,9 @@ function getTelegramUserData() {
     updateAudioControls();
 
     function getEffectiveSound(shouldPlaySound) {
-      // Chỉ thiết bị vừa thực hiện hành động Play/Spin mới được tự động
-      // phát có tiếng. Client vào sau/reload luôn bắt đầu mute để tránh
-      // autoplay có tiếng bị WebView/YouTube chặn. Người dùng vẫn có thể
-      // tự bật âm thanh bằng nút loa.
-      if (shouldPlaySound !== true) return false;
-      return savedAudioPreference === false ? false : true;
+      return savedAudioPreference === null
+        ? shouldPlaySound
+        : savedAudioPreference;
     }
 
     function updateAudioNotice(effectiveSound) {
@@ -1752,57 +1746,51 @@ function getTelegramUserData() {
 
       const effectiveSound = getEffectiveSound(shouldPlaySound);
       const playbackState = normalizePlaybackState(playback || currentPlayback);
-      const loadToken = ++playerLoadToken;
+
+      pendingLoadSeek = {
+        songId: playbackState.songId,
+        version: playbackState.version,
+        videoId,
+        position: getPlaybackTargetPosition(playbackState)
+      };
 
       youtubeApiPlayer.setVolume(savedVolume);
       if (effectiveSound && savedVolume > 0) youtubeApiPlayer.unMute();
       else youtubeApiPlayer.mute();
 
       currentPlayback = playbackState;
+
       const targetPosition = getPlaybackTargetPosition(playbackState);
       const shouldStartPaused = playbackState.status === 'paused';
       const scheduledStart = playbackState.status === 'playing' && Number(playbackState.startAt) > Date.now();
-
-      const seekAuthoritative = () => {
-        if (loadToken !== playerLoadToken) return;
-        if (!isSamePlaybackSong(playbackState.songId)) return;
-        if (timelineSeekDragging) return;
-        try {
-          youtubeApiPlayer.seekTo(getPlaybackTargetPosition(currentPlayback), true);
-        } catch (error) {
-          console.warn('⚠️ Chưa thể seek YouTube:', error);
-        }
-      };
 
       if (scheduledStart) {
         youtubeApiPlayer.cueVideoById(videoId, targetPosition);
         const delay = Math.max(0, Number(playbackState.startAt) - Date.now());
         window.setTimeout(() => {
-          if (loadToken !== playerLoadToken || !isSamePlaybackSong(playbackState.songId)) return;
-          seekAuthoritative();
+          if (!isSamePlaybackSong(playbackState.songId)) return;
+          sendYouTubeCommand('seekTo', [getPlaybackTargetPosition(currentPlayback), true]);
           sendYouTubeCommand('playVideo');
         }, delay);
-      } else if (shouldStartPaused) {
-        // Nếu trạng thái authoritative đang Pause, chỉ cue video; không
-        // cho YouTube tự phát rồi mới pause vì điều đó dễ gây race với
-        // trạng thái playback và autoplay policy của WebView.
-        youtubeApiPlayer.cueVideoById(videoId, targetPosition);
       } else {
         youtubeApiPlayer.loadVideoById(videoId, targetPosition);
-
-        // startSeconds đôi khi bị YouTube bỏ qua lúc iframe vừa reload.
-        // Seek lại vài lần sau khi player đã có media để bảo đảm vào đúng mốc.
-        [100, 500, 1200].forEach((delay) => {
-          window.setTimeout(() => {
-            if (loadToken !== playerLoadToken || !isSamePlaybackSong(playbackState.songId)) return;
-            seekAuthoritative();
-          }, delay);
-        });
-
         window.setTimeout(() => {
-          if (loadToken !== playerLoadToken || !isSamePlaybackSong(playbackState.songId)) return;
-          youtubeApiPlayer.playVideo();
+          if (!pendingLoadSeek) return;
+          if (pendingLoadSeek.songId !== currentPlayback.songId) return;
+          if (pendingLoadSeek.version !== currentPlayback.version) return;
+          try {
+            youtubeApiPlayer.seekTo(getPlaybackTargetPosition(currentPlayback), true);
+            pendingLoadSeek = null;
+          } catch (_) {}
         }, 150);
+        if (shouldStartPaused) {
+          youtubeApiPlayer.pauseVideo();
+        } else {
+          youtubeApiPlayer.playVideo();
+        }
+        // YouTube WebView có thể chưa áp dụng seek/play ngay lập tức.
+        // Retry vài lần để client mới/reload không bị đứng ở 0 giây.
+        scheduleViewerPlaybackReconcile();
       }
 
       updateAudioNotice(effectiveSound && savedVolume > 0);
@@ -2078,16 +2066,25 @@ function getTelegramUserData() {
         const drift = Math.abs(local - target);
         const isLocalAuthority = next.authoritySocketId === socket.id;
 
-        // Không tự tua liên tục trên chính authority. Server đã nhận vị trí
-        // thực tế từ authority; các client khác chỉ hiệu chỉnh khi lệch rõ rệt.
+        // Mọi client, kể cả Admin đang giữ authority, phải áp dụng một
+        // forceSeek do server xác nhận (đặc biệt sau khi Admin vừa kéo slider).
+        // Chỉ bỏ seek tự động của authority khi đây không phải forceSeek.
         if (!timelineSeekDragging && (options.forceSeek === true || (!isLocalAuthority && drift > 2.5))) {
           youtubeApiPlayer.seekTo(target, true);
+          pendingLoadSeek = null;
         }
 
         if (next.status === 'paused') {
           if (eventStateIsPlaying()) youtubeApiPlayer.pauseVideo();
         } else if (next.status === 'playing') {
-          if (eventStateIsPaused()) youtubeApiPlayer.playVideo();
+          const ytState = youtubeApiPlayer.getPlayerState?.();
+          // Client mới/reload đôi khi còn ở UNSTARTED/CUED/PAUSED.
+          // Không chỉ kiểm tra PAUSED, nếu không player có thể đứng im
+          // cho tới khi Admin bấm Pause -> Play lần nữa.
+          if (ytState !== YT.PlayerState.PLAYING &&
+              ytState !== YT.PlayerState.BUFFERING) {
+            youtubeApiPlayer.playVideo();
+          }
         }
       } catch (error) {
         console.warn('⚠️ Không thể đồng bộ timeline:', error);
@@ -2308,20 +2305,6 @@ function getTelegramUserData() {
       if (!acquired || !timelineSeekOwner) return;
 
       const position = Number(playbackTimeline.value) || 0;
-
-      // Kết thúc kéo trước khi commit để forceSeek có thể chạy ngay.
-      timelineSeekDragging = false;
-      updateTimelineSeekUI();
-
-      // Nhảy ngay trên máy Admin.
-      try {
-        if (youtubeApiPlayer && youtubePlayerReady) {
-          youtubeApiPlayer.seekTo(position, true);
-        }
-      } catch (error) {
-        console.warn('⚠️ Không seek cục bộ được:', error);
-      }
-
       await commitTimelineSeek(position);
       await releaseTimelineSeekLock();
       updatePlaybackTimeline();
@@ -2344,13 +2327,6 @@ function getTelegramUserData() {
 
     playbackTimeline?.addEventListener('pointerup', async (event) => {
       try { playbackTimeline.releasePointerCapture?.(event.pointerId); } catch (_) {}
-      await finishTimelineSeek();
-    });
-
-    // Một số WebView/thiết bị không luôn phát pointerup đúng với input range.
-    // change là fallback chuẩn của <input type=range> sau khi người dùng nhả tay.
-    playbackTimeline?.addEventListener('change', async () => {
-      if (!timelineSeekOwner || !timelineSeekDragging) return;
       await finishTimelineSeek();
     });
 
@@ -2420,6 +2396,50 @@ function getTelegramUserData() {
       applyPlaybackState(state);
     });
 
+    // ==================== CLIENT PLAYBACK RECONCILIATION ====================
+    // Client mới/reload không được chờ Admin bấm Pause/Play mới nhận seek.
+    // Server là nguồn thời gian chuẩn; viewer tự kiểm tra drift định kỳ.
+    function reconcilePlaybackForViewer() {
+      if (timelineSeekDragging || timelineSeekCommitBusy) return;
+      if (!youtubeApiPlayer || !youtubePlayerReady) return;
+      if (!currentPlayback.songId || !currentPlayingUrl) return;
+      if (!socket.connected) return;
+      if (currentPlayback.authoritySocketId === socket.id) return;
+      if (currentPlayback.status !== 'playing' && currentPlayback.status !== 'paused') return;
+      if (!isSamePlaybackSong(currentPlayback.songId)) return;
+
+      try {
+        const target = getPlaybackTargetPosition(currentPlayback);
+        const local = Number(youtubeApiPlayer.getCurrentTime?.() || 0);
+        const drift = Math.abs(local - target);
+        const ytState = youtubeApiPlayer.getPlayerState?.();
+
+        // 1.5s đủ lớn để tránh seek liên tục nhưng vẫn sửa nhanh cho user mới.
+        if (drift > 1.5) {
+          youtubeApiPlayer.seekTo(target, true);
+        }
+
+        if (currentPlayback.status === 'playing') {
+          if (ytState !== YT.PlayerState.PLAYING &&
+              ytState !== YT.PlayerState.BUFFERING) {
+            youtubeApiPlayer.playVideo();
+          }
+        } else if (currentPlayback.status === 'paused') {
+          if (ytState === YT.PlayerState.PLAYING) {
+            youtubeApiPlayer.pauseVideo();
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ Reconcile playback viewer thất bại:', error);
+      }
+    }
+
+    function scheduleViewerPlaybackReconcile() {
+      window.setTimeout(reconcilePlaybackForViewer, 250);
+      window.setTimeout(reconcilePlaybackForViewer, 1000);
+      window.setTimeout(reconcilePlaybackForViewer, 2500);
+    }
+
     function reportPlaybackPosition() {
       if (playbackSyncBusy || timelineSeekDragging || timelineSeekCommitBusy || !youtubeApiPlayer || !youtubePlayerReady) return;
       if (!currentPlayback.songId || !currentPlayingUrl) return;
@@ -2443,14 +2463,29 @@ function getTelegramUserData() {
     }
 
     playbackSyncTimer = window.setInterval(reportPlaybackPosition, 2000);
+    // Tất cả viewer (trừ authority) tự kiểm tra và sửa lệch thời gian.
+    playbackReconcileTimer = window.setInterval(reconcilePlaybackForViewer, 1000);
 
     function onYouTubePlayerStateChange(event) {
       console.log('🎬 YouTube state:', event.data);
 
+      if (typeof YT !== 'undefined' &&
+          (event.data === YT.PlayerState.CUED || event.data === YT.PlayerState.BUFFERING) &&
+          pendingLoadSeek &&
+          pendingLoadSeek.songId === currentPlayback.songId &&
+          pendingLoadSeek.version === currentPlayback.version) {
+        try {
+          youtubeApiPlayer.seekTo(getPlaybackTargetPosition(currentPlayback), true);
+          pendingLoadSeek = null;
+        } catch (_) {}
+      }
+
       if (typeof YT !== 'undefined' && event.data === YT.PlayerState.PLAYING) {
         reportPlaybackPosition();
+        reconcilePlaybackForViewer();
       } else if (typeof YT !== 'undefined' && event.data === YT.PlayerState.PAUSED) {
         reportPlaybackPosition();
+        reconcilePlaybackForViewer();
       }
 
       if (
