@@ -23,6 +23,132 @@
     button { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s, opacity 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
     .btn-submit { background: #0088cc; color: white; }
     .btn-submit:disabled { background: #4a5568; opacity: 0.6; cursor: not-allowed; }
+
+    /* ==================== ONLINE USERS BAR ==================== */
+    .online-bar {
+      width: 100%;
+      max-width: 480px;
+      min-width: 0;
+      min-height: 42px;
+      margin: -4px 0 16px;
+      padding: 8px 10px 8px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      background: #182235;
+      border: 1px solid #2e3a52;
+      border-radius: 10px;
+      box-sizing: border-box;
+    }
+
+    .online-summary {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      color: #ddd;
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #onlineUserCount {
+      color: #64b5f6;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .online-details-toggle {
+      display: none;
+      flex: 0 0 auto;
+      width: 30px;
+      min-width: 30px;
+      height: 30px;
+      padding: 0;
+      border-radius: 7px;
+      background: #2b384e;
+      color: #ddd;
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .online-toggle-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      line-height: 1;
+      transform: translateY(-1px);
+    }
+
+    .online-details-toggle:not(.admin-only) {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .online-details {
+      width: 100%;
+      max-width: 480px;
+      margin: -8px 0 16px;
+      padding: 10px 12px;
+      display: none;
+      background: #202b3f;
+      border: 1px solid #34415a;
+      border-radius: 10px;
+      box-sizing: border-box;
+    }
+
+    .online-details.open {
+      display: block;
+    }
+
+    .online-detail-title {
+      color: #ffca28;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .online-user-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    .online-user-chip {
+      max-width: 100%;
+      padding: 5px 8px;
+      border-radius: 7px;
+      background: #182235;
+      color: #64b5f6;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .online-connections {
+      color: #ddd;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .online-connections strong {
+      color: #fff;
+    }
+
+    .online-empty {
+      color: #888;
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
     .wheel-container { position: relative; width: 300px; height: 300px; margin: 10px auto 20px auto; }
     .pointer { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 12px solid transparent; border-right: 12px solid transparent; border-top: 20px solid #ffcc00; z-index: 10; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); }
     canvas { width: 300px; height: 300px; border-radius: 50%; box-shadow: 0 0 15px rgba(0,0,0,0.5); }
@@ -37,28 +163,13 @@
       color: #ffca28;
       font-weight: 700;
     }
-    .btn-audio-toggle {
-        width: auto;
-        min-width: 0;
-        max-width: 140px;
-
-        height: 38px;
-
-        padding: 7px clamp(7px, 2vw, 12px);
-
-        background: #37474f;
-        color: #fff;
-
-        flex: 0 1 auto;
-
-        font-size: clamp(12px, 3.5vw, 15px);
-        line-height: 1;
-
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: clip;
-
-        box-sizing: border-box;
+    .admin-actions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: clamp(7px, 2vw, 10px);
+      margin-bottom: 16px;
+      width: 100%;
+      max-width: 480px;
     }
 
     .btn-auto-play {
@@ -333,77 +444,102 @@
     .vote-button.dislike { background: #d32f2f; }
     .vote-button.active { box-shadow: inset 0 0 0 3px #fff; transform: translateY(-1px); }
     .vote-button:disabled { opacity: 0.45; cursor: not-allowed; }
-    
-    ..audio-controls {
-        display: flex;
-        align-items: center;
-
-        gap: clamp(5px, 2vw, 10px);
-
-        margin-top: 10px;
-
-        padding: 10px clamp(6px, 2vw, 12px);
-
-        background: #182235;
-        border-radius: 10px;
-
-        width: 100%;
-        min-width: 0;
-
-        box-sizing: border-box;
-        overflow: hidden;
+    .audio-controls {
+      display: flex;
+      align-items: center;
+      gap: clamp(5px, 2vw, 10px);
+      margin-top: 10px;
+      padding: 10px clamp(6px, 2vw, 12px);
+      background: #182235;
+      border-radius: 10px;
+      width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+      overflow: hidden;
     }
 
     .btn-audio-toggle {
-        width: auto;
-        min-width: 100px;
-        height: 38px;
-        padding: 7px 12px;
-        background: #37474f;
-        color: #fff;
-        flex: 0 1 auto;
-        min-width: 0;
+      width: auto;
+      min-width: 0;
+      max-width: 140px;
+      height: 38px;
+      padding: 7px clamp(7px, 2vw, 12px);
+      background: #37474f;
+      color: #fff;
+      flex: 0 1 auto;
+      font-size: clamp(12px, 3.5vw, 15px);
+      line-height: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      box-sizing: border-box;
     }
-    .btn-audio-toggle.enabled { background:#2e7d32; }
+
+    .btn-audio-toggle.enabled { background: #2e7d32; }
+
     .volume-icon {
-    font-size: clamp(16px, 4vw, 18px);
-    flex: 0 0 auto;
+      font-size: clamp(16px, 4vw, 18px);
+      flex: 0 0 auto;
+      line-height: 1;
     }
+
     .am-luong {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-
-        height: 38px;
-
-        min-width: 44px;
-        padding: 0 7px;
-
-        background-color: #2e7d32;
-        border-radius: 10px;
-
-        flex: 0 0 auto;
-        box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 38px;
+      min-width: 44px;
+      padding: 0 7px;
+      background-color: #2e7d32;
+      border-radius: 10px;
+      flex: 0 0 auto;
+      box-sizing: border-box;
     }
 
     #volumeSlider {
-        flex: 1 1 auto;
-
-        width: auto;
-        min-width: 0;
-
-        accent-color: #00aaff;
-        cursor: pointer;
+      flex: 1 1 auto;
+      width: auto;
+      min-width: 0;
+      accent-color: #00aaff;
+      cursor: pointer;
     }
 
     #volumeValue {
-        font-size: clamp(12px, 3.5vw, 14px);
-        font-weight: 700;
-        color: #ddd;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 24px;
+      font-size: clamp(12px, 3.5vw, 14px);
+      font-weight: 700;
+      color: #ddd;
+      line-height: 1;
+      white-space: nowrap;
+    }
 
-        flex: 0 0 auto;
+    @media (max-width: 380px) {
+      .audio-controls {
+        gap: 5px;
+        padding: 8px 6px;
+      }
 
-        white-space: nowrap;
+      .btn-audio-toggle {
+        height: 36px;
+        padding: 6px 7px;
+        font-size: 12px;
+      }
+
+      .volume-icon {
+        font-size: 16px;
+      }
+
+      .am-luong {
+        height: 36px;
+        min-width: 42px;
+        padding: 0 5px;
+      }
+
+      #volumeValue {
+        font-size: 12px;
+      }
     }
     
     /* Utility class cho admin */
@@ -450,31 +586,6 @@
         border-radius: 9px;
       }
 
-      .audio-controls {
-        gap: 5px;
-        padding: 8px 6px;
-      }
-
-      .btn-audio-toggle {
-          height: 36px;
-          padding: 6px 7px;
-
-          font-size: 12px;
-      }
-
-      .volume-icon {
-          font-size: 16px;
-      }
-
-      .am-luong {
-          height: 36px;
-          min-width: 42px;
-          padding: 0 5px;
-      }
-
-      #volumeValue {
-          font-size: 12px;
-      }
     }
 
   </style>
@@ -491,6 +602,32 @@
     <div class="input-group">
       <input type="text" id="songUrl" placeholder="https://www.youtube.com/watch?v=..." />
       <button id="btnSubmit" class="btn-submit">🚀 Gửi bài hát</button>
+    </div>
+  </div>
+
+  <div id="onlineBar" class="online-bar">
+    <div class="online-summary">
+      <span>🟢</span>
+      <span>Đang online:</span>
+      <strong id="onlineUserCount">0</strong>
+      <span>user</span>
+    </div>
+
+    <button
+      id="onlineDetailsToggle"
+      class="online-details-toggle admin-only"
+      type="button"
+      title="Xem chi tiết người đang online"
+      aria-expanded="false"
+      aria-controls="onlineDetails"
+    ><span id="onlineToggleIcon" class="online-toggle-icon" aria-hidden="true">▼</span></button>
+  </div>
+
+  <div id="onlineDetails" class="online-details admin-only">
+    <div class="online-detail-title">👥 Người dùng đang online</div>
+    <div id="onlineUserList" class="online-user-list"></div>
+    <div id="onlineConnectionDetails" class="online-connections">
+      📱 Connections: <strong>0</strong>
     </div>
   </div>
 
@@ -614,6 +751,11 @@ function getTelegramUserData() {
     const userData = getTelegramUserData();
     const socket = io();
 
+    const deviceInfo = {
+      platform: tg?.platform || '',
+      userAgent: navigator.userAgent || ''
+    };
+
     const statusBadge = document.getElementById('statusBadge');
     const songUrlInput = document.getElementById('songUrl');
     const btnSubmit = document.getElementById('btnSubmit');
@@ -641,6 +783,12 @@ function getTelegramUserData() {
     const volumeSlider = document.getElementById('volumeSlider');
     const volumeValue = document.getElementById('volumeValue');
     const volumeIcon = document.getElementById('volumeIcon');
+    const onlineUserCount = document.getElementById('onlineUserCount');
+    const onlineDetailsToggle = document.getElementById('onlineDetailsToggle');
+    const onlineToggleIcon = document.getElementById('onlineToggleIcon');
+    const onlineDetails = document.getElementById('onlineDetails');
+    const onlineUserList = document.getElementById('onlineUserList');
+    const onlineConnectionDetails = document.getElementById('onlineConnectionDetails');
 
     const MUSIC_PREF_KEY = 'gemsMusicAudioPreference';
     const VOLUME_PREF_KEY = 'gemsMusicVolume';
@@ -707,13 +855,85 @@ function getTelegramUserData() {
       return (match && match[1]) ? match[1] : null;
     }
 
+    function updateOnlineSummary(summary = {}) {
+      const count = Number(summary.users) || 0;
+      if (onlineUserCount) {
+        onlineUserCount.textContent = String(count);
+      }
+    }
+
+    function renderOnlineDetails(payload = {}) {
+      if (!window.isAdmin) return;
+
+      const users = Array.isArray(payload.users) ? payload.users : [];
+      const summary = payload.summary || {};
+      const connections = Number(summary.connections) || 0;
+      const devices = summary.devices || {};
+
+      if (onlineUserList) {
+        if (users.length === 0) {
+          onlineUserList.innerHTML = '<div class="online-empty">Không có user nào đang online.</div>';
+        } else {
+          onlineUserList.innerHTML = users.map(user => {
+            const name = escapeHtml(user.name || 'Người dùng');
+            const connectionCount = Number(user.connections) || 0;
+            return `<span class="online-user-chip" title="${name}">${name}${connectionCount > 1 ? ` · ${connectionCount} connections` : ''}</span>`;
+          }).join('');
+        }
+      }
+
+      if (onlineConnectionDetails) {
+        onlineConnectionDetails.innerHTML = `
+          📱 Connections: <strong>${connections}</strong><br>
+          ├── 📱 Điện thoại: <strong>${Number(devices.phone) || 0}</strong><br>
+          ├── 💻 Máy tính: <strong>${Number(devices.computer) || 0}</strong><br>
+          └── 📲 Tablet: <strong>${Number(devices.tablet) || 0}</strong>
+        `;
+      }
+    }
+
+    function requestOnlineDetails() {
+      if (!window.isAdmin || !socket.connected) return;
+      socket.emit('requestOnlineDetails');
+    }
+
+    onlineDetailsToggle?.addEventListener('click', () => {
+      if (!window.isAdmin) return;
+
+      const open = onlineDetails?.classList.toggle('open') === true;
+      onlineDetailsToggle.setAttribute('aria-expanded', String(open));
+
+      if (onlineToggleIcon) {
+        onlineToggleIcon.textContent = open ? '▲' : '▼';
+      }
+
+      if (open) {
+        requestOnlineDetails();
+      }
+    });
+
+    socket.on('onlineUsers', (summary) => {
+      updateOnlineSummary(summary);
+
+      // Nếu Admin đang mở bảng chi tiết, cập nhật ngay khi có người
+      // vào/ra hoặc đổi số connection.
+      if (window.isAdmin && onlineDetails?.classList.contains('open')) {
+        requestOnlineDetails();
+      }
+    });
+
+    socket.on('onlineDetails', (payload) => {
+      renderOnlineDetails(payload);
+    });
+
     // Quản lý trạng thái socket
     socket.on('connect', () => {
       console.log('🔌 Socket connected:', socket.id);
       console.log('🔑 Sending Telegram initData, length:', telegramInitData.length);
 
       socket.emit('authenticate', {
-        initData: telegramInitData
+        initData: telegramInitData,
+        deviceInfo
       });
     });
 
@@ -732,6 +952,21 @@ function getTelegramUserData() {
 
       // Lưu trạng thái Admin để updateUI() biết có hiện nút Xóa hay không
       window.isAdmin = data.isAdmin === true;
+
+      if (onlineDetailsToggle) {
+        onlineDetailsToggle.classList.toggle('admin-only', !window.isAdmin);
+      }
+      if (onlineDetails) {
+        onlineDetails.classList.toggle('admin-only', !window.isAdmin);
+        if (!window.isAdmin) {
+          onlineDetails.classList.remove('open');
+          onlineDetailsToggle?.setAttribute('aria-expanded', 'false');
+          if (onlineToggleIcon) onlineToggleIcon.textContent = '▼';
+        }
+      }
+      if (window.isAdmin && onlineDetails?.classList.contains('open')) {
+        requestOnlineDetails();
+      }
 
       // Đồng bộ lại quyền Controller sau khi trạng thái Admin được xác thực.
       // Điều này tránh trường hợp event autoPlayMode đến trước adminStatus.
@@ -758,6 +993,7 @@ function getTelegramUserData() {
       currentLikeCount = Number(data.likes) || 0;
       currentDislikeCount = Number(data.dislikes) || 0;
       replacementCountdown = Number.isFinite(Number(data.replacementCountdown)) ? Number(data.replacementCountdown) : null;
+      updateOnlineSummary(data.online || {});
       updateHealth(typeof data.health === 'number' ? data.health : 5);
 
       if (typeof data.autoPlayMode !== 'undefined') {

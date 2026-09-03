@@ -218,6 +218,155 @@ let replacementCountdown = null;
 let replacementTimer = null;
 let replacementInProgress = false;
 
+// ==================== ONLINE USERS / CONNECTIONS ====================
+// Đếm user Telegram duy nhất, đồng thời theo dõi số socket đang kết nối.
+// Một Telegram user mở nhiều thiết bị vẫn chỉ tính là 1 user online.
+const onlineUsers = new Map();
+const socketPresence = new Map();
+const socketAuth = new Map();
+
+function detectDeviceType(deviceInfo = {}) {
+  const platform = String(deviceInfo.platform || '').toLowerCase();
+  const userAgent = String(deviceInfo.userAgent || '').toLowerCase();
+
+  // Tablet: iPad hoặc Android không có chuỗi "mobile".
+  if (
+    userAgent.includes('ipad') ||
+    platform === 'ipad' ||
+    (userAgent.includes('android') && !userAgent.includes('mobile'))
+  ) {
+    return 'tablet';
+  }
+
+  // Máy tính: Telegram Desktop hoặc trình duyệt desktop.
+  if (
+    ['tdesktop', 'macos', 'windows', 'linux'].includes(platform) ||
+    userAgent.includes('windows nt') ||
+    userAgent.includes('macintosh') ||
+    userAgent.includes('x11') ||
+    (userAgent.includes('linux') && !userAgent.includes('android'))
+  ) {
+    return 'computer';
+  }
+
+  // Còn lại ưu tiên coi là điện thoại.
+  return 'phone';
+}
+
+function addOnlineUser(socket, authUser, deviceInfo = {}) {
+  const telegramId = String(authUser.id);
+  const userName =
+    [authUser.first_name, authUser.last_name]
+      .filter(Boolean)
+      .join(' ')
+      .trim() ||
+    authUser.username ||
+    'Người dùng';
+
+  // Nếu socket này từng đăng nhập user khác, gỡ presence cũ trước.
+  removeOnlineUser(socket.id, false);
+
+  let entry = onlineUsers.get(telegramId);
+  if (!entry) {
+    entry = {
+      telegramId,
+      name: userName,
+      connections: new Map()
+    };
+    onlineUsers.set(telegramId, entry);
+  } else {
+    entry.name = userName;
+  }
+
+  entry.connections.set(socket.id, {
+    device: detectDeviceType(deviceInfo)
+  });
+
+  socketPresence.set(socket.id, telegramId);
+  socketAuth.set(socket.id, {
+    telegramId,
+    isAdmin: isAdmin(telegramId)
+  });
+}
+
+function removeOnlineUser(socketId, shouldBroadcast = true) {
+  const telegramId = socketPresence.get(socketId);
+  if (!telegramId) {
+    socketAuth.delete(socketId);
+    return;
+  }
+
+  const entry = onlineUsers.get(telegramId);
+  if (entry) {
+    entry.connections.delete(socketId);
+    if (entry.connections.size === 0) {
+      onlineUsers.delete(telegramId);
+    }
+  }
+
+  socketPresence.delete(socketId);
+  socketAuth.delete(socketId);
+
+  if (shouldBroadcast) {
+    broadcastOnlineSummary();
+  }
+}
+
+function getOnlineSummary() {
+  const devices = {
+    phone: 0,
+    computer: 0,
+    tablet: 0
+  };
+
+  let connections = 0;
+
+  for (const entry of onlineUsers.values()) {
+    for (const connection of entry.connections.values()) {
+      connections += 1;
+      const type = connection.device;
+      if (Object.prototype.hasOwnProperty.call(devices, type)) {
+        devices[type] += 1;
+      }
+    }
+  }
+
+  return {
+    users: onlineUsers.size,
+    connections,
+    devices
+  };
+}
+
+function broadcastOnlineSummary() {
+  io.emit('onlineUsers', getOnlineSummary());
+}
+
+function getOnlineDetails() {
+  return Array.from(onlineUsers.values())
+    .map(entry => {
+      const devices = {
+        phone: 0,
+        computer: 0,
+        tablet: 0
+      };
+
+      for (const connection of entry.connections.values()) {
+        if (Object.prototype.hasOwnProperty.call(devices, connection.device)) {
+          devices[connection.device] += 1;
+        }
+      }
+
+      return {
+        telegramId: entry.telegramId,
+        name: entry.name,
+        connections: entry.connections.size,
+        devices
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+}
+
 // Khóa xử lý vote để các lượt bấm đồng thời được xử lý tuần tự.
 let voteQueue = Promise.resolve();
 
@@ -642,7 +791,8 @@ function broadcastState() {
     dislikes: currentDislikeCount,
     replacementCountdown,
     autoPlayMode,
-    controllerSocketId: autoPlayControllerSocketId
+    controllerSocketId: autoPlayControllerSocketId,
+    online: getOnlineSummary()
   });
 }
 
@@ -1245,6 +1395,7 @@ io.on('connection', (socket) => {
 
   socket.on('authenticate', (payload = {}) => {
     const initData = payload.initData || '';
+    const deviceInfo = payload.deviceInfo || {};
     console.log(
       `🔑 Authenticate received: socket=${socket.id}, initDataLength=${initData.length}`
     );
@@ -1272,6 +1423,9 @@ io.on('connection', (socket) => {
       telegramId
     });
 
+    addOnlineUser(socket, auth.user, deviceInfo);
+    broadcastOnlineSummary();
+
     (async () => {
       if (!lastWinner) {
         socket.emit('songHealth', { songId: null, health: 5, likes: 0, dislikes: 0, replacementCountdown: null, userVote: 0 });
@@ -1293,8 +1447,23 @@ io.on('connection', (socket) => {
     })();
   });
 
+  socket.on('requestOnlineDetails', () => {
+    const authState = socketAuth.get(socket.id);
+
+    if (!authState?.isAdmin) {
+      return;
+    }
+
+    socket.emit('onlineDetails', {
+      users: getOnlineDetails(),
+      summary: getOnlineSummary()
+    });
+  });
+
   socket.on('disconnect', (reason) => {
     console.log(`🔌 Socket disconnected: ${socket.id} | ${reason}`);
+
+    removeOnlineUser(socket.id, true);
 
     if (socket.id === autoPlayControllerSocketId) {
       setAutoPlayState(0);
