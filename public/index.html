@@ -362,7 +362,7 @@
     }
     
     .player-wrapper { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px; background: #000; }
-    .player-wrapper iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; pointer-events: none; }
+    .player-wrapper iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; pointer-events: auto; }
     .audio-notice { font-size: 12px; padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 4px; font-weight: 600; }
     .audio-notice.unmuted { background: #1b5e20; color: #a5d6a7; }
     .audio-notice.muted { background: #4a148c; color: #e1bee7; }
@@ -1543,8 +1543,8 @@ function getTelegramUserData() {
       youtubeApiPlayer = new YT.Player('ytPlayer', {
         playerVars: {
           autoplay: 0,
-          controls: 0,
-          disablekb: 1,
+          controls: 1,
+          disablekb: 0,
           rel: 0,
           playsinline: 1,
           enablejsapi: 1,
