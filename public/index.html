@@ -467,10 +467,30 @@
       accent-color: #00aaff;
       cursor: default;
       pointer-events: none;
+      opacity: 0.72;
+    }
+
+    #playbackTimeline.admin-seek-enabled {
+      pointer-events: auto;
+      cursor: grab;
+      opacity: 1;
+    }
+
+    #playbackTimeline.admin-seek-enabled:active {
+      cursor: grabbing;
+    }
+
+    #playbackTimeline.seek-locked {
+      opacity: 0.38;
+      cursor: not-allowed;
     }
 
     #playbackTimeline::-webkit-slider-thumb {
       cursor: default;
+    }
+
+    #playbackTimeline.admin-seek-enabled::-webkit-slider-thumb {
+      cursor: grab;
     }
 
     .playback-time {
@@ -754,7 +774,7 @@
 
     <div class="playback-timeline" aria-label="Tiến trình bài hát">
       <div class="playback-timeline-row">
-        <input id="playbackTimeline" type="range" min="0" max="0" value="0" step="0.1" tabindex="-1" aria-label="Tiến trình video">
+        <input id="playbackTimeline" type="range" min="0" max="0" value="0" step="0.1" aria-label="Tiến trình video">
         <span id="playbackTime" class="playback-time">00:00 / 00:00</span>
       </div>
     </div>
@@ -910,6 +930,13 @@ function getTelegramUserData() {
     let playbackSyncTimer = null;
     let playbackSyncBusy = false;
     let playbackTimelineFrame = null;
+
+    // Quyền tua timeline: chỉ Admin mới được kéo. Server cấp lock tạm thời
+    // cho đúng một Admin; sau khi nhả, tất cả Admin khác phải chờ thêm 500ms.
+    let timelineSeekLock = { active: false, socketId: null, until: 0, token: 0 };
+    let timelineSeekOwner = false;
+    let timelineSeekDragging = false;
+    let timelineSeekCommitBusy = false;
 
     function flushYouTubeApiCallbacks() {
       youtubeApiReady = true;
@@ -1102,6 +1129,9 @@ function getTelegramUserData() {
       updateHealth(typeof data.health === 'number' ? data.health : 5);
       if (data.playback) {
         applyPlaybackState(data.playback, { fromState: true });
+      }
+      if (data.playbackSeekLock) {
+        applyTimelineSeekLock(data.playbackSeekLock);
       }
 
       if (data.songAction) {
@@ -1989,6 +2019,16 @@ function getTelegramUserData() {
       return Math.max(0, position);
     }
 
+    function eventStateIsPlaying() {
+      return typeof YT !== 'undefined' && youtubeApiPlayer &&
+        youtubeApiPlayer.getPlayerState?.() === YT.PlayerState.PLAYING;
+    }
+
+    function eventStateIsPaused() {
+      return typeof YT !== 'undefined' && youtubeApiPlayer &&
+        youtubeApiPlayer.getPlayerState?.() === YT.PlayerState.PAUSED;
+    }
+
     function applyPlaybackState(state, options = {}) {
       const next = normalizePlaybackState(state);
       currentPlayback = next;
@@ -2004,15 +2044,18 @@ function getTelegramUserData() {
       try {
         const local = Number(youtubeApiPlayer.getCurrentTime?.() || 0);
         const drift = Math.abs(local - target);
+        const isLocalAuthority = next.authoritySocketId === socket.id;
 
-        if (drift > 1.25 || options.forceSeek) {
+        // Không tự tua liên tục trên chính authority. Server đã nhận vị trí
+        // thực tế từ authority; các client khác chỉ hiệu chỉnh khi lệch rõ rệt.
+        if (!timelineSeekDragging && !isLocalAuthority && (drift > 2.5 || options.forceSeek)) {
           youtubeApiPlayer.seekTo(target, true);
         }
 
         if (next.status === 'paused') {
-          youtubeApiPlayer.pauseVideo();
+          if (eventStateIsPlaying()) youtubeApiPlayer.pauseVideo();
         } else if (next.status === 'playing') {
-          youtubeApiPlayer.playVideo();
+          if (eventStateIsPaused()) youtubeApiPlayer.playVideo();
         }
       } catch (error) {
         console.warn('⚠️ Không thể đồng bộ timeline:', error);
@@ -2035,7 +2078,9 @@ function getTelegramUserData() {
       if (!playbackTimeline || !playbackTime) return;
 
       let duration = 0;
-      let position = getPlaybackTargetPosition(currentPlayback);
+      let position = timelineSeekDragging
+        ? Number(playbackTimeline.value) || 0
+        : getPlaybackTargetPosition(currentPlayback);
 
       try {
         if (youtubeApiPlayer && youtubePlayerReady) {
@@ -2044,7 +2089,7 @@ function getTelegramUserData() {
 
           // Dùng thời gian thực của YouTube để thanh chạy mượt.
           // Khi player chưa sẵn sàng, dùng vị trí authoritative từ server.
-          if (currentPlayback.status === 'playing' || currentPlayback.status === 'paused') {
+          if (!timelineSeekDragging && (currentPlayback.status === 'playing' || currentPlayback.status === 'paused')) {
             position = Math.max(0, localPosition);
           }
         }
@@ -2060,7 +2105,9 @@ function getTelegramUserData() {
         position = 0;
       }
 
-      playbackTimeline.value = String(position);
+      if (!timelineSeekDragging) {
+        playbackTimeline.value = String(position);
+      }
       playbackTime.textContent = `${formatPlaybackTime(position)} / ${formatPlaybackTime(duration)}`;
     }
 
@@ -2077,6 +2124,193 @@ function getTelegramUserData() {
 
     startPlaybackTimelineLoop();
 
+    function updateTimelineSeekUI() {
+      if (!playbackTimeline) return;
+
+      const now = Date.now();
+      const locked = timelineSeekLock.active && timelineSeekLock.until > now;
+      const canSeek = isAdmin && !!currentPlayingUrl && !songActionLock.active && !isSpinning;
+      const owner = canSeek && timelineSeekOwner && timelineSeekLock.socketId === socket.id;
+
+      playbackTimeline.disabled = !canSeek || (locked && !owner);
+      playbackTimeline.classList.toggle('admin-seek-enabled', canSeek && (!locked || owner));
+      playbackTimeline.classList.toggle('seek-locked', locked && !owner);
+      playbackTimeline.title = !isAdmin
+        ? 'Chỉ Admin được tua'
+        : (locked && !owner
+          ? 'Admin khác đang tua — vui lòng chờ'
+          : (canSeek ? 'Kéo để tua video' : 'Chưa thể tua')) ;
+    }
+
+    function applyTimelineSeekLock(payload = {}) {
+      const token = Number(payload.token) || 0;
+      if (token < Number(timelineSeekLock.token || 0)) return;
+
+      timelineSeekLock = {
+        active: payload.active === true,
+        socketId: payload.socketId || null,
+        until: Number(payload.until) || 0,
+        token
+      };
+
+      if (timelineSeekLock.socketId !== socket.id) {
+        timelineSeekOwner = false;
+        if (timelineSeekDragging) timelineSeekDragging = false;
+      }
+
+      updateTimelineSeekUI();
+      if (timelineSeekLock.active && timelineSeekLock.until > Date.now()) {
+        window.setTimeout(() => {
+          if (Date.now() >= timelineSeekLock.until) {
+            timelineSeekLock.active = false;
+            timelineSeekLock.socketId = null;
+            updateTimelineSeekUI();
+          }
+        }, Math.max(0, timelineSeekLock.until - Date.now()) + 10);
+      }
+    }
+
+    async function claimTimelineSeekLock() {
+      if (!isAdmin || !currentPlayingUrl || !socket.connected) return false;
+
+      try {
+        const res = await fetch('/api/playback-seek-lock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'acquire',
+            initData: telegramInitData,
+            socketId: socket.id,
+            expectedSongId: lastWinnerId()
+          })
+        });
+        const data = await res.json();
+        if (data.lock) applyTimelineSeekLock(data.lock);
+        if (!data.success) return false;
+        timelineSeekOwner = true;
+        updateTimelineSeekUI();
+        return true;
+      } catch (error) {
+        console.error('❌ Không thể chiếm quyền tua timeline:', error);
+        return false;
+      }
+    }
+
+    async function commitTimelineSeek(position) {
+      if (!timelineSeekOwner || timelineSeekCommitBusy || !isAdmin || !currentPlayingUrl) return false;
+
+      timelineSeekCommitBusy = true;
+      try {
+        const res = await fetch('/api/playback-seek', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            initData: telegramInitData,
+            socketId: socket.id,
+            expectedSongId: lastWinnerId(),
+            position: Number(position) || 0,
+            lockToken: timelineSeekLock.token
+          })
+        });
+        const data = await res.json();
+        if (data.lock) applyTimelineSeekLock(data.lock);
+        if (data.playback) applyPlaybackState(data.playback, { forceSeek: true });
+        return data.success === true;
+      } catch (error) {
+        console.error('❌ Lỗi tua timeline:', error);
+        return false;
+      } finally {
+        timelineSeekCommitBusy = false;
+      }
+    }
+
+    async function releaseTimelineSeekLock() {
+      if (!timelineSeekOwner || !socket.connected) return;
+
+      try {
+        const res = await fetch('/api/playback-seek-lock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'release',
+            initData: telegramInitData,
+            socketId: socket.id,
+            lockToken: timelineSeekLock.token
+          })
+        });
+        const data = await res.json();
+        if (data.lock) applyTimelineSeekLock(data.lock);
+      } catch (error) {
+        console.warn('⚠️ Không thể nhả quyền tua timeline:', error);
+      } finally {
+        timelineSeekOwner = false;
+        timelineSeekDragging = false;
+        updateTimelineSeekUI();
+      }
+    }
+
+    let timelineSeekAcquirePromise = null;
+
+    async function beginTimelineSeek() {
+      if (!isAdmin || !currentPlayingUrl || timelineSeekDragging) return false;
+      if (timelineSeekAcquirePromise) return timelineSeekAcquirePromise;
+
+      timelineSeekAcquirePromise = (async () => {
+        const acquired = await claimTimelineSeekLock();
+        if (!acquired) return false;
+        timelineSeekDragging = true;
+        updateTimelineSeekUI();
+        updatePlaybackTimeline();
+        return true;
+      })();
+
+      try {
+        return await timelineSeekAcquirePromise;
+      } finally {
+        timelineSeekAcquirePromise = null;
+      }
+    }
+
+    async function finishTimelineSeek() {
+      const acquired = timelineSeekOwner || await beginTimelineSeek();
+      if (!acquired || !timelineSeekOwner) return;
+
+      const position = Number(playbackTimeline.value) || 0;
+      await commitTimelineSeek(position);
+      await releaseTimelineSeekLock();
+      updatePlaybackTimeline();
+    }
+
+    playbackTimeline?.addEventListener('pointerdown', async (event) => {
+      if (!isAdmin || playbackTimeline.disabled) return;
+      event.preventDefault();
+      try { playbackTimeline.setPointerCapture?.(event.pointerId); } catch (_) {}
+      await beginTimelineSeek();
+    });
+
+    playbackTimeline?.addEventListener('input', () => {
+      if (!timelineSeekOwner) return;
+      // Chỉ thay đổi preview cục bộ; server chỉ nhận mốc cuối khi nhả tay.
+      const duration = Number(playbackTimeline.max) || 0;
+      const position = Math.max(0, Math.min(Number(playbackTimeline.value) || 0, duration || Infinity));
+      playbackTime.textContent = `${formatPlaybackTime(position)} / ${formatPlaybackTime(duration)}`;
+    });
+
+    playbackTimeline?.addEventListener('pointerup', async (event) => {
+      try { playbackTimeline.releasePointerCapture?.(event.pointerId); } catch (_) {}
+      await finishTimelineSeek();
+    });
+
+    playbackTimeline?.addEventListener('pointercancel', async () => {
+      if (!timelineSeekOwner) return;
+      await releaseTimelineSeekLock();
+      updatePlaybackTimeline();
+    });
+
+    socket.on('playbackSeekLock', (payload) => {
+      applyTimelineSeekLock(payload || {});
+    });
+
     function updatePlaybackToggle() {
       if (!btnPlaybackToggle) return;
 
@@ -2086,6 +2320,7 @@ function getTelegramUserData() {
       btnPlaybackToggle.setAttribute('title', isAdmin ? (isPlaying ? 'Tạm dừng cho tất cả' : 'Phát cho tất cả') : 'Chỉ Admin được điều khiển');
       btnPlaybackToggle.disabled = !isAdmin || !currentPlayingUrl;
       btnPlaybackToggle.classList.toggle('admin-enabled', isAdmin && !!currentPlayingUrl);
+      updateTimelineSeekUI();
       updatePlaybackTimeline();
     }
 
@@ -2133,7 +2368,7 @@ function getTelegramUserData() {
     });
 
     function reportPlaybackPosition() {
-      if (playbackSyncBusy || !youtubeApiPlayer || !youtubePlayerReady) return;
+      if (playbackSyncBusy || timelineSeekDragging || timelineSeekCommitBusy || !youtubeApiPlayer || !youtubePlayerReady) return;
       if (!currentPlayback.songId || !currentPlayingUrl) return;
       if (currentPlayback.authoritySocketId !== socket.id) return;
       if (currentPlayback.status !== 'playing' && currentPlayback.status !== 'paused') return;

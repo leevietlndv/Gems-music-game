@@ -227,6 +227,9 @@ let playbackState = {
   controlLockSocketId: null
 };
 let playbackControlQueue = Promise.resolve();
+let playbackSeekLock = { active: false, socketId: null, until: 0, token: 0 };
+let playbackSeekReleaseTimer = null;
+let playbackSeekSuppressAuthorityUntil = 0;
 
 // ==================== GLOBAL SONG ACTION LOCK ====================
 // Mọi thao tác làm thay đổi bài đang phát phải đi qua cùng một lock:
@@ -939,6 +942,9 @@ function setPlaybackForNewSong(song, authoritySocketId = null, options = {}) {
     controlLockUntil: 0,
     controlLockSocketId: null
   };
+  playbackSeekSuppressAuthorityUntil = 0;
+  playbackSeekLock = { active: false, socketId: null, until: 0, token: playbackSeekLock.token + 1 };
+  if (playbackSeekReleaseTimer) { clearTimeout(playbackSeekReleaseTimer); playbackSeekReleaseTimer = null; }
 }
 
 function setPlaybackStopped() {
@@ -953,6 +959,9 @@ function setPlaybackStopped() {
     controlLockUntil: 0,
     controlLockSocketId: null
   };
+  playbackSeekSuppressAuthorityUntil = 0;
+  playbackSeekLock = { active: false, socketId: null, until: 0, token: playbackSeekLock.token + 1 };
+  if (playbackSeekReleaseTimer) { clearTimeout(playbackSeekReleaseTimer); playbackSeekReleaseTimer = null; }
 }
 
 function getPlaybackPayload() {
@@ -978,13 +987,73 @@ function updatePlaybackFromAuthority(socketId, songId, position, status, version
   if (playbackState.songId == null || String(songId) !== String(playbackState.songId)) return;
   if (Number(version) !== Number(playbackState.version)) return;
 
+  const seekLock = getPlaybackSeekLockPayload();
+  if (seekLock.active && seekLock.socketId !== socketId) return;
+  if (Date.now() < playbackSeekSuppressAuthorityUntil) return;
+
   playbackState.position = Math.max(0, Number(position) || 0);
   playbackState.serverTime = Date.now();
   if (status === 'paused' || status === 'playing') {
     playbackState.status = status;
   }
 
-  broadcastPlaybackState('playbackSync');
+  // Không broadcast mỗi lần authority báo vị trí.
+  // Client tự extrapolate từ serverTime; chỉ broadcast khi có action/seek.
+}
+
+function getPlaybackSeekLockPayload() {
+  const now = Date.now();
+  if (playbackSeekLock.active && playbackSeekLock.until <= now) {
+    playbackSeekLock = { active: false, socketId: null, until: 0, token: playbackSeekLock.token };
+  }
+  return { ...playbackSeekLock };
+}
+
+function broadcastPlaybackSeekLock() {
+  io.emit('playbackSeekLock', getPlaybackSeekLockPayload());
+}
+
+function schedulePlaybackSeekLockRelease(token, delayMs = 500) {
+  if (playbackSeekReleaseTimer) clearTimeout(playbackSeekReleaseTimer);
+  playbackSeekReleaseTimer = setTimeout(() => {
+    if (playbackSeekLock.token !== token) return;
+    playbackSeekLock = { active: false, socketId: null, until: 0, token };
+    playbackSeekReleaseTimer = null;
+    broadcastPlaybackSeekLock();
+  }, Math.max(0, delayMs));
+}
+
+function validateAdminSocket(socketId, auth) {
+  if (!socketId || !auth?.user?.id) return false;
+  const state = socketAuth.get(socketId);
+  return !!state?.isAdmin && String(state.telegramId) === String(auth.user.id);
+}
+
+async function performPlaybackSeek(socketId, expectedSongId, position, lockToken) {
+  if (!lastWinner || playbackState.songId == null || String(expectedSongId || '') !== String(lastWinner.id)) {
+    return { success: false, status: 409, message: 'Bài đang phát đã thay đổi.', lock: getPlaybackSeekLockPayload() };
+  }
+
+  const lock = getPlaybackSeekLockPayload();
+  if (!lock.active || lock.socketId !== socketId || Number(lockToken) !== Number(lock.token)) {
+    return { success: false, status: 409, message: 'Bạn không còn quyền tua timeline.', lock };
+  }
+
+  const safePosition = Math.max(0, Number(position) || 0);
+  const now = Date.now();
+
+  playbackSeekSuppressAuthorityUntil = now + 2000;
+
+  playbackState = {
+    ...playbackState,
+    position: safePosition,
+    serverTime: now,
+    version: playbackState.version + 1,
+    startAt: null
+  };
+
+  broadcastPlaybackState();
+  return { success: true, playback: getPlaybackPayload(), lock };
 }
 
 async function performPlaybackControl(socketId, action, expectedSongId) {
@@ -997,6 +1066,11 @@ async function performPlaybackControl(socketId, action, expectedSongId) {
 
     if (playbackState.controlLockUntil > now && playbackState.controlLockSocketId !== socketId) {
       return { success: false, status: 409, message: 'Một Admin khác vừa điều khiển. Vui lòng chờ một chút.', playback: getPlaybackPayload() };
+    }
+
+    const seekLock = getPlaybackSeekLockPayload();
+    if (seekLock.active && seekLock.until > now && seekLock.socketId !== socketId) {
+      return { success: false, status: 409, message: 'Một Admin khác đang tua timeline. Vui lòng chờ.', playback: getPlaybackPayload(), lock: seekLock };
     }
 
     const currentPosition = getAuthoritativePosition();
@@ -1055,7 +1129,8 @@ function broadcastState() {
     controllerSocketId: autoPlayControllerSocketId,
     online: getOnlineSummary(),
     playback: getPlaybackPayload(),
-    songAction: getSongActionPayload()
+    songAction: getSongActionPayload(),
+    playbackSeekLock: getPlaybackSeekLockPayload()
   });
 }
 
@@ -1357,6 +1432,88 @@ app.post('/api/play-song', async (req, res) => {
   return res.json(result);
 });
 
+// ==================== API: PLAYBACK TIMELINE SEEK ====================
+app.post('/api/playback-seek-lock', async (req, res) => {
+  const { action, socketId, expectedSongId, lockToken } = req.body || {};
+  const auth = requireTelegramAdmin(req, res);
+  if (!auth.ok) return;
+
+  if (!validateAdminSocket(socketId, auth)) {
+    return res.status(403).json({ success: false, message: 'Socket Admin không hợp lệ.' });
+  }
+
+  const now = Date.now();
+  const currentLock = getPlaybackSeekLockPayload();
+
+  if (action === 'acquire') {
+    if (getSongActionPayload().active) {
+      return res.status(409).json({ success: false, message: 'Đang xử lý thao tác chọn bài. Vui lòng chờ.', lock: currentLock });
+    }
+
+    if (!lastWinner || playbackState.songId == null || String(expectedSongId || '') !== String(lastWinner.id)) {
+      return res.status(409).json({ success: false, message: 'Bài đang phát đã thay đổi.', lock: currentLock });
+    }
+
+    if (currentLock.active && currentLock.until > now && currentLock.socketId !== socketId) {
+      return res.status(409).json({ success: false, message: 'Một Admin khác đang tua timeline.', lock: currentLock });
+    }
+
+    if (playbackSeekReleaseTimer) {
+      clearTimeout(playbackSeekReleaseTimer);
+      playbackSeekReleaseTimer = null;
+    }
+
+    playbackSeekLock = {
+      active: true,
+      socketId,
+      until: now + 60 * 60 * 1000,
+      token: Number(playbackSeekLock.token || 0) + 1
+    };
+
+    broadcastPlaybackSeekLock();
+    return res.json({ success: true, lock: getPlaybackSeekLockPayload(), playback: getPlaybackPayload() });
+  }
+
+  if (action === 'release') {
+    if (!currentLock.active || currentLock.socketId !== socketId || Number(lockToken) !== Number(currentLock.token)) {
+      return res.status(409).json({ success: false, message: 'Bạn không còn giữ quyền tua.', lock: currentLock });
+    }
+
+    // Nhả quyền nhưng giữ lock thêm đúng 500ms để các Admin khác không
+    // giành quyền ngay đúng thời điểm pointerup.
+    playbackSeekLock = {
+      active: true,
+      socketId,
+      until: now + 500,
+      token: currentLock.token
+    };
+    broadcastPlaybackSeekLock();
+    schedulePlaybackSeekLockRelease(currentLock.token, 500);
+    return res.json({ success: true, lock: getPlaybackSeekLockPayload() });
+  }
+
+  return res.status(400).json({ success: false, message: 'Hành động lock không hợp lệ.' });
+});
+
+app.post('/api/playback-seek', async (req, res) => {
+  const { socketId, expectedSongId, position, lockToken } = req.body || {};
+  const auth = requireTelegramAdmin(req, res);
+  if (!auth.ok) return;
+
+  if (!validateAdminSocket(socketId, auth)) {
+    return res.status(403).json({ success: false, message: 'Socket Admin không hợp lệ.' });
+  }
+
+  const actionLock = getSongActionPayload();
+  if (actionLock.active) {
+    return res.status(409).json({ success: false, message: 'Đang xử lý thao tác chọn bài. Không thể tua lúc này.', lock: getPlaybackSeekLockPayload() });
+  }
+
+  const result = await performPlaybackSeek(socketId, expectedSongId, position, lockToken);
+  if (result.status) return res.status(result.status).json(result);
+  return res.json(result);
+});
+
 // ==================== API: PLAYBACK CONTROL ====================
 app.post('/api/playback-control', async (req, res) => {
   const { action, socketId, expectedSongId } = req.body || {};
@@ -1611,6 +1768,7 @@ io.on('connection', (socket) => {
   });
 
   socket.emit('songActionLock', getSongActionPayload());
+  socket.emit('playbackSeekLock', getPlaybackSeekLockPayload());
 
   socket.on('authenticate', (payload = {}) => {
     const initData = payload.initData || '';
@@ -1693,6 +1851,12 @@ io.on('connection', (socket) => {
     console.log(`🔌 Socket disconnected: ${socket.id} | ${reason}`);
 
     removeOnlineUser(socket.id, true);
+
+    if (playbackSeekLock.socketId === socket.id) {
+      playbackSeekLock = { active: true, socketId: null, until: Date.now() + 500, token: playbackSeekLock.token + 1 };
+      broadcastPlaybackSeekLock();
+      schedulePlaybackSeekLockRelease(playbackSeekLock.token, 500);
+    }
 
     if (socket.id === playbackState.authoritySocketId) {
       const positionAtDisconnect = getAuthoritativePosition();
