@@ -444,6 +444,46 @@
     .vote-button.dislike { background: #d32f2f; }
     .vote-button.active { box-shadow: inset 0 0 0 3px #fff; transform: translateY(-1px); }
     .vote-button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .playback-timeline {
+      margin-top: 10px;
+      padding: 8px 10px 7px;
+      background: #182235;
+      border-radius: 10px;
+      box-sizing: border-box;
+    }
+
+    .playback-timeline-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    #playbackTimeline {
+      flex: 1 1 auto;
+      width: 100%;
+      min-width: 0;
+      margin: 0;
+      accent-color: #00aaff;
+      cursor: default;
+      pointer-events: none;
+    }
+
+    #playbackTimeline::-webkit-slider-thumb {
+      cursor: default;
+    }
+
+    .playback-time {
+      flex: 0 0 auto;
+      min-width: 82px;
+      text-align: right;
+      font-size: 11px;
+      line-height: 1;
+      color: #cfd8dc;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
     .audio-controls {
       display: flex;
       align-items: center;
@@ -535,6 +575,19 @@
     }
 
     @media (max-width: 380px) {
+      .playback-timeline {
+        padding: 7px 7px 6px;
+      }
+
+      .playback-timeline-row {
+        gap: 5px;
+      }
+
+      .playback-time {
+        min-width: 72px;
+        font-size: 10px;
+      }
+
       .audio-controls {
         gap: 5px;
         padding: 8px 6px;
@@ -699,6 +752,13 @@
       <div id="ytPlayer"></div>
     </div>
 
+    <div class="playback-timeline" aria-label="Tiến trình bài hát">
+      <div class="playback-timeline-row">
+        <input id="playbackTimeline" type="range" min="0" max="0" value="0" step="0.1" tabindex="-1" aria-label="Tiến trình video">
+        <span id="playbackTime" class="playback-time">00:00 / 00:00</span>
+      </div>
+    </div>
+
     <div class="audio-controls">
       <div class="audio-action-buttons">
         <button id="btnAudioToggle" class="btn-audio-toggle" type="button" title="Bật / tắt âm thanh" aria-label="Bật / tắt âm thanh">🔇</button>
@@ -812,6 +872,8 @@ function getTelegramUserData() {
     const volumeSlider = document.getElementById('volumeSlider');
     const volumeValue = document.getElementById('volumeValue');
     const volumeIcon = document.getElementById('volumeIcon');
+    const playbackTimeline = document.getElementById('playbackTimeline');
+    const playbackTime = document.getElementById('playbackTime');
     const onlineUserCount = document.getElementById('onlineUserCount');
     const onlineDetailsToggle = document.getElementById('onlineDetailsToggle');
     const onlineToggleIcon = document.getElementById('onlineToggleIcon');
@@ -847,6 +909,7 @@ function getTelegramUserData() {
     let pendingPlayback = null;
     let playbackSyncTimer = null;
     let playbackSyncBusy = false;
+    let playbackTimelineFrame = null;
 
     function flushYouTubeApiCallbacks() {
       youtubeApiReady = true;
@@ -990,6 +1053,9 @@ function getTelegramUserData() {
 
       // Lưu trạng thái Admin để updateUI() biết có hiện nút Xóa hay không
       window.isAdmin = data.isAdmin === true;
+      // Giữ cả biến cục bộ và window.isAdmin đồng nhất.
+      // Các hàm điều khiển playback dùng biến cục bộ isAdmin.
+      isAdmin = window.isAdmin;
 
       if (onlineDetailsToggle) {
         onlineDetailsToggle.classList.toggle('admin-only', !window.isAdmin);
@@ -1953,15 +2019,74 @@ function getTelegramUserData() {
       }
     }
 
+    function formatPlaybackTime(seconds) {
+      const total = Math.max(0, Math.floor(Number(seconds) || 0));
+      const hours = Math.floor(total / 3600);
+      const minutes = Math.floor((total % 3600) / 60);
+      const secs = total % 60;
+
+      if (hours > 0) {
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+      }
+      return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
+    function updatePlaybackTimeline() {
+      if (!playbackTimeline || !playbackTime) return;
+
+      let duration = 0;
+      let position = getPlaybackTargetPosition(currentPlayback);
+
+      try {
+        if (youtubeApiPlayer && youtubePlayerReady) {
+          duration = Number(youtubeApiPlayer.getDuration?.() || 0);
+          const localPosition = Number(youtubeApiPlayer.getCurrentTime?.() || 0);
+
+          // Dùng thời gian thực của YouTube để thanh chạy mượt.
+          // Khi player chưa sẵn sàng, dùng vị trí authoritative từ server.
+          if (currentPlayback.status === 'playing' || currentPlayback.status === 'paused') {
+            position = Math.max(0, localPosition);
+          }
+        }
+      } catch (error) {
+        // Giữ position từ server nếu YouTube chưa trả được thời gian.
+      }
+
+      if (duration > 0) {
+        playbackTimeline.max = String(duration);
+        position = Math.min(position, duration);
+      } else {
+        playbackTimeline.max = '0';
+        position = 0;
+      }
+
+      playbackTimeline.value = String(position);
+      playbackTime.textContent = `${formatPlaybackTime(position)} / ${formatPlaybackTime(duration)}`;
+    }
+
+    function startPlaybackTimelineLoop() {
+      if (playbackTimelineFrame) return;
+
+      const tick = () => {
+        updatePlaybackTimeline();
+        playbackTimelineFrame = window.requestAnimationFrame(tick);
+      };
+
+      playbackTimelineFrame = window.requestAnimationFrame(tick);
+    }
+
+    startPlaybackTimelineLoop();
+
     function updatePlaybackToggle() {
       if (!btnPlaybackToggle) return;
 
-      const isPlaying = currentPlayback.status === 'playing';
+      const isPlaying = currentPlayback.status === 'playing' || currentPlayback.status === 'scheduled';
       btnPlaybackToggle.textContent = isPlaying ? '⏸️' : '▶️';
       btnPlaybackToggle.setAttribute('aria-label', isPlaying ? 'Tạm dừng' : 'Phát');
       btnPlaybackToggle.setAttribute('title', isAdmin ? (isPlaying ? 'Tạm dừng cho tất cả' : 'Phát cho tất cả') : 'Chỉ Admin được điều khiển');
       btnPlaybackToggle.disabled = !isAdmin || !currentPlayingUrl;
       btnPlaybackToggle.classList.toggle('admin-enabled', isAdmin && !!currentPlayingUrl);
+      updatePlaybackTimeline();
     }
 
     async function sendPlaybackControl(action) {

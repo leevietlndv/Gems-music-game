@@ -988,8 +988,9 @@ function updatePlaybackFromAuthority(socketId, songId, position, status, version
 }
 
 async function performPlaybackControl(socketId, action, expectedSongId) {
-  const now = Date.now();
   const run = playbackControlQueue.then(async () => {
+    const now = Date.now();
+
     if (!lastWinner || playbackState.songId == null || String(expectedSongId || '') !== String(lastWinner.id)) {
       return { success: false, status: 409, message: 'Bài đang phát đã thay đổi.' };
     }
