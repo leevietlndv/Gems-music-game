@@ -784,8 +784,11 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "https://telegram.org", "https://www.youtube.com", "https://s.ytimg.com"],
-      connectSrc: ["'self'", "https://telegram.org", "wss:"],
+      // index.html hiện chứa JavaScript inline. Nếu không cho phép inline script,
+      // toàn bộ code Telegram + Socket.IO phía client sẽ không chạy và UI sẽ
+      // đứng mãi ở "⏳ Đang kết nối...".
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://telegram.org", "https://www.youtube.com", "https://s.ytimg.com"],
+      connectSrc: ["'self'", "https://telegram.org", "https://www.youtube.com", "wss:", "ws:"],
       frameSrc: ["https://www.youtube.com", "https://www.youtube-nocookie.com"],
       imgSrc: ["'self'", "data:", "https://i.ytimg.com"],
       styleSrc: ["'self'", "'unsafe-inline'"] // CSS đang viết inline trong <style>

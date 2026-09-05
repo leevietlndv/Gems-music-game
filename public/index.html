@@ -1029,7 +1029,7 @@
     }
 
     const userData = getTelegramUserData();
-    const socket = io();
+    const socket = io({ autoConnect: false });
 
     const deviceInfo = {
       platform: tg?.platform || '',
@@ -2451,6 +2451,12 @@
         });
       }
     });
+
+    // Chỉ kết nối SAU KHI toàn bộ socket.on(...) đã được đăng ký.
+    // Tránh trường hợp socket kết nối quá sớm và event connect bị bỏ lỡ.
+    console.log('🚀 Bắt đầu kết nối Socket.IO...');
+    setConnectionStatus('⏳ Đang kết nối máy chủ...');
+    socket.connect();
   </script>
 </body>
 
