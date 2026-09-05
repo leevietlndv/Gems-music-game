@@ -25,14 +25,32 @@ const io = new Server(server, {
   }
 });
 
+// Cau hinh SSL cho PostgreSQL:
+// - Render Internal DB (host *.internal) khong ho tro SSL -> tat SSL.
+// - Render External DB (host *.render.com) bat SSL, chung chi cua Render
+//   khong nam trong trust store cua Node nen phai rejectUnauthorized: false
+//   (van ma hoa TLS, chi bo buoc verify CA).
+// - Co the ghi de bang DATABASE_SSL_REJECT_UNAUTHORIZED=false.
+function getSslConfig(connectionString) {
+  if (!connectionString) return false;
+  let host = '';
+  try {
+    host = new URL(connectionString).hostname || '';
+  } catch {
+    return false;
+  }
+  // DB noi bo Render (*.internal): khong can SSL
+  if (host.endsWith('.internal')) return false;
+  // Neu chuoi ket noi co sslmode=disable thi khong dung SSL
+  if (/sslmode=disable/i.test(connectionString)) return false;
+  return {
+    rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false'
+  };
+}
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: {
-    // Mặc định kiểm tra chứng chỉ TLS (chống MITM).
-    // Chỉ bật false nếu DB dùng chứng chỉ self-signed:
-    // DATABASE_SSL_REJECT_UNAUTHORIZED=false
-    rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false'
-  }
+  ssl: getSslConfig(process.env.DATABASE_URL)
 });
 async function initDatabase() {
   await pool.query(`
