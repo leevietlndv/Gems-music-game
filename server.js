@@ -1491,6 +1491,24 @@ app.post('/api/delete-song', async (req, res) => {
 
 
 // ==================== SOCKET.IO ====================
+// Gửi state hiện tại cho 1 socket (dùng sau khi xác thực hoặc cho view-only).
+function sendInitialState(socket) {
+  socket.emit('stateUpdate', {
+    isFormOpen,
+    songs,
+    lastWinner,
+    lastAction,
+    health: currentHealth,
+    autoPlayMode,
+    controllerSocketId: autoPlayControllerSocketId
+  });
+
+  socket.emit('autoPlayMode', {
+    mode: autoPlayMode,
+    controllerSocketId: autoPlayControllerSocketId
+  });
+}
+
 io.on('connection', (socket) => {
   console.log(`🔌 Socket connected: ${socket.id}`);
 
@@ -1514,6 +1532,15 @@ io.on('connection', (socket) => {
         authenticated: false,
         message: auth.message
       });
+
+      // Khởi động Telegram initData (vd: mở ngoài Telegram bằng trình duyệt)
+      // -> vẫn gửi state ở chế độ CHỈ XEM để app không treo ở "Đang kết nối".
+      // Các thao tác ghi (submit/vote/play/spin) vẫn bị chặn ở HTTP API.
+      const missingInitData = !initData;
+      if (missingInitData) {
+        console.log('👀 View-only socket (không có initData):', socket.id);
+        sendInitialState(socket);
+      }
       return;
     }
 
@@ -1531,21 +1558,8 @@ io.on('connection', (socket) => {
     addOnlineUser(socket, auth.user, deviceInfo);
     broadcastOnlineSummary();
 
-    // Chỉ sau khi xác thực mới gửi state hiện tại cho socket này.
-    socket.emit('stateUpdate', {
-      isFormOpen,
-      songs,
-      lastWinner,
-      lastAction,
-      health: currentHealth,
-      autoPlayMode,
-      controllerSocketId: autoPlayControllerSocketId
-    });
-
-    socket.emit('autoPlayMode', {
-      mode: autoPlayMode,
-      controllerSocketId: autoPlayControllerSocketId
-    });
+    // Gửi state hiện tại cho socket vừa xác thực.
+    sendInitialState(socket);
 
     (async () => {
       if (!lastWinner) {
