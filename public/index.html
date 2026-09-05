@@ -957,7 +957,22 @@
       tg.expand();
     }
 
-    const telegramInitData = tg?.initData || '';
+    // initData có thể được Telegram tiêm TRỄ hơn thời điểm script chạy,
+    // nên dùng let và chờ sự kiện ready/envSafeChanged rồi đọc lại.
+    let telegramInitData = tg?.initData || '';
+
+    function resolveTelegramInitData() {
+      const d = tg?.initData || '';
+      if (d && d !== telegramInitData) {
+        telegramInitData = d;
+        console.log('✅ initData đã có sau khi chờ Telegram ready:', d.length);
+      }
+      return !!telegramInitData;
+    }
+
+    if (!tg) {
+      console.warn('⚠️ Trang này không được mở bên trong Telegram Mini App.');
+    }
 
     console.log('📱 Telegram WebApp:', {
       available: !!tg,
@@ -967,17 +982,36 @@
       userId: tg?.initDataUnsafe?.user?.id || null
     });
 
-    if (!tg) {
-      console.warn('⚠️ Trang này không được mở bên trong Telegram Mini App.');
+    // Telegram đôi khi tiêm initData TRỄ (đặc biệt trên iOS/Desktop) —
+    // chờ ready + retry ngắn để bắt được initData trước khi authenticate.
+    let telegramReadyWaiters = [];
+    function onTelegramReady(callback) {
+      if (resolveTelegramInitData() || (tg && tg.initData)) {
+        callback();
+        return;
+      }
+      telegramReadyWaiters.push(callback);
     }
 
-    // Cảnh báo rõ ràng trên UI khi thiếu initData (chỉ xem, không tương tác được)
-    if (!telegramInitData) {
-      const warn = document.createElement('div');
-      warn.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#b3261e;color:#fff;padding:10px 14px;font-size:13px;text-align:center;';
-      warn.textContent = '⚠️ Không nhận được Telegram initData — ứng dụng đang ở chế độ chỉ xem. Hãy mở Mini App qua nút Menu của bot @' + (location.hostname) + ' (không mở link trực tiếp trong trình duyệt).';
-      document.addEventListener('DOMContentLoaded', () => document.body.prepend(warn));
-      if (document.body) document.body.prepend(warn);
+    function flushTelegramReadyWaiters() {
+      if (resolveTelegramInitData()) {
+        const waiters = telegramReadyWaiters.splice(0);
+        waiters.forEach(cb => {
+          try { cb(); } catch (e) { console.error('❌ Telegram ready callback:', e); }
+        });
+      }
+    }
+
+    if (tg) {
+      try { tg.ready(flushTelegramReadyWaiters); } catch (e) { console.warn('tg.ready(cb) lỗi:', e); }
+      // ready() có thể không nhận callback trên một số phiên bản — poll an toàn
+      const initDataPoll = setInterval(() => {
+        if (resolveTelegramInitData()) {
+          flushTelegramReadyWaiters();
+          clearInterval(initDataPoll);
+        }
+      }, 250);
+      setTimeout(() => clearInterval(initDataPoll), 15000); // tối đa 15s
     }
 
     function getTelegramUserData() {
@@ -1179,10 +1213,21 @@
       console.log('🔌 Socket connected:', socket.id);
       console.log('🔑 Sending Telegram initData, length:', telegramInitData.length);
 
-      socket.emit('authenticate', {
-        initData: telegramInitData,
-        deviceInfo
-      });
+      // Chờ initData (nếu Telegram tiêm trễ) rồi mới authenticate.
+      // Nếu sau 5s vẫn không có thì authenticate với rỗng để nhận chế độ chỉ xem.
+      let sent = false;
+      const doAuth = () => {
+        if (sent) return;
+        sent = true;
+        resolveTelegramInitData();
+        socket.emit('authenticate', {
+          initData: telegramInitData,
+          deviceInfo
+        });
+      };
+
+      onTelegramReady(doAuth);
+      setTimeout(doAuth, 5000); // fallback: không để user chờ vô hạn
     });
 
     socket.on('connect_error', (error) => {
