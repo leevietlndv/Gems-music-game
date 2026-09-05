@@ -22,9 +22,23 @@ app.set('trust proxy', 1);
 // CORS: chỉ cho phép Mini App của bạn nối Socket.IO (trước đây: mọi origin).
 // WEBAPP_URL phải trùng với domain load Mini App, ví dụ
 // https://gems-music-game.onrender.com
+// Socket.IO chạy cùng origin với Mini App nên không cần khóa cứng một URL
+// duy nhất. Render/Telegram có thể gửi Origin khác nhau (đặc biệt khi đổi
+// domain, preview hoặc thêm/bớt dấu /). Cho phép đúng các origin tin cậy.
+const allowedOrigins = new Set([
+  process.env.WEBAPP_URL || 'https://gems-music-game.onrender.com',
+  'https://gems-music-game.onrender.com'
+].filter(Boolean).map(url => String(url).replace(/\/$/, '')));
+
 const io = new Server(server, {
   cors: {
-    origin: process.env.WEBAPP_URL || 'https://gems-music-game.onrender.com',
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.has(String(origin).replace(/\/$/, ''))) {
+        return callback(null, true);
+      }
+      console.warn(`🚫 Socket.IO CORS blocked origin: ${origin}`);
+      return callback(new Error('Socket.IO CORS origin not allowed'));
+    },
     methods: ['GET', 'POST']
   }
 });
@@ -1536,11 +1550,11 @@ io.on('connection', (socket) => {
       // Khởi động Telegram initData (vd: mở ngoài Telegram bằng trình duyệt)
       // -> vẫn gửi state ở chế độ CHỈ XEM để app không treo ở "Đang kết nối".
       // Các thao tác ghi (submit/vote/play/spin) vẫn bị chặn ở HTTP API.
-      const missingInitData = !initData;
-      if (missingInitData) {
-        console.log('👀 View-only socket (không có initData):', socket.id);
-        sendInitialState(socket);
-      }
+      // Luôn gửi state cho socket chưa xác thực để frontend không bị treo
+      // ở trạng thái chờ nếu Telegram initData bị lỗi/đến trễ.
+      // Các thao tác ghi vẫn phải qua HTTP API + validateTelegramInitData.
+      console.log('👀 View-only socket:', socket.id);
+      sendInitialState(socket);
       return;
     }
 

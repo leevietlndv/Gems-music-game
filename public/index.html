@@ -1208,40 +1208,95 @@
       renderOnlineDetails(payload);
     });
 
-    // Quản lý trạng thái socket
+    // ==================== QUẢN LÝ TRẠNG THÁI SOCKET ====================
+    // Tách rõ CONNECTED và AUTHENTICATED để tránh UI bị kẹt ở
+    // "Đang kết nối" khi Socket.IO đã kết nối nhưng Telegram initData đến trễ.
+    let socketAuthenticated = false;
+    let authTimer = null;
+    let authAttempts = 0;
+    const MAX_AUTH_ATTEMPTS = 20;
+
+    function setConnectionStatus(text, state = 'connecting') {
+      if (!statusBadge) return;
+      statusBadge.textContent = text;
+      statusBadge.className = 'status-badge' + (state === 'offline' ? ' offline' : state === 'closed' ? ' closed' : '');
+    }
+
+    function clearAuthTimer() {
+      if (authTimer) {
+        clearInterval(authTimer);
+        authTimer = null;
+      }
+    }
+
+    function authenticateSocket() {
+      if (!socket.connected || socketAuthenticated) return;
+
+      resolveTelegramInitData();
+
+      // Trong Telegram Mini App phải có initData thật.
+      // Không gửi authenticate rỗng nữa vì nó có thể làm client rơi vào
+      // trạng thái view-only trước khi Telegram kịp tiêm initData.
+      if (!telegramInitData) {
+        authAttempts++;
+        setConnectionStatus(`⏳ Chờ Telegram xác thực... (${authAttempts}/${MAX_AUTH_ATTEMPTS})`);
+        console.warn('⚠️ Chưa có Telegram initData, chưa authenticate:', authAttempts);
+        if (authAttempts >= MAX_AUTH_ATTEMPTS) {
+          clearAuthTimer();
+          setConnectionStatus('🟠 Không nhận được Telegram initData', 'offline');
+        }
+        return;
+      }
+
+      clearAuthTimer();
+      setConnectionStatus('🔐 Đang xác thực Telegram...');
+      console.log('🔑 Sending Telegram initData:', telegramInitData.length);
+
+      socket.emit('authenticate', {
+        initData: telegramInitData,
+        deviceInfo
+      });
+    }
+
     socket.on('connect', () => {
-      console.log('🔌 Socket connected:', socket.id);
-      console.log('🔑 Sending Telegram initData, length:', telegramInitData.length);
+      socketAuthenticated = false;
+      authAttempts = 0;
+      clearAuthTimer();
+      console.log('🔌 Socket connected:', socket.id, 'transport:', socket.io.engine.transport.name);
+      setConnectionStatus('🟢 Socket đã kết nối, đang xác thực...');
 
-      // Chờ initData (nếu Telegram tiêm trễ) rồi mới authenticate.
-      // Nếu sau 5s vẫn không có thì authenticate với rỗng để nhận chế độ chỉ xem.
-      let sent = false;
-      const doAuth = () => {
-        if (sent) return;
-        sent = true;
-        resolveTelegramInitData();
-        socket.emit('authenticate', {
-          initData: telegramInitData,
-          deviceInfo
-        });
-      };
-
-      onTelegramReady(doAuth);
-      setTimeout(doAuth, 5000); // fallback: không để user chờ vô hạn
+      // Thử ngay lập tức, sau đó retry mỗi 250ms trong tối đa 5 giây.
+      authenticateSocket();
+      authTimer = setInterval(authenticateSocket, 250);
     });
 
     socket.on('connect_error', (error) => {
-      console.error('❌ Socket connection error:', error);
+      socketAuthenticated = false;
+      clearAuthTimer();
+      console.error('❌ Socket connection error:', error?.message || error);
+      setConnectionStatus('❌ Lỗi kết nối máy chủ', 'offline');
     });
 
-    socket.on('disconnect', () => {
-      statusBadge.textContent = '🔴 Mất kết nối';
-      statusBadge.className = 'status-badge offline';
+    socket.on('disconnect', (reason) => {
+      socketAuthenticated = false;
+      clearAuthTimer();
+      console.warn('🔌 Socket disconnected:', reason);
+      setConnectionStatus('🔴 Mất kết nối', 'offline');
     });
 
     // Cập nhật phân quyền từ Backend
     socket.on('adminStatus', (data) => {
       console.log('👮 ADMIN STATUS:', data);
+
+      socketAuthenticated = data?.authenticated === true;
+      if (socketAuthenticated) {
+        clearAuthTimer();
+        setConnectionStatus('🟢 Đã kết nối');
+      } else if (!socket.connected) {
+        setConnectionStatus('❌ Mất kết nối', 'offline');
+      } else {
+        setConnectionStatus('🟠 Chưa xác thực Telegram', 'offline');
+      }
 
       // Lưu trạng thái Admin để updateUI() biết có hiện nút Xóa hay không
       window.isAdmin = data.isAdmin === true;
