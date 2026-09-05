@@ -1105,6 +1105,7 @@ function broadcastState() {
     replacementCountdown,
     autoPlayMode,
     controllerSocketId: autoPlayControllerSocketId,
+    blockedSongs,
     online: getOnlineSummary()
   });
 }
@@ -1689,6 +1690,71 @@ app.post('/api/delete-song', async (req, res) => {
 });
 
 
+// ==================== API: UNBLOCK ONE SONG ====================
+app.post('/api/unblock-song', async (req, res) => {
+  const auth = requireTelegramAdmin(req, res);
+  if (!auth.ok) return;
+
+  const { id } = req.body || {};
+  const normalizedId = Number.parseInt(id, 10);
+
+  if (!Number.isInteger(normalizedId) || normalizedId <= 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'ID blacklist không hợp lệ!'
+    });
+  }
+
+  try {
+    const result = await pool.query(`
+      DELETE FROM blocked_songs
+      WHERE id = $1
+      RETURNING
+        id,
+        video_id AS "videoId",
+        url,
+        title,
+        user_name AS user,
+        telegram_id AS "telegramId",
+        blocked_reason AS "blockedReason",
+        blocked_at AS "blockedAt"
+    `, [normalizedId]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy bài hát trong blacklist!'
+      });
+    }
+
+    const unblockedSong = result.rows[0];
+
+    blockedSongs = blockedSongs.filter(
+      item => String(item.id) !== String(normalizedId)
+    );
+
+    // Gỡ chặn KHÔNG tự động đưa bài hát trở lại danh sách songs.
+    broadcastState();
+
+    console.log(
+      `🔓 Admin đã gỡ chặn bài hát #${normalizedId}: ${unblockedSong.title || unblockedSong.url}`
+    );
+
+    return res.json({
+      success: true,
+      message: 'Đã gỡ chặn bài hát! Hãy gửi lại link nếu muốn thêm bài này.',
+      song: unblockedSong
+    });
+  } catch (error) {
+    console.error('❌ Lỗi gỡ chặn bài hát:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Không thể gỡ chặn bài hát!'
+    });
+  }
+});
+
+
 // ==================== SOCKET.IO ====================
 // Gửi state hiện tại cho 1 socket (dùng sau khi xác thực hoặc cho view-only).
 function sendInitialState(socket) {
@@ -1699,7 +1765,8 @@ function sendInitialState(socket) {
     lastAction,
     health: currentHealth,
     autoPlayMode,
-    controllerSocketId: autoPlayControllerSocketId
+    controllerSocketId: autoPlayControllerSocketId,
+    blockedSongs
   });
 
   socket.emit('autoPlayMode', {
