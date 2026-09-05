@@ -213,6 +213,149 @@ async function loadBlockedSongsFromDatabase() {
   console.log(`🚫 Đã tải ${blockedSongs.length} bài hát trong blacklist từ PostgreSQL`);
 }
 
+/**
+ * Chuyển một bài hát từ danh sách songs sang blacklist trong cùng một transaction.
+ * Phase 2 chỉ dùng cho Admin Delete; Health = 0 sẽ được nối vào helper này ở phase sau.
+ */
+async function blockSongAndRemove(songId, reason = 'manual_delete') {
+  const normalizedId = Number.parseInt(songId, 10);
+
+  if (!Number.isInteger(normalizedId) || normalizedId <= 0) {
+    const error = new Error('ID bài hát không hợp lệ');
+    error.code = 'INVALID_SONG_ID';
+    throw error;
+  }
+
+  if (!['manual_delete', 'health_zero'].includes(reason)) {
+    const error = new Error('Lý do blacklist không hợp lệ');
+    error.code = 'INVALID_BLOCK_REASON';
+    throw error;
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // Khóa đúng bài hát trong transaction để tránh hai thao tác xóa chạy đồng thời.
+    const songResult = await client.query(`
+      SELECT
+        id,
+        video_id AS "videoId",
+        url,
+        title,
+        user_name AS "user",
+        telegram_id AS "telegramId"
+      FROM songs
+      WHERE id = $1
+      FOR UPDATE
+    `, [normalizedId]);
+
+    if (songResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+
+    const song = songResult.rows[0];
+
+    // Ghi vào blacklist trước khi xóa khỏi songs.
+    // ON CONFLICT giúp thao tác idempotent nếu video_id đã có trong blacklist.
+    let blockedResult = await client.query(`
+      INSERT INTO blocked_songs (
+        video_id,
+        url,
+        title,
+        user_name,
+        telegram_id,
+        blocked_reason
+      )
+      VALUES ($1, $2, $3, $4, $5, $6)
+      ON CONFLICT (video_id) DO NOTHING
+      RETURNING
+        id,
+        video_id AS "videoId",
+        url,
+        title,
+        user_name AS "user",
+        telegram_id AS "telegramId",
+        blocked_reason AS "blockedReason",
+        blocked_at AS "blockedAt"
+    `, [
+      song.videoId,
+      song.url,
+      song.title,
+      song.user,
+      song.telegramId,
+      reason
+    ]);
+
+    let blockedSong;
+
+    if (blockedResult.rowCount > 0) {
+      blockedSong = blockedResult.rows[0];
+    } else {
+      const existingResult = await client.query(`
+        SELECT
+          id,
+          video_id AS "videoId",
+          url,
+          title,
+          user_name AS "user",
+          telegram_id AS "telegramId",
+          blocked_reason AS "blockedReason",
+          blocked_at AS "blockedAt"
+        FROM blocked_songs
+        WHERE video_id = $1
+      `, [song.videoId]);
+
+      blockedSong = existingResult.rows[0];
+    }
+
+    // Giữ nguyên hành vi hiện tại: vote của bài bị xóa cũng phải được dọn.
+    await client.query('DELETE FROM song_votes WHERE song_id = $1', [normalizedId]);
+
+    const deleteResult = await client.query(
+      'DELETE FROM songs WHERE id = $1 RETURNING id',
+      [normalizedId]
+    );
+
+    if (deleteResult.rowCount === 0) {
+      throw new Error('Bài hát không còn tồn tại khi thực hiện xóa');
+    }
+
+    await client.query('COMMIT');
+
+    // Chỉ cập nhật RAM sau khi transaction PostgreSQL đã commit thành công.
+    songs = songs.filter(songItem => String(songItem.id) !== String(normalizedId));
+
+    if (blockedSong) {
+      const existingIndex = blockedSongs.findIndex(
+        item => String(item.videoId) === String(blockedSong.videoId)
+      );
+
+      if (existingIndex >= 0) {
+        blockedSongs[existingIndex] = blockedSong;
+      } else {
+        blockedSongs.push(blockedSong);
+      }
+    }
+
+    return {
+      song,
+      blockedSong
+    };
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackError) {
+      console.error('❌ Lỗi ROLLBACK khi blacklist bài hát:', rollbackError);
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEBAPP_URL = process.env.WEBAPP_URL || 'https://gems-music-game.onrender.com';
 const MAIN_MINI_APP_URL = 'https://t.me/GU3B_Radio_Bot/music3B';
@@ -335,8 +478,7 @@ function validateTelegramInitData(initData) {
 let isFormOpen = true;
 let songs = [];
 // Danh sách blacklist được cache trong RAM sau khi tải từ PostgreSQL.
-// Giai đoạn 1 chỉ chuẩn bị dữ liệu; chưa expose ra client và chưa thay đổi
-// hành vi Xóa/Health cho tới các giai đoạn tiếp theo.
+// Phase 2 bắt đầu sử dụng cache này cho thao tác Admin Delete.
 let blockedSongs = [];
 let lastWinner = null;
 let lastAction = null;
@@ -1510,19 +1652,14 @@ app.post('/api/delete-song', async (req, res) => {
   }
 
   try {
-    const result = await pool.query(
-      'DELETE FROM songs WHERE id = $1 RETURNING id',
-      [id]
-    );
+    const result = await blockSongAndRemove(id, 'manual_delete');
 
-    if (result.rowCount === 0) {
+    if (!result) {
       return res.status(404).json({
         success: false,
         message: 'Không tìm thấy bài hát!'
       });
     }
-
-    songs = songs.filter(song => String(song.id) !== String(id));
 
     // Nếu xóa chính bài đang phát, xóa luôn trạng thái current winner.
     if (lastWinner && String(lastWinner.id) === String(id)) {
@@ -1536,11 +1673,11 @@ app.post('/api/delete-song', async (req, res) => {
 
     broadcastState();
 
-    console.log(`🗑️ Admin đã xóa bài hát #${id}`);
+    console.log(`🗑️ Admin đã xóa bài hát #${id} và đưa vào blacklist`);
 
     res.json({
       success: true,
-      message: 'Đã xóa bài hát!'
+      message: 'Đã xóa bài hát và đưa vào blacklist!'
     });
   } catch (error) {
     console.error('❌ Lỗi xóa bài hát:', error);
