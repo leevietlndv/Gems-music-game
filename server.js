@@ -257,6 +257,13 @@ async function blockSongAndRemove(songId, reason = 'manual_delete') {
     }
 
     const song = songResult.rows[0];
+    const videoId = song.videoId || getYouTubeVideoId(song.url);
+
+    if (!videoId) {
+      const error = new Error('Bài hát không có YouTube video_id hợp lệ để đưa vào blacklist');
+      error.code = 'MISSING_VIDEO_ID';
+      throw error;
+    }
 
     // Ghi vào blacklist trước khi xóa khỏi songs.
     // ON CONFLICT giúp thao tác idempotent nếu video_id đã có trong blacklist.
@@ -281,7 +288,7 @@ async function blockSongAndRemove(songId, reason = 'manual_delete') {
         blocked_reason AS "blockedReason",
         blocked_at AS "blockedAt"
     `, [
-      song.videoId,
+      videoId,
       song.url,
       song.title,
       song.user,
@@ -639,8 +646,16 @@ function getOnlineDetails() {
     .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
 }
 
-// Khóa xử lý vote để các lượt bấm đồng thời được xử lý tuần tự.
-let voteQueue = Promise.resolve();
+// Khóa toàn bộ các thao tác làm thay đổi trạng thái game hiện tại.
+// Vote, Play, Spin, Auto Play, Reset, Delete và Health=0 đều đi qua cùng
+// một hàng đợi để tránh race-condition khi nhiều request đến đồng thời.
+let gameMutationQueue = Promise.resolve();
+
+function enqueueGameMutation(task) {
+  const run = gameMutationQueue.then(task, task);
+  gameMutationQueue = run.catch(() => {});
+  return run;
+}
 
 function clampHealth(value) {
   return Math.max(0, Math.min(5, Number(value) || 0));
@@ -819,8 +834,7 @@ function startReplacementCountdown() {
 
     if (replacementCountdown <= 0) {
       clearReplacementCountdown();
-      const run = voteQueue.then(() => replaceCurrentSongDueToHealth(), () => replaceCurrentSongDueToHealth());
-      voteQueue = run.catch(() => {});
+      const run = enqueueGameMutation(() => replaceCurrentSongDueToHealth());
       await run;
       return;
     }
@@ -928,7 +942,7 @@ async function performSpin(initiatorSocketId = null, actionUser = null) {
 
   bot.command('spin', async (ctx) => {
     if (!requireBotAdmin(ctx)) return denyNonAdmin(ctx);
-    const result = await performSpin();
+    const result = await enqueueGameMutation(() => performSpin());
     if (!result.success) {
       ctx.reply(`⚠️ ${result.message}`);
     } else {
@@ -1296,17 +1310,21 @@ app.post('/api/auto-play-mode', async (req, res) => {
   }
 
   if (newMode === 0) {
-    setAutoPlayState(0);
-    broadcastAutoPlayState();
-    broadcastState();
+    const result = await enqueueGameMutation(async () => {
+      setAutoPlayState(0);
+      broadcastAutoPlayState();
+      broadcastState();
 
-    console.log('⏹ Admin đã tắt Auto Play');
+      console.log('⏹ Admin đã tắt Auto Play');
 
-    return res.json({
-      success: true,
-      mode: 0,
-      controllerSocketId: null
+      return {
+        success: true,
+        mode: 0,
+        controllerSocketId: null
+      };
     });
+
+    return res.json(result);
   }
 
   if (!socketId || typeof socketId !== 'string') {
@@ -1316,22 +1334,26 @@ app.post('/api/auto-play-mode', async (req, res) => {
     });
   }
 
-  setAutoPlayState(newMode, socketId);
-  broadcastAutoPlayState();
-  broadcastState();
+  const result = await enqueueGameMutation(async () => {
+    setAutoPlayState(newMode, socketId);
+    broadcastAutoPlayState();
+    broadcastState();
 
-  console.log(
-    autoPlayMode === 1
-      ? `🔢 Admin bật Auto Play TUẦN TỰ | controller=${socketId}`
-      : `🔀 Admin bật Auto Play NGẪU NHIÊN | controller=${socketId}`
-  );
+    console.log(
+      autoPlayMode === 1
+        ? `🔢 Admin bật Auto Play TUẦN TỰ | controller=${socketId}`
+        : `🔀 Admin bật Auto Play NGẪU NHIÊN | controller=${socketId}`
+    );
 
-  res.json({
-    success: true,
-    mode: autoPlayMode,
-    controllerSocketId: autoPlayControllerSocketId,
-    hasCurrentSong: !!lastWinner
+    return {
+      success: true,
+      mode: autoPlayMode,
+      controllerSocketId: autoPlayControllerSocketId,
+      hasCurrentSong: !!lastWinner
+    };
   });
+
+  res.json(result);
 });
 
 // ==================== API: AUTO PLAY NEXT ====================
@@ -1356,7 +1378,8 @@ app.post('/api/auto-play-next', async (req, res) => {
   }
 
   try {
-    const currentId = lastWinner?.id != null
+    const result = await enqueueGameMutation(async () => {
+      const currentId = lastWinner?.id != null
       ? String(lastWinner.id)
       : null;
 
@@ -1364,11 +1387,11 @@ app.post('/api/auto-play-next', async (req, res) => {
     // sau khi Admin/user đã bấm Play hoặc Spin, không được phép ghi đè
     // bài mới. Client phải xác nhận đúng bài vừa kết thúc.
     if (expectedSongId != null && currentId !== String(expectedSongId)) {
-      return res.json({
+      return {
         success: false,
         stale: true,
         message: 'Bỏ qua Auto Play cũ vì bài đang phát đã thay đổi.'
-      });
+      };
     }
 
     const availableSongs = songs.filter(song =>
@@ -1382,11 +1405,11 @@ app.post('/api/auto-play-next', async (req, res) => {
 
       console.log('⏹ Auto Play dừng: không còn bài tiếp theo.');
 
-      return res.json({
+      return {
         success: false,
         stopAutoPlay: true,
         message: 'Không còn bài hát tiếp theo.'
-      });
+      };
     }
 
     let nextSong;
@@ -1433,11 +1456,14 @@ app.post('/api/auto-play-next', async (req, res) => {
         : `🔀 Auto ngẫu nhiên → #${nextSong.id}`
     );
 
-    res.json({
-      success: true,
-      song: nextSong,
-      mode: autoPlayMode
+      return {
+        success: true,
+        song: nextSong,
+        mode: autoPlayMode
+      };
     });
+
+    res.json(result);
   } catch (error) {
     console.error('❌ Lỗi Auto Play Next:', error);
     res.status(500).json({
@@ -1490,49 +1516,76 @@ app.post('/api/play-song', async (req, res) => {
 
     const song = result.rows[0];
 
-    if (lastWinner && String(lastWinner.id) !== String(song.id)) {
-      await pool.query('DELETE FROM songs WHERE id = $1', [lastWinner.id]);
-      songs = songs.filter(s => String(s.id) !== String(lastWinner.id));
-      console.log(`🗑️ Đã xóa bài đang phát #${lastWinner.id}`);
-    }
+    const resultData = await enqueueGameMutation(async () => {
+      // Sau khi chờ queue, bài đang phát có thể đã thay đổi.
+      // Kiểm tra lại bản ghi để tránh phát một bài vừa bị xóa.
+      const freshSongResult = await pool.query(`
+        SELECT
+          id,
+          url,
+          title,
+          user_name AS user,
+          telegram_id AS "telegramId",
+          created_at
+        FROM songs
+        WHERE id = $1
+      `, [id]);
 
-    // Reset vote cũ đọng để health của bài này luôn bắt đầu từ 5.
-    await pool.query('DELETE FROM song_votes WHERE song_id = $1', [song.id]);
+      if (freshSongResult.rowCount === 0) {
+        return {
+          success: false,
+          status: 404,
+          message: 'Bài hát không còn tồn tại!'
+        };
+      }
 
-    lastWinner = song;
-    currentHealth = 5;
-    currentLikeCount = 0;
-    currentDislikeCount = 0;
-    clearReplacementCountdown();
+      const freshSong = freshSongResult.rows[0];
 
-    const userName =
-      [auth.user.first_name, auth.user.last_name]
-        .filter(Boolean)
-        .join(' ')
-        .trim() || 'Người dùng';
+      if (lastWinner && String(lastWinner.id) !== String(freshSong.id)) {
+        await pool.query('DELETE FROM songs WHERE id = $1', [lastWinner.id]);
+        songs = songs.filter(s => String(s.id) !== String(lastWinner.id));
+        console.log(`🗑️ Đã xóa bài đang phát #${lastWinner.id}`);
+      }
 
-    lastAction = { type: 'play', user: userName };
+      // Reset vote cũ đọng để health của bài này luôn bắt đầu từ 5.
+      await pool.query('DELETE FROM song_votes WHERE song_id = $1', [freshSong.id]);
 
-    // Nếu Admin đang bật Auto Play thì vẫn giữ mode,
-    // nhưng bài Play thủ công thay thế bài đang phát hiện tại.
-    io.emit('songPlayed', {
-      song,
-      initiatorSocketId: socketId || null,
-      action: lastAction,
-      health: 5,
-      likes: 0,
-      dislikes: 0,
-      replacementCountdown: null
+      lastWinner = freshSong;
+      currentHealth = 5;
+      currentLikeCount = 0;
+      currentDislikeCount = 0;
+      clearReplacementCountdown();
+
+      const userName =
+        [auth.user.first_name, auth.user.last_name]
+          .filter(Boolean)
+          .join(' ')
+          .trim() || 'Người dùng';
+
+      lastAction = { type: 'play', user: userName };
+
+      io.emit('songPlayed', {
+        song: freshSong,
+        initiatorSocketId: socketId || null,
+        action: lastAction,
+        health: 5,
+        likes: 0,
+        dislikes: 0,
+        replacementCountdown: null
+      });
+
+      broadcastState();
+
+      console.log(`▶️ Phát bài hát #${freshSong.id}: ${freshSong.title || freshSong.url}`);
+
+      return {
+        success: true,
+        song: freshSong
+      };
     });
 
-    broadcastState();
-
-    console.log(`▶️ Phát bài hát #${song.id}: ${song.title || song.url}`);
-
-    res.json({
-      success: true,
-      song
-    });
+    if (resultData.status) return res.status(resultData.status).json(resultData);
+    res.json(resultData);
   } catch (error) {
     console.error('❌ Lỗi phát bài hát:', error);
     res.status(500).json({
@@ -1623,8 +1676,7 @@ app.post('/api/song-vote', async (req, res) => {
     };
   };
 
-  const run = voteQueue.then(runVote, runVote);
-  voteQueue = run.catch(() => {});
+  const run = enqueueGameMutation(runVote);
   const result = await run;
 
   if (result.status) return res.status(result.status).json(result);
@@ -1644,7 +1696,7 @@ app.post('/api/spin', async (req, res) => {
       .trim() || 'Người dùng';
 
   try {
-    const result = await performSpin(socketId || null, userName);
+    const result = await enqueueGameMutation(() => performSpin(socketId || null, userName));
     res.json(result);
   } catch (error) {
     console.error('❌ Lỗi Spin:', error);
@@ -1671,24 +1723,27 @@ app.post('/api/reset', async (req, res) => {
   if (!auth.ok) return;
 
   try {
-    await pool.query('DELETE FROM songs');
+    const result = await enqueueGameMutation(async () => {
+      await pool.query('DELETE FROM songs');
 
-    songs = [];
-    lastWinner = null;
-    lastAction = null;
-    currentHealth = 5;
-    currentLikeCount = 0;
-    currentDislikeCount = 0;
-    clearReplacementCountdown();
+      songs = [];
+      lastWinner = null;
+      lastAction = null;
+      currentHealth = 5;
+      currentLikeCount = 0;
+      currentDislikeCount = 0;
+      clearReplacementCountdown();
 
-    // Reset cũng tắt Auto Play để không tự phát lại sau khi reset.
-    setAutoPlayState(0);
-    broadcastAutoPlayState();
-    broadcastState();
+      // Reset cũng tắt Auto Play để không tự phát lại sau khi reset.
+      setAutoPlayState(0);
+      broadcastAutoPlayState();
+      broadcastState();
 
-    console.log('🧹 Đã xóa toàn bộ bài hát khỏi PostgreSQL');
+      console.log('🧹 Đã xóa toàn bộ bài hát khỏi PostgreSQL');
+      return { success: true };
+    });
 
-    res.json({ success: true });
+    res.json(result);
   } catch (error) {
     console.error('❌ Lỗi reset PostgreSQL:', error);
     res.status(500).json({
@@ -1713,33 +1768,39 @@ app.post('/api/delete-song', async (req, res) => {
   }
 
   try {
-    const result = await blockSongAndRemove(id, 'manual_delete');
+    const result = await enqueueGameMutation(async () => {
+      const blockResult = await blockSongAndRemove(id, 'manual_delete');
 
-    if (!result) {
-      return res.status(404).json({
-        success: false,
-        message: 'Không tìm thấy bài hát!'
-      });
-    }
+      if (!blockResult) {
+        return {
+          success: false,
+          status: 404,
+          message: 'Không tìm thấy bài hát!'
+        };
+      }
 
-    // Nếu xóa chính bài đang phát, xóa luôn trạng thái current winner.
-    if (lastWinner && String(lastWinner.id) === String(id)) {
-      lastWinner = null;
-      lastAction = null;
-      currentHealth = 5;
-      currentLikeCount = 0;
-      currentDislikeCount = 0;
-      clearReplacementCountdown();
-    }
+      // Nếu xóa chính bài đang phát, xóa luôn trạng thái current winner.
+      if (lastWinner && String(lastWinner.id) === String(id)) {
+        lastWinner = null;
+        lastAction = null;
+        currentHealth = 5;
+        currentLikeCount = 0;
+        currentDislikeCount = 0;
+        clearReplacementCountdown();
+      }
 
-    broadcastState();
+      broadcastState();
 
-    console.log(`🗑️ Admin đã xóa bài hát #${id} và đưa vào blacklist`);
+      console.log(`🗑️ Admin đã xóa bài hát #${id} và đưa vào blacklist`);
 
-    res.json({
-      success: true,
-      message: 'Đã xóa bài hát và đưa vào blacklist!'
+      return {
+        success: true,
+        message: 'Đã xóa bài hát và đưa vào blacklist!'
+      };
     });
+
+    if (result.status) return res.status(result.status).json(result);
+    res.json(result);
   } catch (error) {
     console.error('❌ Lỗi xóa bài hát:', error);
     res.status(500).json({
