@@ -1163,6 +1163,38 @@ app.post('/api/submit', async (req, res) => {
   }
 
   try {
+    // Phase 4A: kiểm tra blacklist ngay trên PostgreSQL trước khi cho phép INSERT.
+    // Không chỉ dựa vào mảng blockedSongs trong RAM để tránh trường hợp state cũ.
+    const blockedResult = await pool.query(
+      `
+        SELECT
+          id,
+          title,
+          url,
+          blocked_reason AS "blockedReason"
+        FROM blocked_songs
+        WHERE video_id = $1
+        LIMIT 1
+      `,
+      [youtubeVideoId]
+    );
+
+    if (blockedResult.rowCount > 0) {
+      const blockedSong = blockedResult.rows[0];
+      const reasonText = blockedSong.blockedReason === 'health_zero'
+        ? 'Sức khỏe của bài hát đã về 0.'
+        : 'Bài hát đã bị Admin chặn.';
+
+      console.log(
+        `🚫 Từ chối submit bài đã blacklist: video_id=${youtubeVideoId}`
+      );
+
+      return res.json({
+        success: false,
+        message: `🚫 Bài hát này đang nằm trong blacklist. ${reasonText} Bạn cần được Admin gỡ chặn trước khi gửi lại.`
+      });
+    }
+
     const title = await getYouTubeTitle(cleanUrl);
 
     // ON CONFLICT: chống race-condition — hai request submit cùng bài
