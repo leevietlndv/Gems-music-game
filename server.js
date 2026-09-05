@@ -215,7 +215,7 @@ async function loadBlockedSongsFromDatabase() {
 
 /**
  * Chuyển một bài hát từ danh sách songs sang blacklist trong cùng một transaction.
- * Phase 2 chỉ dùng cho Admin Delete; Health = 0 sẽ được nối vào helper này ở phase sau.
+ * Dùng chung cho Admin Delete và tự động thay bài khi Health = 0.
  */
 async function blockSongAndRemove(songId, reason = 'manual_delete') {
   const normalizedId = Number.parseInt(songId, 10);
@@ -725,27 +725,53 @@ async function replaceCurrentSongDueToHealth() {
   if (replacementInProgress || !lastWinner || currentHealth !== 0) return false;
 
   replacementInProgress = true;
+  const previousSong = lastWinner;
+  const previousTitle = previousSong.title || previousSong.url || 'bài hát trước đó';
+
   try {
-    const previousSong = lastWinner;
-    const previousTitle = previousSong.title || previousSong.url || 'bài hát trước đó';
-    const availableSongs = songs.filter(song => String(song.id) !== String(previousSong.id));
+    // Phase 4B: Health = 0 => đưa bài cũ vào blacklist và xóa khỏi songs
+    // trong cùng transaction PostgreSQL. Không dùng DELETE trực tiếp ở đây
+    // để tránh trường hợp bài biến mất nhưng blacklist không được ghi.
+    const blockResult = await blockSongAndRemove(previousSong.id, 'health_zero');
+
+    if (!blockResult) {
+      console.warn(`⚠️ Không tìm thấy bài #${previousSong.id} khi tự động blacklist do Health = 0`);
+      lastWinner = null;
+      currentHealth = 5;
+      currentLikeCount = 0;
+      currentDislikeCount = 0;
+      clearReplacementCountdown();
+      broadcastState();
+      return false;
+    }
 
     clearReplacementCountdown();
 
+    // blockSongAndRemove() đã loại previousSong khỏi mảng songs sau COMMIT.
+    // Vì vậy danh sách dưới đây chỉ còn các bài có thể được thay thế.
+    const availableSongs = songs.filter(
+      song => String(song.id) !== String(previousSong.id)
+    );
+
     if (availableSongs.length === 0) {
-      currentHealth = 0;
-      await broadcastHealthOnly();
-      return false;
+      lastWinner = null;
+      currentHealth = 5;
+      currentLikeCount = 0;
+      currentDislikeCount = 0;
+      lastAction = { type: 'replace', title: previousTitle };
+
+      broadcastState();
+
+      console.log(
+        `❤️ Health = 0 → blacklist #${previousSong.id}; không còn bài hát để thay thế.`
+      );
+      return true;
     }
 
     const nextSong = availableSongs[Math.floor(Math.random() * availableSongs.length)];
 
-    // Xóa vote cũ đọng từ lần phát trước để health của bài mới luôn bắt đầu
-    // đúng từ 5 (không bị tính lại theo old votes ở lần vote tiếp theo).
+    // Reset vote cũ của bài kế tiếp để Health luôn bắt đầu từ 5.
     await pool.query('DELETE FROM song_votes WHERE song_id = $1', [nextSong.id]);
-    await pool.query('DELETE FROM song_votes WHERE song_id = $1', [previousSong.id]);
-    await pool.query('DELETE FROM songs WHERE id = $1', [previousSong.id]);
-    songs = songs.filter(song => String(song.id) !== String(previousSong.id));
 
     lastWinner = nextSong;
     currentHealth = 5;
@@ -764,10 +790,12 @@ async function replaceCurrentSongDueToHealth() {
     });
     broadcastState();
 
-    console.log(`❤️ Máu về 0 quá 10 giây → thay #${previousSong.id} bằng #${nextSong.id}: ${nextSong.title || nextSong.url}`);
+    console.log(
+      `❤️ Health = 0 → blacklist #${previousSong.id} (${blockResult.blockedSong?.blockedReason || 'health_zero'}) → thay bằng #${nextSong.id}: ${nextSong.title || nextSong.url}`
+    );
     return true;
   } catch (error) {
-    console.error('❌ Lỗi tự động thay bài do máu:', error);
+    console.error('❌ Lỗi tự động blacklist/thay bài do Health = 0:', error);
     return false;
   } finally {
     replacementInProgress = false;
