@@ -1,28 +1,133 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Vòng Quay Nhạc</title>
   <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
   <script src="/socket.io/socket.io.js"></script>
+  <script src="/shared/youtube.js"></script>
   <script src="https://www.youtube.com/iframe_api"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-    body { background-color: #1c2333; color: #ffffff; padding: 16px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
-    .header { text-align: center; margin-bottom: 16px; width: 100%; max-width: 480px; }
-    .header h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; gap: 8px; }
-    .status-badge { display: inline-block; padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; background: #2b384e; color: #00e676; transition: all 0.3s ease; }
-    .status-badge.closed { background: #3a2329; color: #ff5252; }
-    .status-badge.offline { background: #4a4a4a; color: #bdbdbd; }
-    .card { background: #252f42; border-radius: 12px; padding: 16px; width: 100%; max-width: 480px; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-    .card-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: #64b5f6; }
-    .input-group { display: flex; flex-direction: column; gap: 10px; }
-    input[type="text"] { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #3b4861; background: #1a2232; color: #fff; font-size: 14px; outline: none; }
-    input[type="text"]:focus { border-color: #2196f3; }
-    button { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s, opacity 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
-    .btn-submit { background: #0088cc; color: white; }
-    .btn-submit:disabled { background: #4a5568; opacity: 0.6; cursor: not-allowed; }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: #1c2333;
+      color: #ffffff;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 16px;
+      width: 100%;
+      max-width: 480px;
+    }
+
+    .header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      background: #2b384e;
+      color: #00e676;
+      transition: all 0.3s ease;
+    }
+
+    .status-badge.closed {
+      background: #3a2329;
+      color: #ff5252;
+    }
+
+    .status-badge.offline {
+      background: #4a4a4a;
+      color: #bdbdbd;
+    }
+
+    .card {
+      background: #252f42;
+      border-radius: 12px;
+      padding: 16px;
+      width: 100%;
+      max-width: 480px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #64b5f6;
+    }
+
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #3b4861;
+      background: #1a2232;
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+    }
+
+    input[type="text"]:focus {
+      border-color: #2196f3;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-submit {
+      background: #0088cc;
+      color: white;
+    }
+
+    .btn-submit:disabled {
+      background: #4a5568;
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
 
     /* ==================== ONLINE USERS BAR ==================== */
     .online-bar {
@@ -149,11 +254,49 @@
       font-size: 12px;
       margin-bottom: 10px;
     }
-    .wheel-container { position: relative; width: 300px; height: 300px; margin: 10px auto 20px auto; }
-    .pointer { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 12px solid transparent; border-right: 12px solid transparent; border-top: 20px solid #ffcc00; z-index: 10; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); }
-    canvas { width: 300px; height: 300px; border-radius: 50%; box-shadow: 0 0 15px rgba(0,0,0,0.5); }
-    .btn-spin { background: #ff9800; color: #111; font-size: 16px; font-weight: 700; margin-bottom: 12px; }
-    .btn-spin:disabled { background: #78541c; color: #666; cursor: not-allowed; }
+
+    .wheel-container {
+      position: relative;
+      width: 300px;
+      height: 300px;
+      margin: 10px auto 20px auto;
+    }
+
+    .pointer {
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 12px solid transparent;
+      border-right: 12px solid transparent;
+      border-top: 20px solid #ffcc00;
+      z-index: 10;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+    }
+
+    canvas {
+      width: 300px;
+      height: 300px;
+      border-radius: 50%;
+      box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+    }
+
+    .btn-spin {
+      background: #ff9800;
+      color: #111;
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .btn-spin:disabled {
+      background: #78541c;
+      color: #666;
+      cursor: not-allowed;
+    }
+
     .player-label {
       color: #ddd;
       font-weight: 400;
@@ -163,6 +306,7 @@
       color: #ffca28;
       font-weight: 700;
     }
+
     .admin-actions {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -176,8 +320,16 @@
       background: #37474f;
       color: white;
     }
-    .btn-toggle { background: #37474f; color: white; }
-    .btn-reset { background: #d32f2f; color: white; }
+
+    .btn-toggle {
+      background: #37474f;
+      color: white;
+    }
+
+    .btn-reset {
+      background: #d32f2f;
+      color: white;
+    }
 
     /* ===== 3 NÚT ADMIN ===== */
     .admin-actions button {
@@ -215,26 +367,28 @@
     }
 
     .song-list {
-        max-height: 240px;
-        overflow-y: auto;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
+      max-height: 240px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
-   .song-item {
-        width: 100%;
-        box-sizing: border-box;
-        padding: 12px 14px;
-        background: #182235;
-        border-left: 4px solid #00aaff;
-        border-radius: 12px;
 
-        /* QUAN TRỌNG: không dùng flex ở đây */
-        display: block;
+    .song-item {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 12px 14px;
+      background: #182235;
+      border-left: 4px solid #00aaff;
+      border-radius: 12px;
 
-        overflow: hidden;
-        flex-shrink: 0;
+      /* QUAN TRỌNG: không dùng flex ở đây */
+      display: block;
+
+      overflow: hidden;
+      flex-shrink: 0;
     }
+
     .song-header {
       width: 100%;
       display: flex;
@@ -244,17 +398,17 @@
       margin-bottom: 5px;
     }
 
-.song-actions {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 6px;
+    .song-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 6px;
 
-    flex: 0 0 auto;
-}
+      flex: 0 0 auto;
+    }
 
-  /* Nút PLAY */
-  .btn-play-song {
+    /* Nút PLAY */
+    .btn-play-song {
       width: 20%;
       height: 33px;
       max-width: 50px;
@@ -276,15 +430,15 @@
       justify-content: center;
 
       white-space: nowrap;
-  }
+    }
 
-  .btn-play-song:hover {
+    .btn-play-song:hover {
       background: #008dcc;
-  }
+    }
 
-  .btn-play-song:active {
+    .btn-play-song:active {
       transform: scale(0.96);
-  }
+    }
 
     .song-user {
       width: 80%;
@@ -299,13 +453,13 @@
     }
 
     .song-url {
-    min-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
     }
 
-      /* Nút DELETE */
+    /* Nút DELETE */
     .btn-delete-song {
       width: 20%;
       height: 33px;
@@ -331,11 +485,11 @@
     }
 
     .btn-delete-song:hover {
-        background: #b71c1c;
+      background: #b71c1c;
     }
 
     .btn-delete-song:active {
-        transform: scale(0.96);
+      transform: scale(0.96);
     }
 
     .song-title-row {
@@ -360,12 +514,43 @@
       margin-left: auto;
       flex-shrink: 0;
     }
-    
-    .player-wrapper { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px; background: #000; }
-    .player-wrapper iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
-    .audio-notice { font-size: 12px; padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 4px; font-weight: 600; }
-    .audio-notice.unmuted { background: #1b5e20; color: #a5d6a7; }
-    .audio-notice.muted { background: #4a148c; color: #e1bee7; }
+
+    .player-wrapper {
+      position: relative;
+      padding-bottom: 56.25%;
+      height: 0;
+      overflow: hidden;
+      border-radius: 8px;
+      background: #000;
+    }
+
+    .player-wrapper iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+
+    .audio-notice {
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-top: 4px;
+      font-weight: 600;
+    }
+
+    .audio-notice.unmuted {
+      background: #1b5e20;
+      color: #a5d6a7;
+    }
+
+    .audio-notice.muted {
+      background: #4a148c;
+      color: #e1bee7;
+    }
 
     .winner-interaction-row {
       display: flex;
@@ -373,6 +558,7 @@
       gap: 10px;
       margin-bottom: 10px;
     }
+
     .health-box {
       flex: 1 1 72%;
       min-width: 0;
@@ -380,6 +566,7 @@
       background: #182235;
       border-radius: 8px;
     }
+
     .health-title {
       font-size: 12px;
       font-weight: 700;
@@ -390,10 +577,12 @@
       display: flex;
       align-items: center;
     }
+
     .health-status-countdown {
       color: #ffcc00;
       font-weight: 800;
     }
+
     .health-bar {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
@@ -401,23 +590,41 @@
       width: 100%;
       height: 12px;
     }
+
     .health-segment {
       border-radius: 5px;
       background: #37474f;
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
       transition: background 0.2s ease, transform 0.2s ease;
     }
-    .health-segment.active:nth-child(1) { background: #d32f2f; }
-    .health-segment.active:nth-child(2) { background: #e85d23; }
-    .health-segment.active:nth-child(3) { background: #ff9800; }
-    .health-segment.active:nth-child(4) { background: #8caf2f; }
-    .health-segment.active:nth-child(5) { background: #2e7d32; }
+
+    .health-segment.active:nth-child(1) {
+      background: #d32f2f;
+    }
+
+    .health-segment.active:nth-child(2) {
+      background: #e85d23;
+    }
+
+    .health-segment.active:nth-child(3) {
+      background: #ff9800;
+    }
+
+    .health-segment.active:nth-child(4) {
+      background: #8caf2f;
+    }
+
+    .health-segment.active:nth-child(5) {
+      background: #2e7d32;
+    }
+
     .vote-actions {
       flex: 0 0 28%;
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 6px;
     }
+
     .vote-button {
       min-height: 54px;
       padding: 5px 2px;
@@ -428,6 +635,7 @@
       gap: 1px;
       line-height: 1.05;
     }
+
     .action-label {
       color: #ddd;
       font-weight: 400;
@@ -437,13 +645,42 @@
       color: #64b5f6;
       font-weight: 700;
     }
-    .vote-icon { font-size: 20px; line-height: 1; margin-bottom: 3px;}
-    .vote-label { font-size: 11px; font-weight: 700; }
-    .vote-count { font-size: 12px; font-weight: 800; opacity: 0.95; }
-    .vote-button.like { background: #2e7d32; }
-    .vote-button.dislike { background: #d32f2f; }
-    .vote-button.active { box-shadow: inset 0 0 0 3px #fff; transform: translateY(-1px); }
-    .vote-button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .vote-icon {
+      font-size: 20px;
+      line-height: 1;
+      margin-bottom: 3px;
+    }
+
+    .vote-label {
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .vote-count {
+      font-size: 12px;
+      font-weight: 800;
+      opacity: 0.95;
+    }
+
+    .vote-button.like {
+      background: #2e7d32;
+    }
+
+    .vote-button.dislike {
+      background: #d32f2f;
+    }
+
+    .vote-button.active {
+      box-shadow: inset 0 0 0 3px #fff;
+      transform: translateY(-1px);
+    }
+
+    .vote-button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
     .audio-controls {
       display: flex;
       align-items: center;
@@ -474,7 +711,9 @@
       box-sizing: border-box;
     }
 
-    .btn-audio-toggle.enabled { background: #2e7d32; }
+    .btn-audio-toggle.enabled {
+      background: #2e7d32;
+    }
 
     .volume-icon {
       font-size: clamp(16px, 4vw, 18px);
@@ -541,9 +780,12 @@
         font-size: 12px;
       }
     }
-    
+
     /* Utility class cho admin */
-    .admin-only { display: none; }
+    .admin-only {
+      display: none;
+    }
+
     /* =========================================================
    RESPONSIVE ADMIN BUTTONS
    Màn hình hẹp: icon trên - text dưới
@@ -560,8 +802,7 @@
 
         gap: 4px;
 
-        padding: clamp(10px, 2.5vw, 13px)
-                clamp(4px, 1.5vw, 8px);
+        padding: clamp(10px, 2.5vw, 13px) clamp(4px, 1.5vw, 8px);
 
         font-size: clamp(12px, 3.8vw, 16px);
 
@@ -587,9 +828,9 @@
       }
 
     }
-
   </style>
 </head>
+
 <body>
 
   <div class="header">
@@ -613,14 +854,9 @@
       <span>user</span>
     </div>
 
-    <button
-      id="onlineDetailsToggle"
-      class="online-details-toggle admin-only"
-      type="button"
-      title="Xem chi tiết người đang online"
-      aria-expanded="false"
-      aria-controls="onlineDetails"
-    ><span id="onlineToggleIcon" class="online-toggle-icon" aria-hidden="true">▼</span></button>
+    <button id="onlineDetailsToggle" class="online-details-toggle admin-only" type="button"
+      title="Xem chi tiết người đang online" aria-expanded="false" aria-controls="onlineDetails"><span
+        id="onlineToggleIcon" class="online-toggle-icon" aria-hidden="true">▼</span></button>
   </div>
 
   <div id="onlineDetails" class="online-details admin-only">
@@ -636,13 +872,13 @@
       <span class="player-label">🎉 ĐANG PHÁT:</span>
       <strong id="playerTitleText">-</strong>
     </div>
-    
+
     <div style="font-size: 13px; color: #ddd; margin-bottom: 6px;">
       Người gửi:
       <strong id="winnerUser" style="color: #64b5f6;">-</strong>
       <span id="winnerAction"></span>
     </div>
-    
+
     <div class="winner-interaction-row">
       <div class="health-box">
         <div id="healthStatus" class="health-title">❤️ Bạn có yêu thích bài hát này?</div>
@@ -690,7 +926,7 @@
   <div style="width: 100%; max-width: 480px;">
     <!-- Thêm class admin-only để ẩn nút với người dùng thường -->
     <button id="btnSpin" class="btn-spin admin-only">🎡 QUAY VÒNG QUAY</button>
-    
+
     <div id="adminPanel" class="admin-actions admin-only">
       <button id="btnToggleForm" class="btn-toggle">
         🔒 Đóng Form
@@ -708,40 +944,41 @@
     <div class="card">
       <div id="listTitle" class="card-title">📋 Danh sách bài hát (0)</div>
       <div id="songList" class="song-list">
-        <div style="text-align: center; color: #888; font-size: 13px; padding: 10px;">Chưa có bài hát nào được gửi.</div>
+        <div style="text-align: center; color: #888; font-size: 13px; padding: 10px;">Chưa có bài hát nào được gửi.
+        </div>
       </div>
     </div>
   </div>
 
   <script>
     const tg = window.Telegram?.WebApp;
-if (tg) { 
-  tg.ready(); 
-  tg.expand(); 
-}
+    if (tg) {
+      tg.ready();
+      tg.expand();
+    }
 
-const telegramInitData = tg?.initData || '';
+    const telegramInitData = tg?.initData || '';
 
-console.log('📱 Telegram WebApp:', {
-  available: !!tg,
-  platform: tg?.platform || 'unknown',
-  version: tg?.version || 'unknown',
-  initDataLength: telegramInitData.length,
-  userId: tg?.initDataUnsafe?.user?.id || null
-});
+    console.log('📱 Telegram WebApp:', {
+      available: !!tg,
+      platform: tg?.platform || 'unknown',
+      version: tg?.version || 'unknown',
+      initDataLength: telegramInitData.length,
+      userId: tg?.initDataUnsafe?.user?.id || null
+    });
 
-if (!tg) {
-  console.warn('⚠️ Trang này không được mở bên trong Telegram Mini App.');
-}
+    if (!tg) {
+      console.warn('⚠️ Trang này không được mở bên trong Telegram Mini App.');
+    }
 
-function getTelegramUserData() {
+    function getTelegramUserData() {
       const u = tg?.initDataUnsafe?.user;
       if (!u) return { name: 'Người dùng', id: null };
-      
+
       const first = (u.first_name || '').trim();
       const last = (u.last_name || '').trim();
       const combined = `${first} ${last}`.trim();
-      
+
       return {
         name: combined || u.username || 'Người dùng',
         id: u.id
@@ -799,6 +1036,7 @@ function getTelegramUserData() {
     let isAdmin = false;
     let currentAngle = 0;
     let currentPlayingUrl = null;
+    let currentSongId = null; // ID bài đang phát (bài này KHÔNG còn trong mảng songs)
     let currentAction = null;
     let currentHealth = 5;
     let currentVote = 0; // 1 = Like, -1 = Dislike, 0 = chưa vote
@@ -849,10 +1087,11 @@ function getTelegramUserData() {
     canvas.height = 300 * dpr;
     ctx.scale(dpr, dpr);
 
+    // Parse YouTube: DÙNG CHUNG logic với server (public/shared/youtube.js).
+    // Trước đây extractYouTubeId (regex) và isYouTubeUrl (URL API) viết riêng
+    // ở client, dễ lệch với server — giờ chỉ còn một nguồn sự thật.
     function extractYouTubeId(url) {
-      if (!url) return null;
-      const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
-      return (match && match[1]) ? match[1] : null;
+      return YouTubeUtils.getYouTubeVideoId(url);
     }
 
     function updateOnlineSummary(summary = {}) {
@@ -1129,7 +1368,8 @@ function getTelegramUserData() {
 
                   <button
                     class="btn-play-song"
-                    onclick="playSong('${id}')"
+                    data-action="play"
+                    data-id="${id}"
                     title="Phát bài hát"
                   >
                     ▶
@@ -1146,7 +1386,8 @@ function getTelegramUserData() {
                   <!-- DELETE: CHỈ ADMIN -->
                   <button
                     class="btn-delete-song ${window.isAdmin ? '' : 'admin-only'}"
-                    onclick="deleteSong('${id}')"
+                    data-action="delete"
+                    data-id="${id}"
                     title="Xóa bài hát"
                   >
                     ✖
@@ -1187,7 +1428,7 @@ function getTelegramUserData() {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
     }
-    
+
     async function playSong(songId) {
       if (!songId) {
         alert('Không xác định được bài hát cần phát!');
@@ -1210,10 +1451,10 @@ function getTelegramUserData() {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-          id: songId,
-          initData: telegramInitData,
-          socketId: socket.id
-        })
+            id: songId,
+            initData: telegramInitData,
+            socketId: socket.id
+          })
         });
 
         const data = await res.json();
@@ -1285,6 +1526,20 @@ function getTelegramUserData() {
       }
     }
 
+    // Event delegation: an toàn hơn inline onclick (không nhét dữ liệu
+    // vào attribute HTML, không tạo closure mỗi lần render).
+    songListEl.addEventListener('click', (event) => {
+      const button = event.target.closest('button[data-action]');
+      if (!button) return;
+
+      const songId = button.dataset.id;
+      if (button.dataset.action === 'play') {
+        playSong(songId);
+      } else if (button.dataset.action === 'delete') {
+        deleteSong(songId);
+      }
+    });
+
     function drawWheel() {
       const numSlices = songs.length;
       ctx.clearRect(0, 0, 300, 300);
@@ -1322,7 +1577,7 @@ function getTelegramUserData() {
         ctx.textAlign = 'right';
         ctx.fillStyle = '#ffffff';
 
-        let label = songs[i].user || `Bài ${i+1}`;
+        let label = songs[i].user || `Bài ${i + 1}`;
         if (label.length > 16) label = label.substring(0, 14) + '...';
 
         let fontSize = 12;
@@ -1426,7 +1681,7 @@ function getTelegramUserData() {
       savedAudioPreference = value;
       try {
         localStorage.setItem(MUSIC_PREF_KEY, String(value));
-      } catch (error) {}
+      } catch (error) { }
       updateAudioControls();
     }
 
@@ -1434,7 +1689,7 @@ function getTelegramUserData() {
       savedVolume = Math.max(0, Math.min(100, Number(value) || 0));
       try {
         localStorage.setItem(VOLUME_PREF_KEY, String(savedVolume));
-      } catch (error) {}
+      } catch (error) { }
       updateAudioControls();
     }
 
@@ -1505,23 +1760,36 @@ function getTelegramUserData() {
       }
     });
 
+    // Debounce: kéo slider cập nhật âm thanh ngay lập tức, nhưng chỉ ghi
+    // localStorage sau khi người dùng ngừng kéo 200ms (tránh spam disk I/O).
+    let volumeSaveTimer = null;
+
     volumeSlider.addEventListener('input', () => {
-      const value = Number(volumeSlider.value);
-      saveVolume(value);
+      const value = Math.max(0, Math.min(100, Number(volumeSlider.value) || 0));
+      savedVolume = value;
 
       if (value === 0) {
-        saveAudioPreference(false);
+        savedAudioPreference = false;
         sendYouTubeCommand('mute');
       } else {
-        saveAudioPreference(true);
+        savedAudioPreference = true;
         sendYouTubeCommand('setVolume', [value]);
         sendYouTubeCommand('unMute');
       }
 
       updateAudioControls();
+
+      clearTimeout(volumeSaveTimer);
+      volumeSaveTimer = setTimeout(() => {
+        try {
+          localStorage.setItem(VOLUME_PREF_KEY, String(savedVolume));
+          localStorage.setItem(MUSIC_PREF_KEY, String(savedAudioPreference));
+        } catch (error) { }
+      }, 200);
     });
 
     updateAudioControls();
+    updateVoteButtons(); // disable Like/Dislike ngay từ đầu khi chưa có bài
 
     function getEffectiveSound(shouldPlaySound) {
       return savedAudioPreference === null
@@ -1575,6 +1843,7 @@ function getTelegramUserData() {
       pendingPlayerSong = null;
       pendingPlayerSound = false;
       currentPlayingUrl = null;
+      currentSongId = null;
 
       if (youtubeApiPlayer && youtubePlayerReady) {
         try {
@@ -1658,14 +1927,17 @@ function getTelegramUserData() {
         data.replacementCountdown
       );
 
+      // songHealth gửi TRỰC TIẾP cho socket này (trong handler 'authenticate')
+      // mới chứa userVote riêng của user. Broadcast chung không có userVote.
       if (
-        data.telegramId != null &&
-        userData.id != null &&
-        String(data.telegramId) === String(userData.id)
+        data.userVote !== undefined &&
+        data.songId != null &&
+        currentSongId != null &&
+        String(data.songId) === String(currentSongId)
       ) {
         currentVote = Number(data.userVote) || 0;
-        updateVoteButtons();
       }
+      updateVoteButtons();
     });
 
     socket.on('replacementCountdown', (data) => {
@@ -1684,9 +1956,9 @@ function getTelegramUserData() {
     });
 
     function lastWinnerId() {
-      if (!currentPlayingUrl) return null;
-      const currentSong = songs.find(song => song.url === currentPlayingUrl);
-      return currentSong?.id ?? null;
+      // Bài đang phát đã bị xóa khỏi mảng songs (server xóa winner cũ khi
+      // play/spin), nên phải dùng ID đã lưu thay vì tìm lại qua URL.
+      return currentSongId;
     }
 
     async function sendVote(vote) {
@@ -1707,8 +1979,13 @@ function getTelegramUserData() {
 
         const data = await res.json();
 
-        if (!res.ok || !data.success && !data.replaced) {
-          if (data.message) console.log('❤️ Vote:', data.message);
+        if (!res.ok || !(data.success || data.replaced)) {
+          // Lỗi 401 (initData hết hạn), 400 v.v. — báo cho người dùng thay vì im lặng
+          if (data.message) {
+            alert('⚠️ ' + data.message);
+          } else {
+            console.error('❤️ Vote thất bại, HTTP status:', res.status);
+          }
           return;
         }
 
@@ -1737,6 +2014,7 @@ function getTelegramUserData() {
       if (!videoId) return;
 
       currentPlayingUrl = winner.url;
+      currentSongId = winner.id ?? null;
       currentAction = action || null;
       winnerUser.textContent = winner.user || 'Người dùng';
       playerTitleText.textContent = winner.title || '-';
@@ -1841,43 +2119,7 @@ function getTelegramUserData() {
     }
 
     function isYouTubeUrl(inputUrl) {
-      try {
-        const url = new URL(inputUrl.trim());
-
-        const hostname = url.hostname
-          .toLowerCase()
-          .replace(/^www\./, '');
-
-        if (
-          hostname === 'youtube.com' ||
-          hostname === 'm.youtube.com' ||
-          hostname === 'music.youtube.com'
-        ) {
-          if (url.searchParams.get('v')) {
-            return true;
-          }
-
-          const parts = url.pathname
-            .split('/')
-            .filter(Boolean);
-
-          return (
-            parts.length >= 2 &&
-            ['shorts', 'embed', 'live'].includes(parts[0])
-          );
-        }
-
-        if (hostname === 'youtu.be') {
-          return url.pathname
-            .split('/')
-            .filter(Boolean)
-            .length > 0;
-        }
-
-        return false;
-      } catch {
-        return false;
-      }
+      return YouTubeUtils.isValidYouTubeUrl(inputUrl);
     }
     function updateAutoPlayButton() {
       if (!btnAutoPlay) return;
@@ -1897,90 +2139,90 @@ function getTelegramUserData() {
         btnAutoPlay.style.background = '#37474f';
       }
     }
-    
-btnAutoPlay.addEventListener('click', async () => {
-  if (!window.isAdmin) {
-    alert('Bạn không có quyền Admin!');
-    return;
-  }
 
-  let nextMode;
+    btnAutoPlay.addEventListener('click', async () => {
+      if (!window.isAdmin) {
+        alert('Bạn không có quyền Admin!');
+        return;
+      }
 
-  if (autoPlayMode === 0) {
-    nextMode = 1;
-  } else if (autoPlayMode === 1) {
-    nextMode = 2;
-  } else {
-    nextMode = 0;
-  }
+      let nextMode;
 
-  btnAutoPlay.disabled = true;
+      if (autoPlayMode === 0) {
+        nextMode = 1;
+      } else if (autoPlayMode === 1) {
+        nextMode = 2;
+      } else {
+        nextMode = 0;
+      }
 
-  try {
-    const res = await fetch('/api/auto-play-mode', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        mode: nextMode,
-        initData: telegramInitData,
-        socketId: socket.id
-      })
+      btnAutoPlay.disabled = true;
+
+      try {
+        const res = await fetch('/api/auto-play-mode', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            mode: nextMode,
+            initData: telegramInitData,
+            socketId: socket.id
+          })
+        });
+
+        const data = await res.json();
+
+        if (!data.success) {
+          alert(data.message || 'Không thể đổi chế độ Auto Play!');
+          return;
+        }
+
+        autoPlayMode = Number(data.mode) || 0;
+        autoPlayControllerSocketId = data.controllerSocketId || null;
+        autoPlayController = autoPlayControllerSocketId === socket.id;
+
+        updateAutoPlayButton();
+
+        console.log(
+          '🎵 Auto Play Mode:',
+          autoPlayMode,
+          '| controller:',
+          autoPlayControllerSocketId
+        );
+
+        // Nếu vừa bật Auto Play mà chưa có bài đang phát,
+        // yêu cầu server chọn bài đầu tiên ngay lập tức.
+        if (autoPlayMode !== 0 && !data.hasCurrentSong && autoPlayController) {
+          const nextRes = await fetch('/api/auto-play-next', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              initData: telegramInitData,
+              socketId: socket.id
+            })
+          });
+
+          const nextData = await nextRes.json();
+
+          if (!nextData.success && nextData.stopAutoPlay) {
+            autoPlayMode = 0;
+            autoPlayController = false;
+            autoPlayControllerSocketId = null;
+            updateAutoPlayButton();
+          }
+        }
+      } catch (error) {
+        console.error('❌ Lỗi đổi Auto Play:', error);
+        alert('Lỗi kết nối!');
+      } finally {
+        btnAutoPlay.disabled = false;
+      }
     });
 
-    const data = await res.json();
-
-    if (!data.success) {
-      alert(data.message || 'Không thể đổi chế độ Auto Play!');
-      return;
-    }
-
-    autoPlayMode = Number(data.mode) || 0;
-    autoPlayControllerSocketId = data.controllerSocketId || null;
-    autoPlayController = autoPlayControllerSocketId === socket.id;
-
     updateAutoPlayButton();
-
-    console.log(
-      '🎵 Auto Play Mode:',
-      autoPlayMode,
-      '| controller:',
-      autoPlayControllerSocketId
-    );
-
-    // Nếu vừa bật Auto Play mà chưa có bài đang phát,
-    // yêu cầu server chọn bài đầu tiên ngay lập tức.
-    if (autoPlayMode !== 0 && !data.hasCurrentSong && autoPlayController) {
-      const nextRes = await fetch('/api/auto-play-next', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          initData: telegramInitData,
-          socketId: socket.id
-        })
-      });
-
-      const nextData = await nextRes.json();
-
-      if (!nextData.success && nextData.stopAutoPlay) {
-        autoPlayMode = 0;
-        autoPlayController = false;
-        autoPlayControllerSocketId = null;
-        updateAutoPlayButton();
-      }
-    }
-  } catch (error) {
-    console.error('❌ Lỗi đổi Auto Play:', error);
-    alert('Lỗi kết nối!');
-  } finally {
-    btnAutoPlay.disabled = false;
-  }
-});
-
-updateAutoPlayButton();
 
     function startSpinAnimation(targetIndex, winner, shouldPlaySound, action = currentAction) {
       if (isSpinning) return;
@@ -1991,13 +2233,18 @@ updateAutoPlayButton();
 
       const numSlices = songs.length;
       const sliceAngle = (2 * Math.PI) / numSlices;
-      const targetSliceStartAngle = targetIndex * sliceAngle;
+      // Danh sách có thể đã thay đổi trong 4 giây animation (admin xóa bài),
+      // nên kẹp index trong phạm vi hợp lệ để kim không chỉ sai ô.
+      const safeTargetIndex = numSlices > 0
+        ? Math.min(Math.max(0, Number(targetIndex) || 0), numSlices - 1)
+        : 0;
+      const targetSliceStartAngle = safeTargetIndex * sliceAngle;
       const targetSliceCenterAngle = targetSliceStartAngle + sliceAngle / 2;
       const extraSpins = 5 * 2 * Math.PI;
       const desiredFinalAngle = (1.5 * Math.PI) - targetSliceCenterAngle;
       const startAngle = currentAngle % (2 * Math.PI);
       const totalRotation = extraSpins + (desiredFinalAngle - startAngle);
-      
+
       let startTime = null;
       const duration = 4000;
 
@@ -2005,7 +2252,7 @@ updateAutoPlayButton();
         if (!startTime) startTime = timestamp;
         const progress = Math.min((timestamp - startTime) / duration, 1);
         const easeOut = 1 - Math.pow(1 - progress, 3);
-        
+
         currentAngle = startAngle + totalRotation * easeOut;
         drawWheel();
 
@@ -2025,7 +2272,7 @@ updateAutoPlayButton();
     btnSubmit.addEventListener('click', async () => {
       const url = songUrlInput.value.trim();
       if (!url) return alert('Vui lòng nhập link!');
-      
+
       btnSubmit.disabled = true;
       try {
         const cleanUrl = url.trim();
@@ -2038,24 +2285,24 @@ updateAutoPlayButton();
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-          url: cleanUrl,
-          initData: telegramInitData
-        })
+            url: cleanUrl,
+            initData: telegramInitData
+          })
         });
         const data = await res.json();
         if (data.success) songUrlInput.value = '';
         else alert(data.message);
-      } catch (e) { 
-        alert('Lỗi kết nối!'); 
-      } finally { 
-        btnSubmit.disabled = !isFormOpen; 
+      } catch (e) {
+        alert('Lỗi kết nối!');
+      } finally {
+        btnSubmit.disabled = !isFormOpen;
       }
     });
 
     btnSpin.addEventListener('click', async () => {
       if (isSpinning || songs.length === 0) return;
       try {
-        const res = await fetch('/api/spin', { 
+        const res = await fetch('/api/spin', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2073,7 +2320,7 @@ updateAutoPlayButton();
     });
 
     btnToggleForm.addEventListener('click', () => {
-      fetch('/api/toggle-form', { 
+      fetch('/api/toggle-form', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2085,7 +2332,7 @@ updateAutoPlayButton();
     btnReset.addEventListener('click', () => {
       if (confirm('Xóa tất cả bài hát?')) {
         clearPlayer();
-        fetch('/api/reset', { 
+        fetch('/api/reset', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2097,4 +2344,5 @@ updateAutoPlayButton();
     });
   </script>
 </body>
+
 </html>

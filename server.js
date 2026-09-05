@@ -7,16 +7,32 @@ const path = require('path');
 const crypto = require('crypto');
 const { Telegraf, Markup } = require('telegraf');
 const { Pool } = require('pg');
+const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
+// Logic parse YouTube DÙNG CHUNG với client (public/shared/youtube.js) — chỉ sửa ở đó.
+const { getYouTubeVideoId } = require('./public/shared/youtube.js');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+
+// CORS: chỉ cho phép Mini App của bạn nối Socket.IO (trước đây: mọi origin).
+// WEBAPP_URL phải trùng với domain load Mini App, ví dụ
+// https://gems-music-game.onrender.com
+const io = new Server(server, {
+  cors: {
+    origin: process.env.WEBAPP_URL || 'https://gems-music-game.onrender.com',
+    methods: ['GET', 'POST']
+  }
+});
 
 const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: {
-        rejectUnauthorized: false
-    }
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    // Mặc định kiểm tra chứng chỉ TLS (chống MITM).
+    // Chỉ bật false nếu DB dùng chứng chỉ self-signed:
+    // DATABASE_SSL_REJECT_UNAUTHORIZED=false
+    rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false'
+  }
 });
 async function initDatabase() {
   await pool.query(`
@@ -45,8 +61,6 @@ async function initDatabase() {
     )
   `);
 
-  // Phiên bản vote mới: LIKE = +1, DISLIKE = -1.
-  // Bản health-v1 cũ dùng ngược dấu, nên chỉ đảo dấu đúng một lần.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS song_votes_meta (
       key TEXT PRIMARY KEY,
@@ -54,17 +68,29 @@ async function initDatabase() {
     )
   `);
 
-  const voteVersion = await pool.query(
-    `SELECT version FROM song_votes_meta WHERE key = 'vote_semantics'`
-  );
+  // Phiên bản vote mới: LIKE = +1, DISLIKE = -1.
+  // Bản health-v1 cũ dùng ngược dấu, nên chỉ đảo dấu đúng một lần.
+  // Chạy trong transaction để không bao giờ đảo dấu 2 lần nếu server
+  // crash giữa chừng (UPDATE xong nhưng chưa ghi meta).
+  await pool.query('BEGIN');
+  try {
+    const voteVersion = await pool.query(
+      `SELECT version FROM song_votes_meta WHERE key = 'vote_semantics' FOR UPDATE`
+    );
 
-  if (voteVersion.rowCount === 0) {
-    await pool.query('UPDATE song_votes SET vote = -vote');
-    await pool.query(`
-      INSERT INTO song_votes_meta (key, version)
-      VALUES ('vote_semantics', 2)
-    `);
-    console.log('🔄 Đã chuyển vote sang quy ước mới: Like +1 | Dislike -1');
+    if (voteVersion.rowCount === 0) {
+      await pool.query('UPDATE song_votes SET vote = -vote');
+      await pool.query(`
+        INSERT INTO song_votes_meta (key, version)
+        VALUES ('vote_semantics', 2)
+      `);
+      console.log('🔄 Đã chuyển vote sang quy ước mới: Like +1 | Dislike -1');
+    }
+
+    await pool.query('COMMIT');
+  } catch (error) {
+    await pool.query('ROLLBACK');
+    throw error;
   }
 
   console.log('🗄️ PostgreSQL: Database ready');
@@ -226,8 +252,9 @@ const socketPresence = new Map();
 const socketAuth = new Map();
 
 function detectDeviceType(deviceInfo = {}) {
-  const platform = String(deviceInfo.platform || '').toLowerCase();
-  const userAgent = String(deviceInfo.userAgent || '').toLowerCase();
+  const info = deviceInfo || {}; // null/0/false coalesce to empty info
+  const platform = String(info.platform || '').toLowerCase();
+  const userAgent = String(info.userAgent || '').toLowerCase();
 
   // Tablet: iPad hoặc Android không có chuỗi "mobile".
   if (
@@ -420,14 +447,17 @@ async function getUserVote(songId, telegramId) {
   return result.rowCount ? Number(result.rows[0].vote) : 0;
 }
 
-async function broadcastHealthOnly(userVote = null) {
+async function broadcastHealthOnly() {
   io.emit('songHealth', {
     songId: lastWinner?.id || null,
     health: currentHealth,
     likes: currentLikeCount,
     dislikes: currentDislikeCount,
-    replacementCountdown,
-    ...(userVote === null ? {} : { userVote })
+    replacementCountdown
+    // Lưu ý: KHÔNG gửi userVote ở đây — broadcast đến tất cả user,
+    // mỗi user có vote riêng. Vote của người bấm được trả về qua HTTP
+    // response của /api/song-vote; userVote riêng lẻ chỉ được emit
+    // qua socket cá nhân trong handler 'authenticate'.
   });
 }
 
@@ -465,6 +495,9 @@ async function replaceCurrentSongDueToHealth() {
 
     const nextSong = availableSongs[Math.floor(Math.random() * availableSongs.length)];
 
+    // Xóa vote cũ đọng từ lần phát trước để health của bài mới luôn bắt đầu
+    // đúng từ 5 (không bị tính lại theo old votes ở lần vote tiếp theo).
+    await pool.query('DELETE FROM song_votes WHERE song_id = $1', [nextSong.id]);
     await pool.query('DELETE FROM song_votes WHERE song_id = $1', [previousSong.id]);
     await pool.query('DELETE FROM songs WHERE id = $1', [previousSong.id]);
     songs = songs.filter(song => String(song.id) !== String(previousSong.id));
@@ -677,6 +710,33 @@ async function performSpin(initiatorSocketId = null, actionUser = null) {
   }
 // --- API HTTP & SOCKET.IO ---
 app.use(express.json());
+
+// Security headers (X-Frame-Options, nosniff, HSTS, ...)
+// connectSrc cho phép Telegram Widget + YouTube iframe + Socket.IO;
+// frameSrc cho phép nhúng YouTube player.
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "https://telegram.org", "https://www.youtube.com", "https://s.ytimg.com"],
+      connectSrc: ["'self'", "https://telegram.org", "wss:"],
+      frameSrc: ["https://www.youtube.com", "https://www.youtube-nocookie.com"],
+      imgSrc: ["'self'", "data:", "https://i.ytimg.com"],
+      styleSrc: ["'self'", "'unsafe-inline'"] // CSS đang viết inline trong <style>
+    }
+  },
+  crossOriginEmbedderPolicy: false // cần cho YouTube iframe embed
+}));
+
+// Chống spam API: 60 request/phút cho mỗi IP.
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Quá nhiều yêu cầu, vui lòng thử lại sau.' }
+});
+app.use('/api/', apiLimiter);
 app.use(express.static(path.join(__dirname, 'public')));
 
 
@@ -727,39 +787,8 @@ async function getYouTubeTitle(url) {
 }
 
 // ==================== YOUTUBE URL VALIDATION ====================
-function getYouTubeVideoId(inputUrl) {
-  try {
-    const url = new URL(String(inputUrl).trim());
-    const hostname = url.hostname
-      .toLowerCase()
-      .replace(/^www\./, '');
-
-    if (hostname === 'youtu.be') {
-      return url.pathname.split('/').filter(Boolean)[0] || null;
-    }
-
-    if (
-      hostname === 'youtube.com' ||
-      hostname === 'm.youtube.com' ||
-      hostname === 'music.youtube.com'
-    ) {
-      const videoId = url.searchParams.get('v');
-      if (videoId) return videoId;
-
-      const parts = url.pathname.split('/').filter(Boolean);
-      if (
-        parts.length >= 2 &&
-        ['shorts', 'embed', 'live'].includes(parts[0])
-      ) {
-        return parts[1];
-      }
-    }
-
-    return null;
-  } catch (error) {
-    return null;
-  }
-}
+// (Đã chuyển sang public/shared/youtube.js — dùng chung với client)
+// Lưu ý: static middleware (dòng dưới) sẽ phục vụ /shared/youtube.js cho client.
 
 // ==================== AUTO PLAY STATE ====================
 // 0 = Tắt | 1 = Tuần tự | 2 = Ngẫu nhiên
@@ -831,6 +860,14 @@ app.post('/api/submit', async (req, res) => {
       .trim() || 'Người dùng';
 
   const cleanUrl = String(url).trim();
+
+  if (cleanUrl.length > 500) {
+    return res.json({
+      success: false,
+      message: 'Link quá dài!'
+    });
+  }
+
   const youtubeVideoId = getYouTubeVideoId(cleanUrl);
 
   if (!youtubeVideoId) {
@@ -1017,18 +1054,14 @@ app.post('/api/auto-play-next', async (req, res) => {
       nextSong = availableSongs[randomIndex];
     }
 
-    if (!nextSong) {
-      return res.status(500).json({
-        success: false,
-        message: 'Không tìm được bài hát tiếp theo.'
-      });
-    }
-
     if (lastWinner && String(lastWinner.id) !== String(nextSong.id)) {
       await pool.query('DELETE FROM songs WHERE id = $1', [lastWinner.id]);
       songs = songs.filter(song => String(song.id) !== String(lastWinner.id));
       console.log(`🗑️ Auto Play xóa bài cũ #${lastWinner.id}`);
     }
+
+    // Reset vote cũ đọng của bài kế tiếp để health luôn bắt đầu từ 5.
+    await pool.query('DELETE FROM song_votes WHERE song_id = $1', [nextSong.id]);
 
     lastWinner = nextSong;
     currentHealth = 5;
@@ -1117,6 +1150,9 @@ app.post('/api/play-song', async (req, res) => {
       songs = songs.filter(s => String(s.id) !== String(lastWinner.id));
       console.log(`🗑️ Đã xóa bài đang phát #${lastWinner.id}`);
     }
+
+    // Reset vote cũ đọng để health của bài này luôn bắt đầu từ 5.
+    await pool.query('DELETE FROM song_votes WHERE song_id = $1', [song.id]);
 
     lastWinner = song;
     currentHealth = 5;
@@ -1228,7 +1264,7 @@ app.post('/api/song-vote', async (req, res) => {
       startReplacementCountdown();
     }
 
-    await broadcastHealthOnly(newVote);
+    await broadcastHealthOnly();
     broadcastState();
 
     return {
@@ -1493,4 +1529,38 @@ async function startServer() {
   }
 }
 
-startServer();
+if (require.main === module) {
+  startServer();
+}
+
+// Tắt server an toàn khi Render/deploy gửi SIGTERM (Render deploy)
+function shutdown(signal) {
+  console.log(`🛑 Nhận ${signal}, đang tắt server...`);
+  if (bot) {
+    try { bot.stop(signal); } catch (_) {}
+  }
+  server.close(() => process.exit(0));
+  // Không chờ quá 5 giây nếu còn socket treo
+  setTimeout(() => process.exit(0), 5000).unref();
+}
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));
+
+server.on('error', (error) => {
+  console.error('❌ Lỗi HTTP server:', error);
+  process.exit(1);
+});
+
+module.exports = {
+  clampHealth,
+  detectDeviceType,
+  isAdmin,
+  validateTelegramInitData,
+  addOnlineUser,
+  removeOnlineUser,
+  getOnlineSummary,
+  getOnlineDetails,
+  onlineUsers,
+  socketPresence,
+  socketAuth
+};
