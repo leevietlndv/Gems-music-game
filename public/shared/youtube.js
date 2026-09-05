@@ -17,6 +17,9 @@
    *   youtube.com/embed/ID   | youtube.com/live/ID | music.youtube.com/watch?v=ID
    * @returns {string|null} video ID (11 ký tự) hoặc null nếu không hợp lệ
    */
+  // YouTube video ID luôn là 11 ký tự [A-Za-z0-9_-].
+  const VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
+
   function getYouTubeVideoId(inputUrl) {
     try {
       const url = new URL(String(inputUrl).trim());
@@ -24,28 +27,30 @@
         .toLowerCase()
         .replace(/^www\./, '');
 
-      if (hostname === 'youtu.be') {
-        return url.pathname.split('/').filter(Boolean)[0] || null;
-      }
+      let candidate = null;
 
-      if (
+      if (hostname === 'youtu.be') {
+        candidate = url.pathname.split('/').filter(Boolean)[0] || null;
+      } else if (
         hostname === 'youtube.com' ||
         hostname === 'm.youtube.com' ||
         hostname === 'music.youtube.com'
       ) {
-        const videoId = url.searchParams.get('v');
-        if (videoId) return videoId;
+        candidate = url.searchParams.get('v');
 
-        const parts = url.pathname.split('/').filter(Boolean);
-        if (
-          parts.length >= 2 &&
-          ['shorts', 'embed', 'live'].includes(parts[0])
-        ) {
-          return parts[1];
+        if (!candidate) {
+          const parts = url.pathname.split('/').filter(Boolean);
+          if (
+            parts.length >= 2 &&
+            ['shorts', 'embed', 'live'].includes(parts[0])
+          ) {
+            candidate = parts[1];
+          }
         }
       }
 
-      return null;
+      // Chặn chuỗi rác (quá ngắn/dài, ký tự lạ) trước khi lưu xuống DB.
+      return candidate && VIDEO_ID_PATTERN.test(candidate) ? candidate : null;
     } catch (error) {
       return null;
     }

@@ -15,6 +15,10 @@ const { getYouTubeVideoId } = require('./public/shared/youtube.js');
 const app = express();
 const server = http.createServer(app);
 
+// Render nằm sau reverse proxy: bắt buộc để req.ip / express-rate-limit
+// nhìn thấy IP thật của user thay vì IP của proxy.
+app.set('trust proxy', 1);
+
 // CORS: chỉ cho phép Mini App của bạn nối Socket.IO (trước đây: mọi origin).
 // WEBAPP_URL phải trùng với domain load Mini App, ví dụ
 // https://gems-music-game.onrender.com
@@ -68,6 +72,36 @@ async function initDatabase() {
   ALTER TABLE songs
   ADD COLUMN IF NOT EXISTS title TEXT
 `);
+
+  // Cột video_id (đã extract + validate) để chống race-condition khi
+  // submit trùng bài: duy nhất ở mức DB thay vì check SELECT trước INSERT.
+  await pool.query(`
+    ALTER TABLE songs
+    ADD COLUMN IF NOT EXISTS video_id TEXT
+  `);
+
+  // Backfill video_id cho các dòng cũ + xóa bài trùng (giữ bản cũ nhất).
+  {
+    const rows = await pool.query('SELECT id, url, video_id FROM songs');
+    const seen = new Map();
+    for (const row of rows.rows) {
+      const videoId = row.video_id || getYouTubeVideoId(row.url);
+      if (!videoId) continue;
+      if (seen.has(videoId)) {
+        await pool.query('DELETE FROM songs WHERE id = $1', [row.id]);
+      } else {
+        seen.set(videoId, row.id);
+        if (!row.video_id) {
+          await pool.query('UPDATE songs SET video_id = $1 WHERE id = $2', [videoId, row.id]);
+        }
+      }
+    }
+  }
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_songs_video_id
+    ON songs (video_id)
+  `);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS song_votes (
@@ -667,7 +701,12 @@ async function performSpin(initiatorSocketId = null, actionUser = null) {
     }
   });
 
+  // Mọi lệnh quản trị (spin/toggle/reset/list) chỉ dành cho Admin.
+  const requireBotAdmin = (ctx) => isAdmin(ctx.from?.id);
+  const denyNonAdmin = (ctx) => ctx.reply('⛔ Lệnh này chỉ dành cho Admin.');
+
   bot.command('spin', async (ctx) => {
+    if (!requireBotAdmin(ctx)) return denyNonAdmin(ctx);
     const result = await performSpin();
     if (!result.success) {
       ctx.reply(`⚠️ ${result.message}`);
@@ -677,12 +716,14 @@ async function performSpin(initiatorSocketId = null, actionUser = null) {
   });
 
   bot.command('toggle', (ctx) => {
+    if (!requireBotAdmin(ctx)) return denyNonAdmin(ctx);
     isFormOpen = !isFormOpen;
     broadcastState();
     ctx.reply(`📢 Trạng thái form: ${isFormOpen ? '🟢 Đang MỞ' : '🔴 Đã ĐÓNG'}`);
   });
 
   bot.command('reset', async (ctx) => {
+    if (!requireBotAdmin(ctx)) return denyNonAdmin(ctx);
     await pool.query('DELETE FROM songs');
 
     songs = [];
@@ -696,6 +737,7 @@ async function performSpin(initiatorSocketId = null, actionUser = null) {
   });
 
   bot.command('list', (ctx) => {
+    if (!requireBotAdmin(ctx)) return denyNonAdmin(ctx);
     if (songs.length === 0) {
       return ctx.reply('📋 Danh sách bài hát hiện đang trống.');
     }
@@ -755,6 +797,28 @@ const apiLimiter = rateLimit({
   message: { success: false, message: 'Quá nhiều yêu cầu, vui lòng thử lại sau.' }
 });
 app.use('/api/', apiLimiter);
+
+// Rate-limit theo USER Telegram: nhiều người dùng chung 1 IP (NAT/VPN)
+// sẽ không làm cạn quota của nhau, và attacker không thể đổi IP để bypass.
+// initData được verify chữ ký trước khi dùng để định danh.
+function getTelegramUserIdFromRequest(req) {
+  const initData = req.body?.initData || '';
+  const auth = validateTelegramInitData(initData);
+  return auth.valid ? `tg:${auth.user.id}` : null;
+}
+
+const { ipKeyGenerator } = require('express-rate-limit');
+
+const userLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) =>
+    getTelegramUserIdFromRequest(req) || ipKeyGenerator(req.ip),
+  message: { success: false, message: 'Bạn đã gửi quá nhiều yêu cầu, vui lòng thử lại sau.' }
+});
+app.use('/api/', userLimiter);
 app.use(express.static(path.join(__dirname, 'public')));
 
 
@@ -785,11 +849,15 @@ function requireTelegramAdmin(req, res) {
 
 // ==================== YOUTUBE TITLE ====================
 async function getYouTubeTitle(url) {
+  // Timeout 5s: tránh request /api/submit treo vĩnh viễn nếu YouTube chậm.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+
   try {
     const oembedUrl =
       `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
 
-    const response = await fetch(oembedUrl);
+    const response = await fetch(oembedUrl, { signal: controller.signal });
 
     if (!response.ok) {
       console.warn(`⚠️ Không lấy được YouTube title: HTTP ${response.status}`);
@@ -801,6 +869,8 @@ async function getYouTubeTitle(url) {
   } catch (error) {
     console.error('❌ Lỗi lấy YouTube title:', error);
     return 'Bài hát YouTube';
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -896,29 +966,21 @@ app.post('/api/submit', async (req, res) => {
   }
 
   try {
-    const existingSongs = await pool.query('SELECT id, url FROM songs');
-    const existingSong = existingSongs.rows.find(
-      song => getYouTubeVideoId(song.url) === youtubeVideoId
-    );
-
-    if (existingSong) {
-      return res.json({
-        success: false,
-        message: '⚠️ Bài hát này đã tồn tại trong danh sách!'
-      });
-    }
-
     const title = await getYouTubeTitle(cleanUrl);
 
+    // ON CONFLICT: chống race-condition — hai request submit cùng bài
+    // đồng thời thì chỉ một dòng được ghi, request kia báo trùng.
     const result = await pool.query(
       `
         INSERT INTO songs (
           url,
+          video_id,
           title,
           user_name,
           telegram_id
         )
-        VALUES ($1, $2, $3, $4)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (video_id) DO NOTHING
         RETURNING
           id,
           url,
@@ -929,11 +991,19 @@ app.post('/api/submit', async (req, res) => {
       `,
       [
         cleanUrl,
+        youtubeVideoId,
         title,
         userName,
         String(telegramUser.id)
       ]
     );
+
+    if (result.rowCount === 0) {
+      return res.json({
+        success: false,
+        message: '⚠️ Bài hát này đã tồn tại trong danh sách!'
+      });
+    }
 
     songs.push(result.rows[0]);
     songs.sort((a, b) => Number(a.id) - Number(b.id));
@@ -1432,20 +1502,9 @@ app.post('/api/delete-song', async (req, res) => {
 io.on('connection', (socket) => {
   console.log(`🔌 Socket connected: ${socket.id}`);
 
-  socket.emit('stateUpdate', {
-    isFormOpen,
-    songs,
-    lastWinner,
-    lastAction,
-    health: currentHealth,
-    autoPlayMode,
-    controllerSocketId: autoPlayControllerSocketId
-  });
-
-  socket.emit('autoPlayMode', {
-    mode: autoPlayMode,
-    controllerSocketId: autoPlayControllerSocketId
-  });
+  // Không emit state cho socket CHƯA xác thực initData — chỉ sau khi
+  // authenticate thành công mới gửi state hiện tại (chống rò rỉ dữ liệu
+  // cho bất kỳ ai mở kết nối websocket thuần).
 
   socket.on('authenticate', (payload = {}) => {
     const initData = payload.initData || '';
@@ -1479,6 +1538,22 @@ io.on('connection', (socket) => {
 
     addOnlineUser(socket, auth.user, deviceInfo);
     broadcastOnlineSummary();
+
+    // Chỉ sau khi xác thực mới gửi state hiện tại cho socket này.
+    socket.emit('stateUpdate', {
+      isFormOpen,
+      songs,
+      lastWinner,
+      lastAction,
+      health: currentHealth,
+      autoPlayMode,
+      controllerSocketId: autoPlayControllerSocketId
+    });
+
+    socket.emit('autoPlayMode', {
+      mode: autoPlayMode,
+      controllerSocketId: autoPlayControllerSocketId
+    });
 
     (async () => {
       if (!lastWinner) {
