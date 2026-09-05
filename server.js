@@ -126,6 +126,27 @@ async function initDatabase() {
     )
   `);
 
+  // Blacklist v1: lưu riêng các bài đã bị chặn để không làm thay đổi
+  // cấu trúc/ý nghĩa của bảng songs hiện tại. video_id là định danh duy nhất
+  // của bài YouTube, nên một bài chỉ xuất hiện một lần trong blacklist.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS blocked_songs (
+      id SERIAL PRIMARY KEY,
+      video_id TEXT NOT NULL,
+      url TEXT NOT NULL,
+      title TEXT,
+      user_name TEXT,
+      telegram_id TEXT,
+      blocked_reason TEXT NOT NULL CHECK (blocked_reason IN ('manual_delete', 'health_zero')),
+      blocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_blocked_songs_video_id
+    ON blocked_songs (video_id)
+  `);
+
   // Phiên bản vote mới: LIKE = +1, DISLIKE = -1.
   // Bản health-v1 cũ dùng ngược dấu, nên chỉ đảo dấu đúng một lần.
   // Chạy trong transaction để không bao giờ đảo dấu 2 lần nếu server
@@ -170,6 +191,26 @@ async function loadSongsFromDatabase() {
   songs = result.rows;
 
   console.log(`🎵 Đã tải ${songs.length} bài hát từ PostgreSQL`);
+}
+
+async function loadBlockedSongsFromDatabase() {
+  const result = await pool.query(`
+    SELECT
+      id,
+      video_id AS "videoId",
+      url,
+      title,
+      user_name AS user,
+      telegram_id AS "telegramId",
+      blocked_reason AS "blockedReason",
+      blocked_at AS "blockedAt"
+    FROM blocked_songs
+    ORDER BY id ASC
+  `);
+
+  blockedSongs = result.rows;
+
+  console.log(`🚫 Đã tải ${blockedSongs.length} bài hát trong blacklist từ PostgreSQL`);
 }
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -293,6 +334,10 @@ function validateTelegramInitData(initData) {
 
 let isFormOpen = true;
 let songs = [];
+// Danh sách blacklist được cache trong RAM sau khi tải từ PostgreSQL.
+// Giai đoạn 1 chỉ chuẩn bị dữ liệu; chưa expose ra client và chưa thay đổi
+// hành vi Xóa/Health cho tới các giai đoạn tiếp theo.
+let blockedSongs = [];
 let lastWinner = null;
 let lastAction = null;
 let currentHealth = 5;
@@ -1634,10 +1679,12 @@ async function startServer() {
   try {
     await initDatabase();
     await loadSongsFromDatabase();
+    await loadBlockedSongsFromDatabase();
 
     server.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`🎵 Songs loaded: ${songs.length}`);
+      console.log(`🚫 Blacklist loaded: ${blockedSongs.length}`);
     });
   } catch (error) {
     console.error('❌ Không thể khởi động server:', error);
