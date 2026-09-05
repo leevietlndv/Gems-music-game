@@ -341,59 +341,86 @@
       gap: 8px;
     }
 
+    /* UI Phase 1: Blacklist item = 2 dòng, bố cục giống song-item. */
     .blacklist-item {
       width: 100%;
+      min-height: 58px;
       box-sizing: border-box;
-      padding: 9px 10px;
+      padding: 10px 10px 9px 12px;
       display: flex;
-      align-items: center;
-      gap: 9px;
+      align-items: stretch;
+      gap: 10px;
       background: #182235;
       border-left: 4px solid #ef5350;
       border-radius: 9px;
+      overflow: hidden;
+      flex-shrink: 0;
     }
 
     .blacklist-info {
       min-width: 0;
       flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 4px;
+      overflow: hidden;
     }
 
-    .blacklist-user {
+    /* Dòng 1: user + lý do. JS sẽ tự co font nếu cần để luôn nằm trên 1 dòng. */
+    .blacklist-user-row {
+      min-width: 0;
+      width: 100%;
+      overflow: hidden;
+      white-space: nowrap;
+      line-height: 1.15;
+    }
+
+    .blacklist-user-reason {
+      display: inline-block;
+      min-width: max-content;
       color: #64b5f6;
       font-size: 12px;
       font-weight: 700;
-      margin-bottom: 3px;
+      white-space: nowrap;
+      transform-origin: left center;
     }
 
     .blacklist-title {
+      min-width: 0;
+      width: 100%;
       color: #eee;
       font-size: 12px;
-      line-height: 1.35;
+      line-height: 1.2;
+      white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
     }
 
-    .blacklist-reason {
-      color: #888;
-      font-size: 10px;
-      margin-top: 3px;
-    }
-
+    /* Cùng kích thước cơ bản với Play/Delete: 50 x 33px. */
     .btn-unblock-song {
-      flex: 0 0 auto;
-      min-width: 72px;
-      height: 32px;
-      padding: 0 8px;
+      flex: 0 0 50px;
+      width: 50px;
+      height: 33px;
+      min-width: 50px;
+      max-width: 50px;
+      padding: 3px;
+      align-self: center;
       border: none;
-      border-radius: 7px;
+      border-radius: 6px;
       background: #2e7d32;
       color: #fff;
-      font-size: 11px;
+      font-size: 18px;
       font-weight: 700;
       cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap;
+    }
+
+    .btn-unblock-song:hover {
+      background: #256b29;
     }
 
     .btn-unblock-song:active {
@@ -1624,15 +1651,16 @@
           const user = escapeHtml(item.user || 'Người dùng');
           const title = escapeHtml(item.title || item.url || 'Bài hát YouTube');
           const reason = item.blockedReason === 'health_zero'
-            ? '❤️ Sức khỏe = 0'
-            : '🗑️ Admin xóa';
+            ? '- bị 5 vote'
+            : '- bởi Ad';
 
           return `
             <div class="blacklist-item">
               <div class="blacklist-info">
-                <div class="blacklist-user">${user}</div>
-                <div class="blacklist-title">${title}</div>
-                <div class="blacklist-reason">${reason}</div>
+                <div class="blacklist-user-row" data-font-fit="true">
+                  <span class="blacklist-user-reason">${user} ${reason}</span>
+                </div>
+                <div class="blacklist-title" title="${title}">${title}</div>
               </div>
 
               <button
@@ -1641,12 +1669,15 @@
                 data-id="${escapeHtml(id)}"
                 type="button"
                 title="Gỡ bài hát khỏi blacklist"
+                aria-label="Gỡ bài hát khỏi blacklist"
               >
-                🔓 Gỡ chặn
+                🔓
               </button>
             </div>
           `;
         }).join('');
+
+        requestAnimationFrame(fitBlacklistUserReasonFonts);
       } catch (error) {
         console.error('❌ Lỗi render blacklist:', error);
         blacklistListEl.innerHTML = `
@@ -1656,6 +1687,38 @@
         `;
       }
     }
+
+    function fitBlacklistUserReasonFonts() {
+      const rows = document.querySelectorAll('.blacklist-user-row[data-font-fit="true"]');
+
+      rows.forEach((row) => {
+        const text = row.querySelector('.blacklist-user-reason');
+        if (!text) return;
+
+        const maxFontSize = 12;
+        const minFontSize = 8;
+        const step = 0.25;
+
+        text.style.fontSize = `${maxFontSize}px`;
+        text.style.transform = 'none';
+
+        // Co font dần để dòng 1 luôn nằm trên một hàng.
+        while (text.scrollWidth > row.clientWidth && parseFloat(text.style.fontSize) > minFontSize) {
+          const current = parseFloat(text.style.fontSize);
+          text.style.fontSize = `${Math.max(minFontSize, current - step)}px`;
+        }
+
+        // Nếu vẫn quá dài ở mức tối thiểu, scale nhẹ để tuyệt đối không xuống dòng.
+        if (text.scrollWidth > row.clientWidth && row.clientWidth > 0) {
+          const scale = Math.max(0.72, row.clientWidth / text.scrollWidth);
+          text.style.transform = `scaleX(${scale})`;
+        }
+      });
+    }
+
+    window.addEventListener('resize', () => {
+      requestAnimationFrame(fitBlacklistUserReasonFonts);
+    });
 
     function toggleBlacklistDetails(forceOpen = null) {
       if (!blacklistDetails) return;
