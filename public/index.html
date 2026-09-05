@@ -971,6 +971,15 @@
       console.warn('⚠️ Trang này không được mở bên trong Telegram Mini App.');
     }
 
+    // Cảnh báo rõ ràng trên UI khi thiếu initData (chỉ xem, không tương tác được)
+    if (!telegramInitData) {
+      const warn = document.createElement('div');
+      warn.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#b3261e;color:#fff;padding:10px 14px;font-size:13px;text-align:center;';
+      warn.textContent = '⚠️ Không nhận được Telegram initData — ứng dụng đang ở chế độ chỉ xem. Hãy mở Mini App qua nút Menu của bot @' + (location.hostname) + ' (không mở link trực tiếp trong trình duyệt).';
+      document.addEventListener('DOMContentLoaded', () => document.body.prepend(warn));
+      if (document.body) document.body.prepend(warn);
+    }
+
     function getTelegramUserData() {
       const u = tg?.initDataUnsafe?.user;
       if (!u) return { name: 'Người dùng', id: null };
