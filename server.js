@@ -690,7 +690,13 @@ function setPlaybackState({
 }
 
 function getPlaybackState() {
-  return { ...playbackState };
+  // Phase 6C: gửi mốc thời gian server để client có thể ước lượng
+  // chênh lệch đồng hồ và tính vị trí authoritative chính xác hơn.
+  // serverNow chỉ là metadata realtime, không lưu DB và không làm tăng version.
+  return {
+    ...playbackState,
+    serverNow: Date.now()
+  };
 }
 
 function stopPlayback() {

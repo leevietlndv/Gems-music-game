@@ -1366,6 +1366,16 @@
     let playbackTimelineSongId = null;
     const PLAYBACK_TIMELINE_TICK_MS = 250;
 
+    // ==================== DRIFT CORRECTION (PHASE 6C) ====================
+    // Không broadcast currentTime mỗi giây. Client tự so sánh vị trí YouTube
+    // thực tế với vị trí authoritative từ server và chỉ seek khi lệch đáng kể.
+    let playbackDriftTimer = null;
+    let playbackDriftCorrectionAt = 0;
+    let serverClockOffsetMs = 0;
+    const PLAYBACK_DRIFT_CHECK_MS = 2000;
+    const PLAYBACK_DRIFT_CORRECTION_THRESHOLD_SEC = 1.5;
+    const PLAYBACK_DRIFT_CORRECTION_COOLDOWN_MS = 3000;
+
     // Phase 6A.1: giữ dấu vết thao tác Play vừa phát sinh trực tiếp từ user gesture.
     // Dùng để tránh server echo lại làm reload video, đồng thời reconcile theo
     // playback state authoritative sau khi server xác nhận.
@@ -1565,6 +1575,7 @@
     socket.on('disconnect', (reason) => {
       socketAuthenticated = false;
       clearAuthTimer();
+      stopPlaybackDriftCorrection();
       console.warn('🔌 Socket disconnected:', reason);
       setConnectionStatus('🔴 Mất kết nối', 'offline');
     });
@@ -1643,11 +1654,17 @@
       updateUI();
 
       const incomingPlayback = data.playback || null;
+      updateServerClockOffset(incomingPlayback);
       const playbackChanged =
         !currentPlayback ||
         !incomingPlayback ||
         Number(incomingPlayback.version) !== Number(currentPlayback.version);
       currentPlayback = incomingPlayback;
+      if (currentPlayback?.status === 'playing') {
+        startPlaybackDriftCorrection();
+      } else {
+        stopPlaybackDriftCorrection();
+      }
       playbackTimelineSeekPending = false;
       playbackTimelinePendingPosition = null;
       if (incomingPlayback?.songId != null) {
@@ -1693,6 +1710,12 @@
       );
 
       const incomingPlayback = data.playback || null;
+      updateServerClockOffset(incomingPlayback);
+      if (incomingPlayback?.status === 'playing') {
+        startPlaybackDriftCorrection();
+      } else {
+        stopPlaybackDriftCorrection();
+      }
       playbackTimelineSeekPending = false;
       playbackTimelinePendingPosition = null;
       const isLocalInitiator = shouldPlaySound;
@@ -2528,6 +2551,24 @@
       }
     }
 
+    function updateServerClockOffset(playback) {
+      const serverNow = Number(playback?.serverNow);
+      if (!Number.isFinite(serverNow)) return;
+
+      const measuredOffset = serverNow - Date.now();
+
+      // Làm mượt nhẹ để tránh vị trí nhảy do network jitter.
+      if (!Number.isFinite(serverClockOffsetMs)) {
+        serverClockOffsetMs = measuredOffset;
+      } else {
+        serverClockOffsetMs = (serverClockOffsetMs * 0.8) + (measuredOffset * 0.2);
+      }
+    }
+
+    function getAuthoritativeNowMs() {
+      return Date.now() + (Number.isFinite(serverClockOffsetMs) ? serverClockOffsetMs : 0);
+    }
+
     function getLocalPlaybackPosition() {
       if (!currentPlayback) return 0;
 
@@ -2684,8 +2725,61 @@
         return basePosition;
       }
 
-      const elapsed = Math.max(0, (Date.now() - startedAt) / 1000);
+      const elapsed = Math.max(0, (getAuthoritativeNowMs() - startedAt) / 1000);
       return basePosition + elapsed;
+    }
+
+    function stopPlaybackDriftCorrection() {
+      if (playbackDriftTimer) {
+        clearInterval(playbackDriftTimer);
+        playbackDriftTimer = null;
+      }
+    }
+
+    function correctPlaybackDrift() {
+      if (!youtubeApiPlayer || !youtubePlayerReady || !currentPlayback) return;
+      if (currentPlayback.status !== 'playing' || currentPlayback.songId == null) return;
+      if (currentSongId == null || String(currentPlayback.songId) !== String(currentSongId)) return;
+      if (playbackTimelineDragging || playbackTimelineSeekPending) return;
+      if (document.hidden) return;
+
+      const now = Date.now();
+      if (now - playbackDriftCorrectionAt < PLAYBACK_DRIFT_CORRECTION_COOLDOWN_MS) return;
+
+      const target = Math.max(0, getPlaybackTargetPosition(currentPlayback));
+
+      try {
+        const playerState = youtubeApiPlayer.getPlayerState();
+        const currentTime = Number(youtubeApiPlayer.getCurrentTime()) || 0;
+
+        // Nếu YouTube bị pause ngoài ý muốn trong khi server vẫn authoritative
+        // là PLAYING, playVideo() sẽ khôi phục playback. Với drift nhỏ hơn
+        // threshold thì để YouTube tự chạy, tránh seek liên tục.
+        if (typeof YT !== 'undefined' && playerState === YT.PlayerState.PAUSED) {
+          youtubeApiPlayer.playVideo();
+          playbackDriftCorrectionAt = now;
+          return;
+        }
+
+        if (typeof YT !== 'undefined' && playerState !== YT.PlayerState.PLAYING) return;
+
+        const drift = currentTime - target;
+        if (Math.abs(drift) <= PLAYBACK_DRIFT_CORRECTION_THRESHOLD_SEC) return;
+
+        youtubeApiPlayer.seekTo(target, true);
+        playbackDriftCorrectionAt = now;
+        console.log(
+          `🎯 Drift correction: YouTube=${currentTime.toFixed(2)}s | server=${target.toFixed(2)}s | drift=${drift.toFixed(2)}s`
+        );
+      } catch (error) {
+        console.warn('⚠️ Không thể kiểm tra/sửa drift playback:', error);
+      }
+    }
+
+    function startPlaybackDriftCorrection() {
+      if (playbackDriftTimer) return;
+      playbackDriftTimer = setInterval(correctPlaybackDrift, PLAYBACK_DRIFT_CHECK_MS);
+      correctPlaybackDrift();
     }
 
     function schedulePlaybackStart(playback) {
@@ -2723,6 +2817,14 @@
       if (!playback || !youtubeApiPlayer || !youtubePlayerReady) return;
       if (!currentSongId || playback.songId == null) return;
       if (String(playback.songId) !== String(currentSongId)) return;
+
+      updateServerClockOffset(playback);
+      playbackDriftCorrectionAt = 0;
+      if (playback.status === 'playing') {
+        startPlaybackDriftCorrection();
+      } else {
+        stopPlaybackDriftCorrection();
+      }
 
       playbackTimelineSongId = playback.songId;
       startPlaybackTimelineTicker();
@@ -2876,6 +2978,9 @@
       pendingPlayerSound = false;
       pendingPlayerPlayback = null;
       pendingLocalPlayback = null;
+      stopPlaybackDriftCorrection();
+      serverClockOffsetMs = 0;
+      playbackDriftCorrectionAt = 0;
       currentPlayback = null;
       currentPlayingUrl = null;
       currentSongId = null;
@@ -3137,6 +3242,17 @@
         handleAutoPlayEnded();
       }
     }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) return;
+
+      // Telegram WebView/di động có thể tạm dừng iframe khi app ra nền.
+      // Khi quay lại foreground, sync ngay theo server thay vì chờ tick 2s.
+      if (currentPlayback?.status === 'playing') {
+        playbackDriftCorrectionAt = 0;
+        syncPlayerToPlayback(currentPlayback);
+      }
+    });
 
     async function handleAutoPlayEnded() {
       // Chỉ đúng Admin đang giữ quyền điều khiển Auto Play mới được chuyển bài.
