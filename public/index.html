@@ -2239,7 +2239,7 @@
             console.warn('⚠️ YouTube chặn autoplay/playback tự động trên thiết bị này.');
             if (!autoplayBlockedNoticeShown) {
               autoplayBlockedNoticeShown = true;
-              audioNotice.textContent = '▶️ Thiết bị đã chặn tự phát. Hãy bấm nút Play của YouTube để bắt đầu.';
+              audioNotice.textContent = '▶️ Thiết bị yêu cầu bạn bấm Play YouTube một lần để cho phép phát nhạc.';
               audioNotice.className = 'audio-notice muted';
             }
           },
@@ -2555,18 +2555,53 @@
 
       youtubeApiPlayer.setVolume(savedVolume);
 
-      if (effectiveSound && savedVolume > 0) {
+      const isLocalGesturePlayback =
+        pendingLocalPlayback &&
+        String(pendingLocalPlayback.songId) === String(song.id);
+
+      // Mobile/WebView: khi user vừa tap Play, ưu tiên chuỗi mute -> load -> play
+      // -> unmute trong cùng call stack. Cách này cho trình duyệt cơ hội xem
+      // playVideo() là hành động phát được khởi tạo bởi user gesture.
+      if (isLocalGesturePlayback && effectiveSound && savedVolume > 0) {
+        try {
+          youtubeApiPlayer.mute();
+        } catch (error) {}
+      } else if (effectiveSound && savedVolume > 0) {
         youtubeApiPlayer.unMute();
       } else {
         youtubeApiPlayer.mute();
       }
 
       // Với playback state 'playing', play ngay hoặc chờ tới startedAt (Spin).
-      // Nếu state không có, giữ hành vi phát ngay của Phase 5.
+      // Nếu đây là Play vừa được user tap, tránh setTimeout để không làm mất
+      // user activation trên mobile.
       if (hasAuthoritativePlayback && playback.status === 'playing') {
-        schedulePlaybackStart(playback);
+        const startedAt = Number(playback.startedAt);
+        const delayMs = Number.isFinite(startedAt)
+          ? startedAt - Date.now()
+          : 0;
+
+        if (isLocalGesturePlayback && delayMs <= 50) {
+          try {
+            youtubeApiPlayer.playVideo();
+          } catch (error) {
+            console.warn('⚠️ Không thể phát YouTube trong user gesture:', error);
+          }
+          if (effectiveSound && savedVolume > 0) {
+            try { youtubeApiPlayer.unMute(); } catch (error) {}
+          }
+        } else {
+          schedulePlaybackStart(playback);
+        }
       } else {
-        youtubeApiPlayer.playVideo();
+        try {
+          youtubeApiPlayer.playVideo();
+        } catch (error) {
+          console.warn('⚠️ Không thể phát YouTube:', error);
+        }
+        if (isLocalGesturePlayback && effectiveSound && savedVolume > 0) {
+          try { youtubeApiPlayer.unMute(); } catch (error) {}
+        }
       }
 
       updateAudioNotice(effectiveSound && savedVolume > 0);
@@ -2793,6 +2828,19 @@
 
     function onYouTubePlayerStateChange(event) {
       console.log('🎬 YouTube state:', event.data);
+
+      // Nếu autoplay bị WebView chặn nhưng người dùng vừa bấm Play trên
+      // chính YouTube, PLAYING là tín hiệu chắc chắn rằng video đã bắt đầu.
+      // Đồng bộ lại ngay theo server-authoritative timeline, không cần Reload.
+      if (
+        typeof YT !== 'undefined' &&
+        event.data === YT.PlayerState.PLAYING &&
+        currentPlayback &&
+        currentPlayback.status === 'playing'
+      ) {
+        autoplayBlockedNoticeShown = false;
+        syncPlayerToPlayback(currentPlayback);
+      }
 
       if (
         typeof YT !== 'undefined' &&
