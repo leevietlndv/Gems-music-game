@@ -860,6 +860,52 @@
       cursor: not-allowed;
     }
 
+    /* ==================== PHASE 6B: EXTERNAL TIMELINE ==================== */
+    .playback-timeline {
+      margin-top: 10px;
+      padding: 9px 10px 8px;
+      background: #182235;
+      border-radius: 10px;
+      width: 100%;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+
+    .playback-time-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 5px;
+      color: #ddd;
+      font-size: 12px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .playback-time-current {
+      color: #64b5f6;
+    }
+
+    .playback-time-duration {
+      color: #aaa;
+    }
+
+    #playbackTimeline {
+      display: block;
+      width: 100%;
+      height: 18px;
+      margin: 0;
+      padding: 0;
+      accent-color: #00aaff;
+      cursor: pointer;
+    }
+
+    #playbackTimeline:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
     .audio-controls {
       display: flex;
       align-items: center;
@@ -1089,6 +1135,14 @@
       <div id="ytPlayer"></div>
     </div>
 
+    <div class="playback-timeline" aria-label="Tiến trình phát nhạc">
+      <div class="playback-time-row">
+        <span id="playbackCurrentTime" class="playback-time-current">00:00</span>
+        <span id="playbackDuration" class="playback-time-duration">00:00</span>
+      </div>
+      <input id="playbackTimeline" type="range" min="0" max="0" step="0.1" value="0" aria-label="Thanh thời gian bài hát" disabled>
+    </div>
+
     <div class="audio-controls">
       <button id="btnAudioToggle" class="btn-audio-toggle" type="button">🔇 Bật nhạc</button>
       <span id="volumeIcon" class="volume-icon">🔊</span>
@@ -1261,6 +1315,9 @@
     const volumeSlider = document.getElementById('volumeSlider');
     const volumeValue = document.getElementById('volumeValue');
     const volumeIcon = document.getElementById('volumeIcon');
+    const playbackTimeline = document.getElementById('playbackTimeline');
+    const playbackCurrentTime = document.getElementById('playbackCurrentTime');
+    const playbackDuration = document.getElementById('playbackDuration');
     const onlineUserCount = document.getElementById('onlineUserCount');
     const onlineDetailsToggle = document.getElementById('onlineDetailsToggle');
     const onlineToggleIcon = document.getElementById('onlineToggleIcon');
@@ -1299,6 +1356,15 @@
     let playbackStartTimer = null;
     let playbackScheduleToken = 0;
     const PLAYBACK_DRIFT_TOLERANCE_SEC = 1.5;
+    // Phase 6B: timeline là UI cục bộ; không polling server và không gửi
+    // currentTime liên tục. Chỉ gửi seek khi người dùng thả thanh kéo.
+    let playbackTimelineTimer = null;
+    let playbackTimelineDragging = false;
+    let playbackTimelineSeekPending = false;
+    let playbackTimelinePendingPosition = null;
+    let playbackDurationSec = 0;
+    let playbackTimelineSongId = null;
+    const PLAYBACK_TIMELINE_TICK_MS = 250;
 
     // Phase 6A.1: giữ dấu vết thao tác Play vừa phát sinh trực tiếp từ user gesture.
     // Dùng để tránh server echo lại làm reload video, đồng thời reconcile theo
@@ -1582,6 +1648,15 @@
         !incomingPlayback ||
         Number(incomingPlayback.version) !== Number(currentPlayback.version);
       currentPlayback = incomingPlayback;
+      playbackTimelineSeekPending = false;
+      playbackTimelinePendingPosition = null;
+      if (incomingPlayback?.songId != null) {
+        playbackTimelineSongId = incomingPlayback.songId;
+        startPlaybackTimelineTicker();
+      } else if (!data.lastWinner) {
+        resetPlaybackTimeline();
+      }
+      updatePlaybackTimelineUi();
 
       if (data.lastWinner && !isSpinning && currentPlayingUrl !== data.lastWinner.url) {
         renderPlayer(data.lastWinner, false, data.lastAction || currentAction, incomingPlayback);
@@ -1618,6 +1693,8 @@
       );
 
       const incomingPlayback = data.playback || null;
+      playbackTimelineSeekPending = false;
+      playbackTimelinePendingPosition = null;
       const isLocalInitiator = shouldPlaySound;
       const matchesPendingLocal =
         isLocalInitiator &&
@@ -1631,6 +1708,8 @@
         // Chỉ cập nhật UI + ép vị trí theo server authoritative.
         currentPlayingUrl = song.url;
         currentSongId = song.id ?? null;
+        playbackTimelineSongId = currentSongId;
+        startPlaybackTimelineTicker();
         currentAction = data.action || currentAction;
         winnerUser.textContent = song.user || 'Người dùng';
         playerTitleText.textContent = song.title || '-';
@@ -2424,6 +2503,167 @@
       }
     }
 
+    function formatPlaybackTime(seconds) {
+      const value = Math.max(0, Math.floor(Number(seconds) || 0));
+      const hours = Math.floor(value / 3600);
+      const minutes = Math.floor((value % 3600) / 60);
+      const secs = value % 60;
+
+      if (hours > 0) {
+        return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+      }
+      return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
+    function setPlaybackTimelineDuration(duration) {
+      const value = Math.max(0, Number(duration) || 0);
+      playbackDurationSec = value;
+
+      if (playbackDuration) {
+        playbackDuration.textContent = formatPlaybackTime(value);
+      }
+      if (playbackTimeline) {
+        playbackTimeline.max = String(value);
+        playbackTimeline.disabled = !(value > 0 && currentSongId != null);
+      }
+    }
+
+    function getLocalPlaybackPosition() {
+      if (!currentPlayback) return 0;
+
+      if (currentPlayback.status === 'playing') {
+        return getPlaybackTargetPosition(currentPlayback);
+      }
+
+      return Math.max(0, Number(currentPlayback.position) || 0);
+    }
+
+    function updatePlaybackTimelineUi() {
+      if (!playbackTimeline || !playbackCurrentTime) return;
+
+      const pendingPosition = playbackTimelineSeekPending
+        ? Number(playbackTimelinePendingPosition)
+        : NaN;
+      const position = Math.max(0, Number(
+        playbackTimelineDragging
+          ? playbackTimeline.value
+          : Number.isFinite(pendingPosition)
+            ? pendingPosition
+            : getLocalPlaybackPosition()
+      ) || 0);
+
+      const max = Math.max(0, Number(playbackDurationSec) || Number(playbackTimeline.max) || 0);
+      const displayPosition = max > 0 ? Math.min(position, max) : position;
+
+      playbackCurrentTime.textContent = formatPlaybackTime(displayPosition);
+
+      if (!playbackTimelineDragging) {
+        playbackTimeline.value = String(displayPosition);
+      }
+
+      if (max > 0) {
+        playbackTimeline.disabled = currentSongId == null;
+      } else {
+        playbackTimeline.disabled = true;
+      }
+    }
+
+    function stopPlaybackTimelineTicker() {
+      if (playbackTimelineTimer) {
+        clearInterval(playbackTimelineTimer);
+        playbackTimelineTimer = null;
+      }
+    }
+
+    function startPlaybackTimelineTicker() {
+      if (playbackTimelineTimer) return;
+      playbackTimelineTimer = setInterval(updatePlaybackTimelineUi, PLAYBACK_TIMELINE_TICK_MS);
+      updatePlaybackTimelineUi();
+    }
+
+    function refreshPlaybackDuration() {
+      if (!youtubeApiPlayer || !youtubePlayerReady || currentSongId == null) return;
+
+      try {
+        const duration = Number(youtubeApiPlayer.getDuration()) || 0;
+        if (duration > 0) {
+          setPlaybackTimelineDuration(duration);
+        }
+      } catch (error) {
+        // YouTube chưa có duration tại thời điểm này; lần tick sau sẽ thử lại.
+      }
+    }
+
+    function resetPlaybackTimeline() {
+      stopPlaybackTimelineTicker();
+      playbackTimelineDragging = false;
+      playbackTimelineSeekPending = false;
+      playbackTimelinePendingPosition = null;
+      playbackDurationSec = 0;
+      playbackTimelineSongId = null;
+
+      if (playbackTimeline) {
+        playbackTimeline.value = '0';
+        playbackTimeline.max = '0';
+        playbackTimeline.disabled = true;
+      }
+      if (playbackCurrentTime) playbackCurrentTime.textContent = '00:00';
+      if (playbackDuration) playbackDuration.textContent = '00:00';
+    }
+
+    function updatePlaybackTimelineFromPlayer() {
+      if (!youtubeApiPlayer || !youtubePlayerReady || currentSongId == null) return;
+
+      refreshPlaybackDuration();
+      updatePlaybackTimelineUi();
+    }
+
+    function sendPlaybackSeek(position) {
+      if (!socket.connected || !currentPlayback || currentPlayback.songId == null) return;
+      if (currentPlayback.status !== 'playing') return;
+      if (playbackTimelineSongId != null && String(playbackTimelineSongId) !== String(currentPlayback.songId)) return;
+
+      const duration = Number(playbackDurationSec) || 0;
+      let target = Math.max(0, Number(position) || 0);
+      if (duration > 0) target = Math.min(target, duration);
+
+      playbackTimelineSeekPending = true;
+      playbackTimelinePendingPosition = target;
+      socket.emit('playbackSeek', {
+        songId: currentPlayback.songId,
+        version: currentPlayback.version,
+        position: target
+      });
+    }
+
+    function commitPlaybackTimelineSeek() {
+      if (!playbackTimeline || !playbackTimelineDragging) return;
+
+      const target = Number(playbackTimeline.value) || 0;
+      playbackTimelineDragging = false;
+      sendPlaybackSeek(target);
+      updatePlaybackTimelineUi();
+    }
+
+    if (playbackTimeline) {
+      playbackTimeline.addEventListener('input', () => {
+        playbackTimelineDragging = true;
+        updatePlaybackTimelineUi();
+      });
+
+      playbackTimeline.addEventListener('change', () => {
+        commitPlaybackTimelineSeek();
+      });
+
+      playbackTimeline.addEventListener('pointerup', () => {
+        commitPlaybackTimelineSeek();
+      });
+
+      playbackTimeline.addEventListener('touchend', () => {
+        commitPlaybackTimelineSeek();
+      }, { passive: true });
+    }
+
     function clearPlaybackStartTimer() {
       playbackScheduleToken += 1;
       if (playbackStartTimer) {
@@ -2484,6 +2724,10 @@
       if (!currentSongId || playback.songId == null) return;
       if (String(playback.songId) !== String(currentSongId)) return;
 
+      playbackTimelineSongId = playback.songId;
+      startPlaybackTimelineTicker();
+      refreshPlaybackDuration();
+
       if (playback.status !== 'playing') {
         clearPlaybackStartTimer();
         try {
@@ -2517,6 +2761,8 @@
       if (!videoId) return;
 
       clearPlaybackStartTimer();
+      playbackTimelineSongId = song.id ?? null;
+      startPlaybackTimelineTicker();
 
       if (!youtubeApiPlayer || !youtubePlayerReady) {
         pendingPlayerSong = song;
@@ -2620,6 +2866,8 @@
 
       updateAudioNotice(effectiveSound && savedVolume > 0);
       updateAudioControls();
+      refreshPlaybackDuration();
+      updatePlaybackTimelineUi();
     }
 
     function clearPlayer() {
@@ -2631,6 +2879,7 @@
       currentPlayback = null;
       currentPlayingUrl = null;
       currentSongId = null;
+      resetPlaybackTimeline();
 
       if (youtubeApiPlayer && youtubePlayerReady) {
         try {
@@ -2846,6 +3095,10 @@
 
     function onYouTubePlayerStateChange(event) {
       console.log('🎬 YouTube state:', event.data);
+      if (event.data !== (typeof YT !== 'undefined' ? YT.PlayerState.ENDED : -1)) {
+        refreshPlaybackDuration();
+        updatePlaybackTimelineUi();
+      }
 
       // Nếu autoplay bị WebView chặn nhưng người dùng vừa bấm Play trên
       // chính YouTube, PLAYING là tín hiệu chắc chắn rằng video đã bắt đầu.

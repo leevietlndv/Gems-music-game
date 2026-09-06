@@ -2043,6 +2043,39 @@ io.on('connection', (socket) => {
     })();
   });
 
+  // ==================== PHASE 6B: SYNCHRONIZED SEEK ====================
+  // Chỉ xử lý seek khi songId + playback version còn khớp. Mỗi seek tạo
+  // một playback version mới để vô hiệu hóa các tín hiệu cũ (ví dụ ENDED).
+  // Không ghi DB và không broadcast currentTime liên tục.
+  socket.on('playbackSeek', (payload = {}) => {
+    const songId = payload.songId;
+    const version = Number(payload.version);
+    const position = Number(payload.position);
+
+    if (songId == null || !Number.isFinite(version) || !Number.isFinite(position)) return;
+
+    enqueueGameMutation(async () => {
+      if (playbackState.songId == null) return;
+      if (String(playbackState.songId) !== String(songId)) return;
+      if (Number(playbackState.version) !== version) return;
+      if (playbackState.status !== 'playing') return;
+
+      const safePosition = Math.max(0, position);
+      const seeked = setPlaybackState({
+        songId: playbackState.songId,
+        status: 'playing',
+        position: safePosition,
+        startedAt: Date.now()
+      });
+
+      io.emit('playbackState', seeked);
+      broadcastState();
+      console.log(`⏩ Seek playback bài #${songId} → ${safePosition.toFixed(1)}s`);
+    }).catch(error => {
+      console.error('❌ Lỗi xử lý playbackSeek:', error);
+    });
+  });
+
   // YouTube đã phát hết bài. Chỉ chấp nhận tín hiệu khớp với playback
   // hiện tại để một client cũ/reload không thể dừng bài mới. Khi Auto Play
   // đang có controller, controller sẽ gọi /api/auto-play-next để chuyển bài;
