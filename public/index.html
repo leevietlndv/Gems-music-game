@@ -2370,6 +2370,9 @@
           onReady: (event) => {
             youtubePlayerReady = true;
             console.log('🎬 YouTube Player đã sẵn sàng');
+            // Phase 6D.2: Player vừa khởi tạo phải nhận global volume hiện tại
+            // ngay cả khi server chưa phát sinh volumeState mới.
+            applyGlobalVolumeToPlayer(true);
             updateAudioControls();
 
             if (pendingPlayerSong) {
@@ -2426,7 +2429,11 @@
     // Mute/unmute vẫn là thiết lập riêng của từng thiết bị; volume là global.
     let savedAudioPreference = null;
     // Phase 6D.1: volume chung do server làm nguồn sự thật.
+    // Phase 6D.2: theo dõi giá trị đã áp dụng thực tế vào YouTube Player
+    // để tránh setVolume() lặp lại không cần thiết khi stateUpdate và
+    // volumeState cùng được nhận.
     let globalVolume = 70;
+    let lastAppliedGlobalVolume = null;
 
     try {
       const storedPreference = localStorage.getItem(MUSIC_PREF_KEY);
@@ -2444,13 +2451,18 @@
       updateAudioControls();
     }
 
-    function applyGlobalVolumeToPlayer() {
+    function applyGlobalVolumeToPlayer(force = false) {
       if (!youtubeApiPlayer || !youtubePlayerReady) return;
 
       try {
-        youtubeApiPlayer.setVolume(globalVolume);
+        if (force || lastAppliedGlobalVolume !== globalVolume) {
+          youtubeApiPlayer.setVolume(globalVolume);
+          lastAppliedGlobalVolume = globalVolume;
+        }
+
         // Mute là trạng thái riêng của từng thiết bị. Chỉ khi global volume
-        // bằng 0 thì player bắt buộc không có tiếng.
+        // bằng 0 thì player bắt buộc không có tiếng. Khi user đã chọn Bật
+        // nhạc, global volume mới được áp dụng nhưng không làm mất preference.
         if (savedAudioPreference === false || globalVolume === 0) {
           youtubeApiPlayer.mute();
         } else if (savedAudioPreference === true) {
@@ -2528,7 +2540,7 @@
     function applyAudioSettings(playAfterUnmute = false) {
       if (!youtubeApiPlayer || !youtubePlayerReady) return;
 
-      youtubeApiPlayer.setVolume(globalVolume);
+      applyGlobalVolumeToPlayer(true);
 
       if (savedAudioPreference === false || globalVolume === 0) {
         youtubeApiPlayer.mute();
@@ -3099,7 +3111,8 @@
         youtubeApiPlayer.loadVideoById(videoId);
       }
 
-      youtubeApiPlayer.setVolume(globalVolume);
+      // Phase 6D.2: áp dụng volume authoritative trước khi xử lý mute/unmute.
+      applyGlobalVolumeToPlayer(true);
 
       const isLocalGesturePlayback =
         pendingLocalPlayback &&
@@ -3182,6 +3195,8 @@
       currentPlayingUrl = null;
       currentSongId = null;
       resetPlaybackTimeline();
+
+      lastAppliedGlobalVolume = null;
 
       if (youtubeApiPlayer && youtubePlayerReady) {
         try {
