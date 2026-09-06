@@ -689,6 +689,30 @@ function setPlaybackState({
   return { ...playbackState };
 }
 
+// ==================== GLOBAL VOLUME STATE (PHASE 6D.1) ====================
+// Volume là trạng thái dùng chung của toàn bộ Radio. Chỉ Admin được phép
+// thay đổi; server là nguồn sự thật và không lưu volume vào PostgreSQL ở phase này.
+const DEFAULT_GLOBAL_VOLUME = 70;
+let globalVolume = DEFAULT_GLOBAL_VOLUME;
+
+function setGlobalVolume(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+
+  globalVolume = Math.max(0, Math.min(100, Math.round(numeric)));
+  return globalVolume;
+}
+
+function getGlobalVolume() {
+  return globalVolume;
+}
+
+function broadcastGlobalVolume() {
+  io.emit('volumeState', {
+    volume: getGlobalVolume()
+  });
+}
+
 function getPlaybackState() {
   // Phase 6C: gửi mốc thời gian server để client có thể ước lượng
   // chênh lệch đồng hồ và tính vị trí authoritative chính xác hơn.
@@ -1219,6 +1243,7 @@ function broadcastState() {
     controllerSocketId: autoPlayControllerSocketId,
     blockedSongs,
     playback: getPlaybackState(),
+    volume: getGlobalVolume(),
     online: getOnlineSummary()
   });
 }
@@ -1967,7 +1992,12 @@ function sendInitialState(socket) {
     controllerSocketId: autoPlayControllerSocketId,
     blockedSongs,
     playback: getPlaybackState(),
+    volume: getGlobalVolume(),
     online: getOnlineSummary()
+  });
+
+  socket.emit('volumeState', {
+    volume: getGlobalVolume()
   });
 
   socket.emit('autoPlayMode', {
@@ -2060,6 +2090,22 @@ io.on('connection', (socket) => {
   // đúng vị trí hiện tại, không cần thay đổi playback version.
   socket.on('requestPlaybackSync', () => {
     socket.emit('playbackSync', getPlaybackState());
+  });
+
+  // ==================== PHASE 6D.1: GLOBAL VOLUME ====================
+  // Chỉ Admin được phép thay đổi volume chung. User thường bị từ chối ở
+  // server ngay cả khi cố tự emit event bằng DevTools.
+  socket.on('volumeChange', (payload = {}) => {
+    if (socket.isAdmin !== true) {
+      console.warn(`⛔ Từ chối volumeChange từ user thường: socket=${socket.id}`);
+      return;
+    }
+
+    const nextVolume = setGlobalVolume(payload.volume);
+    if (nextVolume == null) return;
+
+    broadcastGlobalVolume();
+    console.log(`🔊 Global volume → ${nextVolume}% (Admin socket=${socket.id})`);
   });
 
   // ==================== PHASE 6B: SYNCHRONIZED SEEK ====================

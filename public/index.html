@@ -1332,7 +1332,6 @@
     const blacklistListEl = document.getElementById('blacklistList');
 
     const MUSIC_PREF_KEY = 'gemsMusicAudioPreference';
-    const VOLUME_PREF_KEY = 'gemsMusicVolume';
 
     let isFormOpen = true;
     let songs = [];
@@ -1599,6 +1598,7 @@
       // Lưu trạng thái Admin để updateUI() biết có hiện nút Xóa hay không
       window.isAdmin = data.isAdmin === true;
       updatePlaybackTimelineAccess();
+      updateVolumeAccess();
 
       if (onlineDetailsToggle) {
         onlineDetailsToggle.classList.toggle('admin-only', !window.isAdmin);
@@ -1642,6 +1642,9 @@
       currentDislikeCount = Number(data.dislikes) || 0;
       replacementCountdown = Number.isFinite(Number(data.replacementCountdown)) ? Number(data.replacementCountdown) : null;
       updateOnlineSummary(data.online || {});
+      if (Number.isFinite(Number(data.volume))) {
+        setGlobalVolumeFromServer(data.volume);
+      }
       updateHealth(typeof data.health === 'number' ? data.health : 5);
 
       if (typeof data.autoPlayMode !== 'undefined') {
@@ -1742,7 +1745,7 @@
         renderWinnerAction(currentAction);
         playerCard.style.display = 'block';
         updateVoteButtons();
-        updateAudioNotice(getEffectiveSound(true) && savedVolume > 0);
+        updateAudioNotice(getEffectiveSound(true) && globalVolume > 0);
         updateAudioControls();
 
         syncPlayerToPlayback(incomingPlayback);
@@ -2420,18 +2423,15 @@
 
     // ==================== CÁ NHÂN HÓA ÂM THANH ====================
     // null = chưa từng chọn, true = luôn bật, false = luôn mute.
-    // Volume được lưu trên thiết bị/trình duyệt của từng user.
+    // Mute/unmute vẫn là thiết lập riêng của từng thiết bị; volume là global.
     let savedAudioPreference = null;
-    let savedVolume = 70;
+    // Phase 6D.1: volume chung do server làm nguồn sự thật.
+    let globalVolume = 70;
 
     try {
       const storedPreference = localStorage.getItem(MUSIC_PREF_KEY);
       if (storedPreference === 'true') savedAudioPreference = true;
       if (storedPreference === 'false') savedAudioPreference = false;
-      const storedVolume = Number(localStorage.getItem(VOLUME_PREF_KEY));
-      if (Number.isFinite(storedVolume)) {
-        savedVolume = Math.max(0, Math.min(100, storedVolume));
-      }
     } catch (error) {
       console.warn('⚠️ Không đọc được thiết lập âm thanh:', error);
     }
@@ -2444,12 +2444,39 @@
       updateAudioControls();
     }
 
-    function saveVolume(value) {
-      savedVolume = Math.max(0, Math.min(100, Number(value) || 0));
+    function applyGlobalVolumeToPlayer() {
+      if (!youtubeApiPlayer || !youtubePlayerReady) return;
+
       try {
-        localStorage.setItem(VOLUME_PREF_KEY, String(savedVolume));
-      } catch (error) { }
+        youtubeApiPlayer.setVolume(globalVolume);
+        // Mute là trạng thái riêng của từng thiết bị. Chỉ khi global volume
+        // bằng 0 thì player bắt buộc không có tiếng.
+        if (savedAudioPreference === false || globalVolume === 0) {
+          youtubeApiPlayer.mute();
+        } else if (savedAudioPreference === true) {
+          youtubeApiPlayer.unMute();
+        }
+      } catch (error) {
+        console.warn('⚠️ Không thể áp dụng global volume:', error);
+      }
+    }
+
+    function setGlobalVolumeFromServer(value) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return;
+      globalVolume = Math.max(0, Math.min(100, Math.round(numeric)));
       updateAudioControls();
+      updateVolumeAccess();
+      applyGlobalVolumeToPlayer();
+    }
+
+    function sendGlobalVolume(value) {
+      if (window.isAdmin !== true) return;
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return;
+      socket.emit('volumeChange', {
+        volume: Math.max(0, Math.min(100, Math.round(numeric)))
+      });
     }
 
     function sendYouTubeCommand(func, args = []) {
@@ -2475,22 +2502,35 @@
     }
 
     function updateAudioControls() {
-      const muted = savedAudioPreference === false || savedVolume === 0;
+      const muted = savedAudioPreference === false || globalVolume === 0;
       btnAudioToggle.textContent = muted ? '🔇 Bật nhạc' : '🔊 Tắt nhạc';
       btnAudioToggle.classList.toggle('enabled', !muted);
-      volumeIcon.textContent = muted
+      volumeIcon.textContent = globalVolume === 0
         ? '🔇'
-        : (savedVolume < 50 ? '🔉' : '🔊');
-      volumeSlider.value = String(savedVolume);
-      volumeValue.textContent = savedVolume;
+        : (globalVolume < 50 ? '🔉' : '🔊');
+      volumeSlider.value = String(globalVolume);
+      volumeValue.textContent = globalVolume;
+    }
+
+    function updateVolumeAccess() {
+      if (!volumeSlider) return;
+
+      const canChangeVolume = window.isAdmin === true;
+      volumeSlider.disabled = !canChangeVolume;
+      volumeSlider.setAttribute('aria-disabled', canChangeVolume ? 'false' : 'true');
+      volumeSlider.tabIndex = canChangeVolume ? 0 : -1;
+      volumeSlider.style.cursor = canChangeVolume ? 'pointer' : 'default';
+      volumeSlider.title = canChangeVolume
+        ? 'Điều chỉnh âm lượng chung cho tất cả thiết bị'
+        : 'Chỉ Admin được điều chỉnh âm lượng chung';
     }
 
     function applyAudioSettings(playAfterUnmute = false) {
       if (!youtubeApiPlayer || !youtubePlayerReady) return;
 
-      youtubeApiPlayer.setVolume(savedVolume);
+      youtubeApiPlayer.setVolume(globalVolume);
 
-      if (savedAudioPreference === false || savedVolume === 0) {
+      if (savedAudioPreference === false || globalVolume === 0) {
         youtubeApiPlayer.mute();
       } else {
         youtubeApiPlayer.unMute();
@@ -2503,10 +2543,17 @@
     }
 
     btnAudioToggle.addEventListener('click', () => {
-      const muted = savedAudioPreference === false || savedVolume === 0;
+      const globallyMuted = globalVolume === 0;
+      const locallyMuted = savedAudioPreference === false;
 
-      if (muted) {
-        if (savedVolume === 0) saveVolume(70);
+      if (globallyMuted) {
+        audioNotice.textContent = '🔇 Âm lượng chung đang ở 0% — chỉ Admin có thể tăng';
+        audioNotice.className = 'audio-notice muted';
+        updateAudioControls();
+        return;
+      }
+
+      if (locallyMuted) {
         saveAudioPreference(true);
         applyAudioSettings(true);
         audioNotice.textContent = '🔊 Âm thanh: Đang Bật';
@@ -2519,35 +2566,57 @@
       }
     });
 
-    // Debounce: kéo slider cập nhật âm thanh ngay lập tức, nhưng chỉ ghi
-    // localStorage sau khi người dùng ngừng kéo 200ms (tránh spam disk I/O).
-    let volumeSaveTimer = null;
+    // Phase 6D.1: chỉ Admin được thay đổi global volume. Trong lúc kéo,
+    // UI cập nhật ngay; event gửi server được throttle để tránh spam.
+    let volumeEmitTimer = null;
+    let pendingGlobalVolume = null;
 
     volumeSlider.addEventListener('input', () => {
-      const value = Math.max(0, Math.min(100, Number(volumeSlider.value) || 0));
-      savedVolume = value;
-
-      if (value === 0) {
-        savedAudioPreference = false;
-        sendYouTubeCommand('mute');
-      } else {
-        savedAudioPreference = true;
-        sendYouTubeCommand('setVolume', [value]);
-        sendYouTubeCommand('unMute');
+      if (window.isAdmin !== true) {
+        updateVolumeAccess();
+        return;
       }
 
+      const value = Math.max(0, Math.min(100, Number(volumeSlider.value) || 0));
+      globalVolume = value;
+      pendingGlobalVolume = value;
       updateAudioControls();
+      applyGlobalVolumeToPlayer();
 
-      clearTimeout(volumeSaveTimer);
-      volumeSaveTimer = setTimeout(() => {
-        try {
-          localStorage.setItem(VOLUME_PREF_KEY, String(savedVolume));
-          localStorage.setItem(MUSIC_PREF_KEY, String(savedAudioPreference));
-        } catch (error) { }
-      }, 200);
+      if (volumeEmitTimer === null) {
+        sendGlobalVolume(value);
+        volumeEmitTimer = setTimeout(() => {
+          volumeEmitTimer = null;
+          if (pendingGlobalVolume != null) {
+            sendGlobalVolume(pendingGlobalVolume);
+            pendingGlobalVolume = null;
+          }
+        }, 80);
+      }
+    });
+
+    volumeSlider.addEventListener('change', () => {
+      if (window.isAdmin !== true) {
+        updateVolumeAccess();
+        return;
+      }
+
+      const value = Math.max(0, Math.min(100, Number(volumeSlider.value) || 0));
+      globalVolume = value;
+      pendingGlobalVolume = null;
+      applyGlobalVolumeToPlayer();
+      clearTimeout(volumeEmitTimer);
+      volumeEmitTimer = null;
+      sendGlobalVolume(value);
+      updateAudioControls();
+    });
+
+    socket.on('volumeState', (data) => {
+      setGlobalVolumeFromServer(data?.volume);
     });
 
     updateAudioControls();
+    updateVolumeAccess();
     updateVoteButtons(); // disable Like/Dislike ngay từ đầu khi chưa có bài
 
     function getEffectiveSound(shouldPlaySound) {
@@ -3030,7 +3099,7 @@
         youtubeApiPlayer.loadVideoById(videoId);
       }
 
-      youtubeApiPlayer.setVolume(savedVolume);
+      youtubeApiPlayer.setVolume(globalVolume);
 
       const isLocalGesturePlayback =
         pendingLocalPlayback &&
@@ -3039,11 +3108,11 @@
       // Mobile/WebView: khi user vừa tap Play, ưu tiên chuỗi mute -> load -> play
       // -> unmute trong cùng call stack. Cách này cho trình duyệt cơ hội xem
       // playVideo() là hành động phát được khởi tạo bởi user gesture.
-      if (isLocalGesturePlayback && effectiveSound && savedVolume > 0) {
+      if (isLocalGesturePlayback && effectiveSound && globalVolume > 0) {
         try {
           youtubeApiPlayer.mute();
         } catch (error) {}
-      } else if (effectiveSound && savedVolume > 0) {
+      } else if (effectiveSound && globalVolume > 0) {
         youtubeApiPlayer.unMute();
       } else {
         youtubeApiPlayer.mute();
@@ -3064,7 +3133,7 @@
           } catch (error) {
             console.warn('⚠️ Không thể phát YouTube trong user gesture:', error);
           }
-          if (effectiveSound && savedVolume > 0) {
+          if (effectiveSound && globalVolume > 0) {
             try { youtubeApiPlayer.unMute(); } catch (error) {}
           }
         } else {
@@ -3084,7 +3153,7 @@
             youtubeApiPlayer.loadVideoById(videoId, cuePosition);
             youtubeApiPlayer.pauseVideo();
           }
-          if (effectiveSound && savedVolume > 0) {
+          if (effectiveSound && globalVolume > 0) {
             youtubeApiPlayer.unMute();
           } else {
             youtubeApiPlayer.mute();
@@ -3094,7 +3163,7 @@
         }
       }
 
-      updateAudioNotice(effectiveSound && savedVolume > 0);
+      updateAudioNotice(effectiveSound && globalVolume > 0);
       updateAudioControls();
       refreshPlaybackDuration();
       updatePlaybackTimelineUi();
@@ -3320,7 +3389,7 @@
       updateVoteButtons();
 
       const effectiveSound = getEffectiveSound(shouldPlaySound);
-      updateAudioNotice(effectiveSound && savedVolume > 0);
+      updateAudioNotice(effectiveSound && globalVolume > 0);
       updateAudioControls();
 
       loadSongIntoPlayer(winner, shouldPlaySound, currentPlayback);
