@@ -1598,6 +1598,7 @@
 
       // Lưu trạng thái Admin để updateUI() biết có hiện nút Xóa hay không
       window.isAdmin = data.isAdmin === true;
+      updatePlaybackTimelineAccess();
 
       if (onlineDetailsToggle) {
         onlineDetailsToggle.classList.toggle('admin-only', !window.isAdmin);
@@ -2579,6 +2580,22 @@
       return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
     }
 
+    function updatePlaybackTimelineAccess() {
+      if (!playbackTimeline) return;
+
+      // Chỉ Admin được phép tương tác/seek. User thường vẫn nhìn thấy
+      // timeline và vị trí hiện tại nhưng không thể kéo hoặc nhấn vào slider.
+      const canSeek = window.isAdmin === true &&
+        playbackDurationSec > 0 &&
+        currentSongId != null &&
+        currentPlayback?.status === 'playing';
+
+      playbackTimeline.disabled = !canSeek;
+      playbackTimeline.setAttribute('aria-disabled', canSeek ? 'false' : 'true');
+      playbackTimeline.tabIndex = canSeek ? 0 : -1;
+      playbackTimeline.style.cursor = canSeek ? 'pointer' : 'default';
+    }
+
     function setPlaybackTimelineDuration(duration) {
       const value = Math.max(0, Number(duration) || 0);
       playbackDurationSec = value;
@@ -2588,7 +2605,7 @@
       }
       if (playbackTimeline) {
         playbackTimeline.max = String(value);
-        playbackTimeline.disabled = !(value > 0 && currentSongId != null);
+        updatePlaybackTimelineAccess();
       }
     }
 
@@ -2643,11 +2660,7 @@
         playbackTimeline.value = String(displayPosition);
       }
 
-      if (max > 0) {
-        playbackTimeline.disabled = currentSongId == null;
-      } else {
-        playbackTimeline.disabled = true;
-      }
+      updatePlaybackTimelineAccess();
     }
 
     function stopPlaybackTimelineTicker() {
@@ -2687,7 +2700,7 @@
       if (playbackTimeline) {
         playbackTimeline.value = '0';
         playbackTimeline.max = '0';
-        playbackTimeline.disabled = true;
+        updatePlaybackTimelineAccess();
       }
       if (playbackCurrentTime) playbackCurrentTime.textContent = '00:00';
       if (playbackDuration) playbackDuration.textContent = '00:00';
@@ -2701,6 +2714,9 @@
     }
 
     function sendPlaybackSeek(position) {
+      // Client-side guard: user thường không được phát sinh seek request.
+      // Server cũng kiểm tra quyền Admin để chống sửa JS/DevTools.
+      if (window.isAdmin !== true) return;
       if (!socket.connected || !currentPlayback || currentPlayback.songId == null) return;
       if (currentPlayback.status !== 'playing') return;
       if (playbackTimelineSongId != null && String(playbackTimelineSongId) !== String(currentPlayback.songId)) return;
@@ -2719,6 +2735,10 @@
     }
 
     function commitPlaybackTimelineSeek() {
+      if (window.isAdmin !== true) {
+        if (playbackTimeline) playbackTimelineDragging = false;
+        return;
+      }
       if (!playbackTimeline || !playbackTimelineDragging) return;
 
       const target = Number(playbackTimeline.value) || 0;
@@ -2729,6 +2749,7 @@
 
     if (playbackTimeline) {
       playbackTimeline.addEventListener('input', () => {
+        if (window.isAdmin !== true) return;
         playbackTimelineDragging = true;
         updatePlaybackTimelineUi();
       });

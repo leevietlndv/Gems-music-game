@@ -1979,6 +1979,10 @@ function sendInitialState(socket) {
 io.on('connection', (socket) => {
   console.log(`🔌 Socket connected: ${socket.id}`);
 
+  // Quyền của socket chỉ được xác lập sau khi validate Telegram initData.
+  // Mặc định false để các socket chưa xác thực không thể seek playback.
+  socket.isAdmin = false;
+
   // Không emit state cho socket CHƯA xác thực initData — chỉ sau khi
   // authenticate thành công mới gửi state hiện tại (chống rò rỉ dữ liệu
   // cho bất kỳ ai mở kết nối websocket thuần).
@@ -2013,6 +2017,7 @@ io.on('connection', (socket) => {
 
     const telegramId = String(auth.user.id);
     const admin = isAdmin(telegramId);
+    socket.isAdmin = admin;
 
     console.log(`🔐 Telegram ID: ${telegramId} | Admin: ${admin}`);
 
@@ -2067,6 +2072,10 @@ io.on('connection', (socket) => {
     const position = Number(payload.position);
 
     if (songId == null || !Number.isFinite(version) || !Number.isFinite(position)) return;
+    if (socket.isAdmin !== true) {
+      console.warn(`⛔ Từ chối playbackSeek từ user thường: socket=${socket.id}`);
+      return;
+    }
 
     enqueueGameMutation(async () => {
       if (playbackState.songId == null) return;
