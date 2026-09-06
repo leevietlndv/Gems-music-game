@@ -1001,6 +1001,30 @@
       cursor: pointer;
     }
 
+    /* Chrome / Edge / Safari */
+    #volumeSlider::-webkit-slider-runnable-track {
+      height: 6px;
+      background: #4a4f55;
+      border-radius: 999px;
+    }
+
+    #volumeSlider::-webkit-slider-thumb {
+      margin-top: -5px;
+    }
+
+    /* Firefox */
+    #volumeSlider::-moz-range-track {
+      height: 6px;
+      background: #4a4f55;
+      border-radius: 999px;
+    }
+
+    #volumeSlider::-moz-range-progress {
+      height: 6px;
+      background: #2e7d32;
+      border-radius: 999px;
+    }
+
     #volumeValue {
       display: inline-flex;
       align-items: center;
