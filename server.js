@@ -1959,7 +1959,8 @@ function sendInitialState(socket) {
     autoPlayMode,
     controllerSocketId: autoPlayControllerSocketId,
     blockedSongs,
-    playback: getPlaybackState()
+    playback: getPlaybackState(),
+    online: getOnlineSummary()
   });
 
   socket.emit('autoPlayMode', {
