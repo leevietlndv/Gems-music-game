@@ -1372,6 +1372,8 @@
     let playbackDriftTimer = null;
     let playbackDriftCorrectionAt = 0;
     let serverClockOffsetMs = 0;
+    let playbackResumeRecoveryTimerIds = [];
+    let playbackResumeRecoveryToken = 0;
     const PLAYBACK_DRIFT_CHECK_MS = 2000;
     const PLAYBACK_DRIFT_CORRECTION_THRESHOLD_SEC = 1.5;
     const PLAYBACK_DRIFT_CORRECTION_COOLDOWN_MS = 3000;
@@ -1750,6 +1752,45 @@
         if (isLocalInitiator) {
           pendingLocalPlayback = null;
         }
+      }
+    });
+
+    socket.on('playbackSync', (incomingPlayback) => {
+      if (!incomingPlayback) return;
+
+      updateServerClockOffset(incomingPlayback);
+      const playbackChanged =
+        !currentPlayback ||
+        Number(incomingPlayback.version) !== Number(currentPlayback.version);
+
+      currentPlayback = incomingPlayback;
+      playbackTimelineSeekPending = false;
+      playbackTimelinePendingPosition = null;
+
+      if (incomingPlayback.songId != null) {
+        playbackTimelineSongId = incomingPlayback.songId;
+        startPlaybackTimelineTicker();
+      }
+
+      updatePlaybackTimelineUi();
+
+      if (incomingPlayback.status === 'playing') {
+        startPlaybackDriftCorrection();
+        if (currentSongId != null && String(currentSongId) === String(incomingPlayback.songId)) {
+          // Dù version không đổi, đây là state mới có serverNow mới. Vì vậy
+          // vẫn phải ép lại vị trí sau khi foreground, không chờ drift tick.
+          syncPlayerToPlayback(incomingPlayback, { forceResumeRecovery: true });
+        }
+      } else {
+        stopPlaybackDriftCorrection();
+        clearPlaybackResumeRecovery();
+        if (currentSongId != null && String(currentSongId) === String(incomingPlayback.songId)) {
+          syncPlayerToPlayback(incomingPlayback);
+        }
+      }
+
+      if (playbackChanged) {
+        console.log('🔄 Playback sync mới từ server:', incomingPlayback);
       }
     });
 
@@ -2813,7 +2854,68 @@
       }
     }
 
-    function syncPlayerToPlayback(playback) {
+    function clearPlaybackResumeRecovery() {
+      playbackResumeRecoveryToken += 1;
+      playbackResumeRecoveryTimerIds.forEach((timerId) => clearTimeout(timerId));
+      playbackResumeRecoveryTimerIds = [];
+    }
+
+    function startPlaybackResumeRecovery(playback) {
+      clearPlaybackResumeRecovery();
+      if (!playback || playback.status !== 'playing') return;
+      if (!youtubeApiPlayer || !youtubePlayerReady) return;
+      if (document.hidden) return;
+
+      const token = playbackResumeRecoveryToken;
+      const recoveryDelays = [0, 150, 400, 800, 1500, 2500, 4000];
+
+      const recover = (delay) => {
+        const timerId = setTimeout(() => {
+          if (token !== playbackResumeRecoveryToken) return;
+          if (document.hidden) return;
+          if (!currentPlayback || currentPlayback.status !== 'playing') return;
+          if (String(currentPlayback.songId) !== String(playback.songId)) return;
+          if (Number(currentPlayback.version) !== Number(playback.version)) return;
+          if (!youtubeApiPlayer || !youtubePlayerReady) return;
+
+          const target = Math.max(0, getPlaybackTargetPosition(currentPlayback));
+
+          try {
+            const playerState = youtubeApiPlayer.getPlayerState();
+            // Mobile WebView có thể resume iframe từ vị trí cũ sau khi app
+            // quay lại foreground. Cho player resume trước, rồi seek lại
+            // theo authoritative position ở cùng chu kỳ phục hồi.
+            if (typeof YT !== 'undefined' && playerState !== YT.PlayerState.PLAYING) {
+              youtubeApiPlayer.playVideo();
+            }
+
+            const seekTimerId = setTimeout(() => {
+              if (token !== playbackResumeRecoveryToken) return;
+              if (document.hidden) return;
+              if (!currentPlayback || currentPlayback.status !== 'playing') return;
+              if (String(currentPlayback.songId) !== String(playback.songId)) return;
+              if (Number(currentPlayback.version) !== Number(playback.version)) return;
+
+              try {
+                const freshTarget = Math.max(0, getPlaybackTargetPosition(currentPlayback));
+                youtubeApiPlayer.seekTo(freshTarget, true);
+                playbackDriftCorrectionAt = Date.now();
+              } catch (error) {
+                console.warn('⚠️ Không thể ép lại vị trí playback sau khi foreground:', error);
+              }
+            }, 80);
+            playbackResumeRecoveryTimerIds.push(seekTimerId);
+          } catch (error) {
+            console.warn('⚠️ Không thể khôi phục playback sau khi foreground:', error);
+          }
+        }, delay);
+        playbackResumeRecoveryTimerIds.push(timerId);
+      };
+
+      recoveryDelays.forEach(recover);
+    }
+
+    function syncPlayerToPlayback(playback, options = {}) {
       if (!playback || !youtubeApiPlayer || !youtubePlayerReady) return;
       if (!currentSongId || playback.songId == null) return;
       if (String(playback.songId) !== String(currentSongId)) return;
@@ -2824,6 +2926,7 @@
         startPlaybackDriftCorrection();
       } else {
         stopPlaybackDriftCorrection();
+        clearPlaybackResumeRecovery();
       }
 
       playbackTimelineSongId = playback.songId;
@@ -2848,7 +2951,7 @@
 
       try {
         const currentTime = Number(youtubeApiPlayer.getCurrentTime()) || 0;
-        if (Math.abs(currentTime - target) > PLAYBACK_DRIFT_TOLERANCE_SEC) {
+        if (options.forceResumeRecovery || Math.abs(currentTime - target) > PLAYBACK_DRIFT_TOLERANCE_SEC) {
           youtubeApiPlayer.seekTo(Math.max(0, target), true);
         }
       } catch (error) {
@@ -2856,6 +2959,10 @@
       }
 
       schedulePlaybackStart(playback);
+
+      if (options.forceResumeRecovery) {
+        startPlaybackResumeRecovery(playback);
+      }
     }
 
     function loadSongIntoPlayer(song, shouldPlaySound, playback = currentPlayback) {
@@ -3244,13 +3351,32 @@
     }
 
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) return;
+      if (document.hidden) {
+        clearPlaybackResumeRecovery();
+        return;
+      }
 
       // Telegram WebView/di động có thể tạm dừng iframe khi app ra nền.
-      // Khi quay lại foreground, sync ngay theo server thay vì chờ tick 2s.
+      // Khi quay lại foreground, yêu cầu server gửi playback state mới với
+      // serverNow mới nhất. Sau đó chạy một cửa sổ phục hồi ngắn để chống
+      // YouTube iframe tự resume từ vị trí cũ đã bị đóng băng trước đó.
       if (currentPlayback?.status === 'playing') {
         playbackDriftCorrectionAt = 0;
-        syncPlayerToPlayback(currentPlayback);
+        syncPlayerToPlayback(currentPlayback, { forceResumeRecovery: true });
+        if (socket.connected) {
+          socket.emit('requestPlaybackSync');
+        }
+      }
+    });
+
+    window.addEventListener('pageshow', () => {
+      if (document.hidden) return;
+      if (currentPlayback?.status === 'playing') {
+        playbackDriftCorrectionAt = 0;
+        syncPlayerToPlayback(currentPlayback, { forceResumeRecovery: true });
+        if (socket.connected) {
+          socket.emit('requestPlaybackSync');
+        }
       }
     });
 

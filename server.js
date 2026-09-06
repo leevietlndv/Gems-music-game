@@ -2049,6 +2049,14 @@ io.on('connection', (socket) => {
     })();
   });
 
+  // ==================== PHASE 6C: FRESH PLAYBACK SYNC ====================
+  // Mobile WebView có thể đóng băng iframe khi Mini App xuống nền. Khi user
+  // quay lại, gửi lại playback state với serverNow mới nhất để client tính
+  // đúng vị trí hiện tại, không cần thay đổi playback version.
+  socket.on('requestPlaybackSync', () => {
+    socket.emit('playbackSync', getPlaybackState());
+  });
+
   // ==================== PHASE 6B: SYNCHRONIZED SEEK ====================
   // Chỉ xử lý seek khi songId + playback version còn khớp. Mỗi seek tạo
   // một playback version mới để vô hiệu hóa các tín hiệu cũ (ví dụ ENDED).
