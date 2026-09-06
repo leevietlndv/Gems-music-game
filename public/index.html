@@ -1634,6 +1634,7 @@
         currentAction = data.action || currentAction;
         winnerUser.textContent = song.user || 'Người dùng';
         playerTitleText.textContent = song.title || '-';
+        renderWinnerAction(currentAction);
         playerCard.style.display = 'block';
         updateVoteButtons();
         updateAudioNotice(getEffectiveSound(true) && savedVolume > 0);
@@ -2793,6 +2794,29 @@
     btnLike?.addEventListener('click', () => sendVote(1));
     btnDislike?.addEventListener('click', () => sendVote(-1));
 
+    function renderWinnerAction(action = currentAction) {
+      if (!winnerAction) return;
+
+      if (action?.type === 'spin' && action.user) {
+        winnerAction.innerHTML =
+          ` - <span class="action-label">Quay bởi:</span> ` +
+          `<strong class="action-user">${escapeHtml(action.user)}</strong>`;
+
+      } else if (action?.type === 'play' && action.user) {
+        winnerAction.innerHTML =
+          ` - <span class="action-label">Play bởi:</span> ` +
+          `<strong class="action-user">${escapeHtml(action.user)}</strong>`;
+
+      } else if (action?.type === 'replace' && action.title) {
+        winnerAction.innerHTML =
+          ` - <span class="action-label">Thay thế:</span> ` +
+          `<strong class="action-user">${escapeHtml(action.title)}</strong>`;
+
+      } else {
+        winnerAction.innerHTML = '';
+      }
+    }
+
     function renderPlayer(winner, shouldPlaySound, action = currentAction, playback = currentPlayback) {
       if (!winner?.url) return;
 
@@ -2805,26 +2829,7 @@
       currentPlayback = playback || currentPlayback;
       winnerUser.textContent = winner.user || 'Người dùng';
       playerTitleText.textContent = winner.title || '-';
-      if (winnerAction) {
-        if (currentAction?.type === 'spin' && currentAction.user) {
-          winnerAction.innerHTML =
-            ` - <span class="action-label">Quay bởi:</span> ` +
-            `<strong class="action-user">${escapeHtml(currentAction.user)}</strong>`;
-
-        } else if (currentAction?.type === 'play' && currentAction.user) {
-          winnerAction.innerHTML =
-            ` - <span class="action-label">Play bởi:</span> ` +
-            `<strong class="action-user">${escapeHtml(currentAction.user)}</strong>`;
-
-        } else if (currentAction?.type === 'replace' && currentAction.title) {
-          winnerAction.innerHTML =
-            ` - <span class="action-label">Thay thế:</span> ` +
-            `<strong class="action-user">${escapeHtml(currentAction.title)}</strong>`;
-
-        } else {
-          winnerAction.innerHTML = '';
-        }
-      }
+      renderWinnerAction(currentAction);
       playerCard.style.display = 'block';
 
       // renderPlayer() cũng được gọi sau khi Spin kết thúc.
