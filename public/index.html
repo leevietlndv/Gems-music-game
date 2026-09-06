@@ -1300,6 +1300,12 @@
     let playbackScheduleToken = 0;
     const PLAYBACK_DRIFT_TOLERANCE_SEC = 1.5;
 
+    // Phase 6A.1: giữ dấu vết thao tác Play vừa phát sinh trực tiếp từ user gesture.
+    // Dùng để tránh server echo lại làm reload video, đồng thời reconcile theo
+    // playback state authoritative sau khi server xác nhận.
+    let pendingLocalPlayback = null;
+    let autoplayBlockedNoticeShown = false;
+
     let youtubeApiPlayer = null;
     let youtubeApiReady = false;
     let youtubeApiReadyCallbacks = [];
@@ -1611,8 +1617,37 @@
         song
       );
 
-      currentPlayback = data.playback || currentPlayback;
-      renderPlayer(song, shouldPlaySound, data.action || currentAction, data.playback || currentPlayback);
+      const incomingPlayback = data.playback || null;
+      const isLocalInitiator = shouldPlaySound;
+      const matchesPendingLocal =
+        isLocalInitiator &&
+        pendingLocalPlayback &&
+        String(pendingLocalPlayback.songId) === String(song.id);
+
+      currentPlayback = incomingPlayback || currentPlayback;
+
+      if (matchesPendingLocal && youtubeApiPlayer && youtubePlayerReady) {
+        // Không load lại video: local player đã được khởi động từ user gesture.
+        // Chỉ cập nhật UI + ép vị trí theo server authoritative.
+        currentPlayingUrl = song.url;
+        currentSongId = song.id ?? null;
+        currentAction = data.action || currentAction;
+        winnerUser.textContent = song.user || 'Người dùng';
+        playerTitleText.textContent = song.title || '-';
+        playerCard.style.display = 'block';
+        updateVoteButtons();
+        updateAudioNotice(getEffectiveSound(true) && savedVolume > 0);
+        updateAudioControls();
+
+        syncPlayerToPlayback(incomingPlayback);
+        pendingLocalPlayback = null;
+        console.log('✅ Local playback đã reconcile theo server authoritative.');
+      } else {
+        renderPlayer(song, shouldPlaySound, data.action || currentAction, incomingPlayback || currentPlayback);
+        if (isLocalInitiator) {
+          pendingLocalPlayback = null;
+        }
+      }
     });
 
     socket.on('autoPlayMode', (data) => {
@@ -1939,6 +1974,41 @@
         .replace(/'/g, '&#039;');
     }
 
+    function getCurrentUserDisplayName() {
+      return [userData?.first_name, userData?.last_name]
+        .filter(Boolean)
+        .join(' ')
+        .trim() || userData?.username || 'Người dùng';
+    }
+
+    // PHASE 6A.1: bắt đầu playback ngay trong chính click/tap handler.
+    // Không chờ Socket.IO/fetch vì khi đó user activation trên mobile có thể đã mất.
+    function beginLocalPlaybackFromUserGesture(song) {
+      if (!song?.url) return false;
+
+      const videoId = extractYouTubeId(song.url);
+      if (!videoId) return false;
+
+      pendingLocalPlayback = {
+        songId: String(song.id),
+        videoId,
+        requestedAt: Date.now()
+      };
+
+      autoplayBlockedNoticeShown = false;
+
+      // Không dùng playback state cũ ở đây: server chưa xác nhận thao tác mới.
+      currentPlayback = null;
+      renderPlayer(
+        song,
+        true,
+        { type: 'play', user: getCurrentUserDisplayName() },
+        null
+      );
+
+      return true;
+    }
+
     async function playSong(songId) {
       if (!songId) {
         alert('Không xác định được bài hát cần phát!');
@@ -1953,6 +2023,10 @@
         alert('Không tìm thấy bài hát!');
         return;
       }
+
+      // QUAN TRỌNG PHASE 6A.1:
+      // phải gọi trước await/fetch để giữ user gesture trên Android/iOS.
+      const localStarted = beginLocalPlaybackFromUserGesture(song);
 
       try {
         const res = await fetch('/api/play-song', {
@@ -1970,15 +2044,27 @@
         const data = await res.json();
 
         if (!data.success) {
+          // Server từ chối/race: không để playback optimistic tiếp tục phát.
+          if (pendingLocalPlayback?.songId === String(songId)) {
+            pendingLocalPlayback = null;
+            clearPlayer();
+          }
           alert(data.message || 'Không thể phát bài hát!');
           return;
         }
 
-        // QUAN TRỌNG:
-        // Chính người bấm PLAY sẽ phát có âm thanh.
+        // Server sẽ phát songPlayed + playback authoritative.
+        // Client khởi tạo thao tác vẫn giữ playback hiện tại, sau đó reconcile.
+        if (!localStarted) {
+          console.warn('⚠️ Không thể bắt đầu local playback ngay trong user gesture.');
+        }
 
       } catch (error) {
         console.error('❌ Lỗi phát bài hát:', error);
+        if (pendingLocalPlayback?.songId === String(songId)) {
+          pendingLocalPlayback = null;
+          clearPlayer();
+        }
         alert('Lỗi kết nối đến server!');
       }
     }
@@ -2149,6 +2235,14 @@
             }
           },
           onStateChange: onYouTubePlayerStateChange,
+          onAutoplayBlocked: () => {
+            console.warn('⚠️ YouTube chặn autoplay/playback tự động trên thiết bị này.');
+            if (!autoplayBlockedNoticeShown) {
+              autoplayBlockedNoticeShown = true;
+              audioNotice.textContent = '▶️ Thiết bị đã chặn tự phát. Hãy bấm nút Play của YouTube để bắt đầu.';
+              audioNotice.className = 'audio-notice muted';
+            }
+          },
           onError: (event) => {
             console.warn('⚠️ YouTube Player error:', event.data);
           }
@@ -2427,8 +2521,13 @@
         pendingPlayerSong = song;
         pendingPlayerSound = shouldPlaySound;
         pendingPlayerPlayback = playback || null;
+        if (shouldPlaySound) {
+          console.warn('⚠️ YouTube Player chưa sẵn sàng tại thời điểm user tap; không thể đảm bảo giữ user gesture.');
+        }
         return;
       }
+
+      autoplayBlockedNoticeShown = false;
 
       const effectiveSound = getEffectiveSound(shouldPlaySound);
       const targetPosition = getPlaybackTargetPosition(playback);
@@ -2479,6 +2578,7 @@
       pendingPlayerSong = null;
       pendingPlayerSound = false;
       pendingPlayerPlayback = null;
+      pendingLocalPlayback = null;
       currentPlayback = null;
       currentPlayingUrl = null;
       currentSongId = null;
