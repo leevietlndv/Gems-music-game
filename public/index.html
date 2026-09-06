@@ -997,8 +997,14 @@
       flex: 1 1 auto;
       width: auto;
       min-width: 0;
-      accent-color: #2e7d32;
+      height: 6px;
+      background-color: #182235; /* Màu nền rãnh trượt */
+      border-radius: 4px;
+      accent-color: #2e7d32;     /* Màu con trượt và phần trượt */
       cursor: pointer;
+      outline: none;
+      -webkit-appearance: none;  /* Bắt buộc để nhận màu nền trên Chrome/Safari */
+      appearance: none;
     }
     
     #volumeValue {
