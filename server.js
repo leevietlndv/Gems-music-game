@@ -1465,6 +1465,7 @@ app.post('/api/auto-play-next', async (req, res) => {
 
     if (availableSongs.length === 0) {
       setAutoPlayState(0);
+      stopPlayback();
       broadcastAutoPlayState();
       broadcastState();
 
@@ -2040,6 +2041,37 @@ io.on('connection', (socket) => {
         console.error('❌ Lỗi lấy vote hiện tại:', error);
       }
     })();
+  });
+
+  // YouTube đã phát hết bài. Chỉ chấp nhận tín hiệu khớp với playback
+  // hiện tại để một client cũ/reload không thể dừng bài mới. Khi Auto Play
+  // đang có controller, controller sẽ gọi /api/auto-play-next để chuyển bài;
+  // không stop ở đây để tránh tạo trạng thái trung gian không cần thiết.
+  socket.on('playbackEnded', (payload = {}) => {
+    const songId = payload.songId;
+    const version = Number(payload.version);
+
+    if (songId == null || !Number.isFinite(version)) return;
+
+    enqueueGameMutation(async () => {
+      if (playbackState.songId == null) return;
+      if (String(playbackState.songId) !== String(songId)) return;
+      if (Number(playbackState.version) !== version) return;
+      if (playbackState.status !== 'playing') return;
+
+      // Auto Play có controller đang hoạt động: giữ state hiện tại cho
+      // request chuyển bài của controller, tránh race với Auto Play.
+      if (autoPlayMode !== 0 && autoPlayControllerSocketId) {
+        return;
+      }
+
+      const stopped = stopPlayback();
+      io.emit('playbackState', stopped);
+      broadcastState();
+      console.log(`⏹ Playback STOPPED vì YouTube đã kết thúc bài #${songId}`);
+    }).catch(error => {
+      console.error('❌ Lỗi xử lý playbackEnded:', error);
+    });
   });
 
   socket.on('requestOnlineDetails', () => {

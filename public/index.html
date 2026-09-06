@@ -2594,13 +2594,26 @@
           schedulePlaybackStart(playback);
         }
       } else {
+        // QUAN TRỌNG: authoritative state đang PAUSED/STOPPED thì tuyệt đối
+        // không gọi playVideo(). Trước đây nhánh này vẫn tự phát, khiến
+        // reload ngay sau khi video ENDED tạo vòng PLAY/PAUSE.
         try {
-          youtubeApiPlayer.playVideo();
+          const cuePosition = playback?.status === 'paused'
+            ? Math.max(0, Number(playback.position) || 0)
+            : 0;
+          if (typeof youtubeApiPlayer.cueVideoById === 'function') {
+            youtubeApiPlayer.cueVideoById(videoId, cuePosition);
+          } else {
+            youtubeApiPlayer.loadVideoById(videoId, cuePosition);
+            youtubeApiPlayer.pauseVideo();
+          }
+          if (effectiveSound && savedVolume > 0) {
+            youtubeApiPlayer.unMute();
+          } else {
+            youtubeApiPlayer.mute();
+          }
         } catch (error) {
-          console.warn('⚠️ Không thể phát YouTube:', error);
-        }
-        if (isLocalGesturePlayback && effectiveSound && savedVolume > 0) {
-          try { youtubeApiPlayer.unMute(); } catch (error) {}
+          console.warn('⚠️ Không thể cue YouTube ở trạng thái không phát:', error);
         }
       }
 
@@ -2847,6 +2860,22 @@
         event.data === YT.PlayerState.ENDED
       ) {
         console.log('🏁 BÀI HÁT ĐÃ KẾT THÚC');
+
+        // Báo server ngay khi YouTube kết thúc. Server sẽ xác nhận đúng
+        // songId + playback version rồi chuyển authoritative state sang
+        // STOPPED (khi Auto Play không xử lý bài kế tiếp).
+        if (currentPlayback?.songId != null && currentPlayback?.status === 'playing') {
+          try {
+            socket.emit('playbackEnded', {
+              songId: currentPlayback.songId,
+              version: currentPlayback.version,
+              position: Number(youtubeApiPlayer.getCurrentTime?.() || 0)
+            });
+          } catch (error) {
+            console.warn('⚠️ Không thể báo server bài đã kết thúc:', error);
+          }
+        }
+
         handleAutoPlayEnded();
       }
     }
