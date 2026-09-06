@@ -657,6 +657,62 @@ function enqueueGameMutation(task) {
   return run;
 }
 
+// ==================== REALTIME PLAYBACK STATE (PHASE 6A) ====================
+// Server là nguồn sự thật cho trạng thái phát. Không lưu vào PostgreSQL và
+// không broadcast currentTime liên tục; client tự tính vị trí từ startedAt.
+const SPIN_ANIMATION_MS = 4000;
+let playbackVersion = 0;
+let playbackState = {
+  songId: null,
+  status: 'stopped',
+  position: 0,
+  startedAt: null,
+  version: 0
+};
+
+function setPlaybackState({
+  songId = null,
+  status = 'stopped',
+  position = 0,
+  startedAt = null
+} = {}) {
+  playbackVersion += 1;
+
+  playbackState = {
+    songId: songId == null ? null : Number(songId),
+    status,
+    position: Math.max(0, Number(position) || 0),
+    startedAt: startedAt == null ? null : Number(startedAt),
+    version: playbackVersion
+  };
+
+  return { ...playbackState };
+}
+
+function getPlaybackState() {
+  return { ...playbackState };
+}
+
+function stopPlayback() {
+  return setPlaybackState({
+    songId: null,
+    status: 'stopped',
+    position: 0,
+    startedAt: null
+  });
+}
+
+function startPlayback(songId, position = 0, delayMs = 0) {
+  const startedAt = Date.now() + Math.max(0, Number(delayMs) || 0);
+
+  return setPlaybackState({
+    songId,
+    status: 'playing',
+    position,
+    startedAt
+  });
+}
+
 function clampHealth(value) {
   return Math.max(0, Math.min(5, Number(value) || 0));
 }
@@ -752,6 +808,7 @@ async function replaceCurrentSongDueToHealth() {
     if (!blockResult) {
       console.warn(`⚠️ Không tìm thấy bài #${previousSong.id} khi tự động blacklist do Health = 0`);
       lastWinner = null;
+      stopPlayback();
       currentHealth = 5;
       currentLikeCount = 0;
       currentDislikeCount = 0;
@@ -770,6 +827,7 @@ async function replaceCurrentSongDueToHealth() {
 
     if (availableSongs.length === 0) {
       lastWinner = null;
+      stopPlayback();
       currentHealth = 5;
       currentLikeCount = 0;
       currentDislikeCount = 0;
@@ -789,6 +847,7 @@ async function replaceCurrentSongDueToHealth() {
     await pool.query('DELETE FROM song_votes WHERE song_id = $1', [nextSong.id]);
 
     lastWinner = nextSong;
+    startPlayback(nextSong.id, 0);
     currentHealth = 5;
     currentLikeCount = 0;
     currentDislikeCount = 0;
@@ -801,7 +860,8 @@ async function replaceCurrentSongDueToHealth() {
       health: 5,
       likes: 0,
       dislikes: 0,
-      replacementCountdown: null
+      replacementCountdown: null,
+      playback: getPlaybackState()
     });
     broadcastState();
 
@@ -861,6 +921,7 @@ async function performSpin(initiatorSocketId = null, actionUser = null) {
   }
 
   if (songs.length === 0) {
+    stopPlayback();
     broadcastState();
     return { success: false, message: 'Danh sách bài hát đã hết!' };
   }
@@ -868,6 +929,7 @@ async function performSpin(initiatorSocketId = null, actionUser = null) {
   const selectedIndex = Math.floor(Math.random() * songs.length);
   const winner = songs[selectedIndex];
   lastWinner = winner;
+  startPlayback(winner.id, 0, SPIN_ANIMATION_MS);
   currentHealth = 5;
   currentLikeCount = 0;
   currentDislikeCount = 0;
@@ -878,7 +940,8 @@ async function performSpin(initiatorSocketId = null, actionUser = null) {
     selectedIndex,
     winner,
     initiatorSocketId,
-    action: lastAction
+    action: lastAction,
+    playback: getPlaybackState()
   });
   broadcastState();
   return { success: true, winner };
@@ -963,6 +1026,7 @@ async function performSpin(initiatorSocketId = null, actionUser = null) {
 
     songs = [];
     lastWinner = null;
+    stopPlayback();
 
     setAutoPlayState(0);
     broadcastAutoPlayState();
@@ -1148,6 +1212,7 @@ function broadcastState() {
     autoPlayMode,
     controllerSocketId: autoPlayControllerSocketId,
     blockedSongs,
+    playback: getPlaybackState(),
     online: getOnlineSummary()
   });
 }
@@ -1432,6 +1497,7 @@ app.post('/api/auto-play-next', async (req, res) => {
     await pool.query('DELETE FROM song_votes WHERE song_id = $1', [nextSong.id]);
 
     lastWinner = nextSong;
+    startPlayback(nextSong.id, 0);
     currentHealth = 5;
     currentLikeCount = 0;
     currentDislikeCount = 0;
@@ -1445,7 +1511,8 @@ app.post('/api/auto-play-next', async (req, res) => {
       health: 5,
       likes: 0,
       dislikes: 0,
-      replacementCountdown: null
+      replacementCountdown: null,
+      playback: getPlaybackState()
     });
 
     broadcastState();
@@ -1551,6 +1618,7 @@ app.post('/api/play-song', async (req, res) => {
       await pool.query('DELETE FROM song_votes WHERE song_id = $1', [freshSong.id]);
 
       lastWinner = freshSong;
+      startPlayback(freshSong.id, 0);
       currentHealth = 5;
       currentLikeCount = 0;
       currentDislikeCount = 0;
@@ -1571,7 +1639,8 @@ app.post('/api/play-song', async (req, res) => {
         health: 5,
         likes: 0,
         dislikes: 0,
-        replacementCountdown: null
+        replacementCountdown: null,
+        playback: getPlaybackState()
       });
 
       broadcastState();
@@ -1728,6 +1797,7 @@ app.post('/api/reset', async (req, res) => {
 
       songs = [];
       lastWinner = null;
+      stopPlayback();
       lastAction = null;
       currentHealth = 5;
       currentLikeCount = 0;
@@ -1782,6 +1852,7 @@ app.post('/api/delete-song', async (req, res) => {
       // Nếu xóa chính bài đang phát, xóa luôn trạng thái current winner.
       if (lastWinner && String(lastWinner.id) === String(id)) {
         lastWinner = null;
+        stopPlayback();
         lastAction = null;
         currentHealth = 5;
         currentLikeCount = 0;
@@ -1887,7 +1958,8 @@ function sendInitialState(socket) {
     health: currentHealth,
     autoPlayMode,
     controllerSocketId: autoPlayControllerSocketId,
-    blockedSongs
+    blockedSongs,
+    playback: getPlaybackState()
   });
 
   socket.emit('autoPlayMode', {

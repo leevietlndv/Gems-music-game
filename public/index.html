@@ -1292,6 +1292,14 @@
     let currentDislikeCount = 0;
     let replacementCountdown = null;
 
+    // ==================== REALTIME PLAYBACK SYNC (PHASE 6A) ====================
+    // Server giữ playback state; client chỉ tính vị trí hiện tại từ startedAt.
+    // Không polling socket và không gửi currentTime liên tục.
+    let currentPlayback = null;
+    let playbackStartTimer = null;
+    let playbackScheduleToken = 0;
+    const PLAYBACK_DRIFT_TOLERANCE_SEC = 1.5;
+
     let youtubeApiPlayer = null;
     let youtubeApiReady = false;
     let youtubeApiReadyCallbacks = [];
@@ -1562,8 +1570,17 @@
 
       updateUI();
 
+      const incomingPlayback = data.playback || null;
+      const playbackChanged =
+        !currentPlayback ||
+        !incomingPlayback ||
+        Number(incomingPlayback.version) !== Number(currentPlayback.version);
+      currentPlayback = incomingPlayback;
+
       if (data.lastWinner && !isSpinning && currentPlayingUrl !== data.lastWinner.url) {
-        renderPlayer(data.lastWinner, false);
+        renderPlayer(data.lastWinner, false, data.lastAction || currentAction, incomingPlayback);
+      } else if (data.lastWinner && playbackChanged && !isSpinning) {
+        syncPlayerToPlayback(incomingPlayback);
       } else if (!data.lastWinner && !isSpinning) {
         clearPlayer();
       }
@@ -1594,7 +1611,8 @@
         song
       );
 
-      renderPlayer(song, shouldPlaySound);
+      currentPlayback = data.playback || currentPlayback;
+      renderPlayer(song, shouldPlaySound, data.action || currentAction, data.playback || currentPlayback);
     });
 
     socket.on('autoPlayMode', (data) => {
@@ -1620,7 +1638,13 @@
     socket.on('triggerSpin', (data) => {
       const shouldPlaySound = data?.initiatorSocketId === socket.id;
       currentAction = data?.action || null;
-      startSpinAnimation(data.selectedIndex, data.winner, shouldPlaySound, data?.action || null);
+      startSpinAnimation(
+        data.selectedIndex,
+        data.winner,
+        shouldPlaySound,
+        data?.action || null,
+        data?.playback || null
+      );
     });
 
     function renderBlacklist() {
@@ -2091,6 +2115,7 @@
     // ==================== YOUTUBE PLAYER API ====================
     let pendingPlayerSong = null;
     let pendingPlayerSound = false;
+    let pendingPlayerPlayback = null;
     let youtubePlayerReady = false;
 
     function initYouTubePlayer() {
@@ -2116,9 +2141,11 @@
             if (pendingPlayerSong) {
               const song = pendingPlayerSong;
               const sound = pendingPlayerSound;
+              const playback = pendingPlayerPlayback;
               pendingPlayerSong = null;
               pendingPlayerSound = false;
-              loadSongIntoPlayer(song, sound);
+              pendingPlayerPlayback = null;
+              loadSongIntoPlayer(song, sound, playback);
             }
           },
           onStateChange: onYouTubePlayerStateChange,
@@ -2302,29 +2329,144 @@
       }
     }
 
-    function loadSongIntoPlayer(song, shouldPlaySound) {
+    function clearPlaybackStartTimer() {
+      playbackScheduleToken += 1;
+      if (playbackStartTimer) {
+        clearTimeout(playbackStartTimer);
+        playbackStartTimer = null;
+      }
+    }
+
+    function getPlaybackTargetPosition(playback) {
+      if (!playback || playback.status !== 'playing') {
+        return Math.max(0, Number(playback?.position) || 0);
+      }
+
+      const basePosition = Math.max(0, Number(playback.position) || 0);
+      const startedAt = Number(playback.startedAt);
+
+      if (!Number.isFinite(startedAt)) {
+        return basePosition;
+      }
+
+      const elapsed = Math.max(0, (Date.now() - startedAt) / 1000);
+      return basePosition + elapsed;
+    }
+
+    function schedulePlaybackStart(playback) {
+      clearPlaybackStartTimer();
+      const scheduleToken = ++playbackScheduleToken;
+
+      if (!playback || playback.status !== 'playing') return;
+
+      const startedAt = Number(playback.startedAt);
+      const delayMs = Number.isFinite(startedAt)
+        ? Math.max(0, startedAt - Date.now())
+        : 0;
+
+      const start = () => {
+        if (scheduleToken !== playbackScheduleToken) return;
+        playbackStartTimer = null;
+
+        if (!youtubeApiPlayer || !youtubePlayerReady) return;
+
+        try {
+          youtubeApiPlayer.playVideo();
+        } catch (error) {
+          console.warn('⚠️ Không thể bắt đầu playback theo lịch:', error);
+        }
+      };
+
+      if (delayMs <= 50) {
+        start();
+      } else {
+        playbackStartTimer = setTimeout(start, delayMs);
+      }
+    }
+
+    function syncPlayerToPlayback(playback) {
+      if (!playback || !youtubeApiPlayer || !youtubePlayerReady) return;
+      if (!currentSongId || playback.songId == null) return;
+      if (String(playback.songId) !== String(currentSongId)) return;
+
+      if (playback.status !== 'playing') {
+        clearPlaybackStartTimer();
+        try {
+          youtubeApiPlayer.pauseVideo();
+          youtubeApiPlayer.seekTo(
+            Math.max(0, Number(playback.position) || 0),
+            true
+          );
+        } catch (error) {
+          console.warn('⚠️ Không thể đồng bộ playback pause:', error);
+        }
+        return;
+      }
+
+      const target = getPlaybackTargetPosition(playback);
+
+      try {
+        const currentTime = Number(youtubeApiPlayer.getCurrentTime()) || 0;
+        if (Math.abs(currentTime - target) > PLAYBACK_DRIFT_TOLERANCE_SEC) {
+          youtubeApiPlayer.seekTo(Math.max(0, target), true);
+        }
+      } catch (error) {
+        console.warn('⚠️ Không thể đọc vị trí YouTube để đồng bộ:', error);
+      }
+
+      schedulePlaybackStart(playback);
+    }
+
+    function loadSongIntoPlayer(song, shouldPlaySound, playback = currentPlayback) {
       const videoId = extractYouTubeId(song.url);
       if (!videoId) return;
+
+      clearPlaybackStartTimer();
 
       if (!youtubeApiPlayer || !youtubePlayerReady) {
         pendingPlayerSong = song;
         pendingPlayerSound = shouldPlaySound;
+        pendingPlayerPlayback = playback || null;
         return;
       }
 
       const effectiveSound = getEffectiveSound(shouldPlaySound);
+      const targetPosition = getPlaybackTargetPosition(playback);
 
-      youtubeApiPlayer.loadVideoById(videoId);
+      const hasAuthoritativePlayback =
+        playback &&
+        playback.songId != null &&
+        String(playback.songId) === String(song.id);
 
-      // Đặt mute/volume sau khi load. Với người vừa bấm Play,
-      // thao tác loadVideoById nằm ngay sau user gesture nên có cơ hội autoplay có tiếng.
+      // Nếu Spin đang trong 4 giây animation, không dùng loadVideoById vì
+      // YouTube có thể tự bắt đầu phát ngay. Cue trước, rồi mới play đúng
+      // startedAt. Với playback đã bắt đầu, load thẳng tại vị trí hiện tại.
+      if (hasAuthoritativePlayback && playback.status === 'playing') {
+        const startedAt = Number(playback.startedAt);
+        const isFutureStart = Number.isFinite(startedAt) && startedAt > Date.now() + 50;
+
+        if (isFutureStart && typeof youtubeApiPlayer.cueVideoById === 'function') {
+          youtubeApiPlayer.cueVideoById(videoId, 0);
+        } else {
+          youtubeApiPlayer.loadVideoById(videoId, Math.max(0, targetPosition));
+        }
+      } else {
+        youtubeApiPlayer.loadVideoById(videoId);
+      }
+
       youtubeApiPlayer.setVolume(savedVolume);
 
       if (effectiveSound && savedVolume > 0) {
         youtubeApiPlayer.unMute();
-        youtubeApiPlayer.playVideo();
       } else {
         youtubeApiPlayer.mute();
+      }
+
+      // Với playback state 'playing', play ngay hoặc chờ tới startedAt (Spin).
+      // Nếu state không có, giữ hành vi phát ngay của Phase 5.
+      if (hasAuthoritativePlayback && playback.status === 'playing') {
+        schedulePlaybackStart(playback);
+      } else {
         youtubeApiPlayer.playVideo();
       }
 
@@ -2333,8 +2475,11 @@
     }
 
     function clearPlayer() {
+      clearPlaybackStartTimer();
       pendingPlayerSong = null;
       pendingPlayerSound = false;
+      pendingPlayerPlayback = null;
+      currentPlayback = null;
       currentPlayingUrl = null;
       currentSongId = null;
 
@@ -2500,7 +2645,7 @@
     btnLike?.addEventListener('click', () => sendVote(1));
     btnDislike?.addEventListener('click', () => sendVote(-1));
 
-    function renderPlayer(winner, shouldPlaySound, action = currentAction) {
+    function renderPlayer(winner, shouldPlaySound, action = currentAction, playback = currentPlayback) {
       if (!winner?.url) return;
 
       const videoId = extractYouTubeId(winner.url);
@@ -2509,6 +2654,7 @@
       currentPlayingUrl = winner.url;
       currentSongId = winner.id ?? null;
       currentAction = action || null;
+      currentPlayback = playback || currentPlayback;
       winnerUser.textContent = winner.user || 'Người dùng';
       playerTitleText.textContent = winner.title || '-';
       if (winnerAction) {
@@ -2542,7 +2688,7 @@
       updateAudioNotice(effectiveSound && savedVolume > 0);
       updateAudioControls();
 
-      loadSongIntoPlayer(winner, shouldPlaySound);
+      loadSongIntoPlayer(winner, shouldPlaySound, currentPlayback);
     }
 
     function onYouTubePlayerStateChange(event) {
@@ -2717,7 +2863,7 @@
 
     updateAutoPlayButton();
 
-    function startSpinAnimation(targetIndex, winner, shouldPlaySound, action = currentAction) {
+    function startSpinAnimation(targetIndex, winner, shouldPlaySound, action = currentAction, playback = currentPlayback) {
       if (isSpinning) return;
       isSpinning = true;
       btnSpin.disabled = true;
@@ -2754,7 +2900,8 @@
         } else {
           isSpinning = false;
           btnSpin.disabled = songs.length === 0;
-          renderPlayer(winner, shouldPlaySound, action);
+          currentPlayback = playback || currentPlayback;
+          renderPlayer(winner, shouldPlaySound, action, currentPlayback);
           playerCard.scrollIntoView({ behavior: 'smooth' });
         }
       }
