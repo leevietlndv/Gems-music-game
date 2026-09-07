@@ -1104,6 +1104,19 @@ app.use(express.json());
 // connectSrc cho phép Telegram Widget + YouTube iframe + Socket.IO;
 // frameSrc cho phép nhúng YouTube player.
 app.use(helmet({
+  // Telegram Web mở Mini App bên trong iframe trên web.telegram.org.
+  // Helmet mặc định gửi X-Frame-Options: SAMEORIGIN, làm trình duyệt chặn
+  // Telegram Web nhúng domain của Mini App. Tắt header cũ và dùng CSP
+  // frame-ancestors bên dưới để chỉ cho phép chính app + Telegram Web.
+  xFrameOptions: false,
+
+  // YouTube Error 153 trên iOS/WKWebView: YouTube cần HTTP Referer
+  // hoặc một cơ chế nhận diện client tương đương. Chỉ gửi origin cho
+  // request cross-origin để giữ riêng tư nhưng vẫn nhận diện được embed.
+  referrerPolicy: {
+    policy: 'strict-origin-when-cross-origin'
+  },
+
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
@@ -1113,6 +1126,10 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'", "https://telegram.org", "https://www.youtube.com", "https://s.ytimg.com"],
       connectSrc: ["'self'", "https://telegram.org", "https://www.youtube.com", "wss:", "ws:"],
       frameSrc: ["https://www.youtube.com", "https://www.youtube-nocookie.com"],
+
+      // Cho phép Telegram Web nhúng Mini App, nhưng không mở iframe cho website khác.
+      frameAncestors: ["'self'", "https://web.telegram.org"],
+
       imgSrc: ["'self'", "data:", "https://i.ytimg.com"],
       styleSrc: ["'self'", "'unsafe-inline'"] // CSS đang viết inline trong <style>
     }
@@ -1573,10 +1590,9 @@ app.post('/api/auto-play-next', async (req, res) => {
 });
 
 // ==================== API: PLAY ONE SONG ====================
-// Tất cả user đều được phép phát.
-// Người bấm Play nghe tiếng; các client khác phát mute.
+// Chỉ Admin được phép phát bài hát thủ công.
 app.post('/api/play-song', async (req, res) => {
-  const { id, initData, socketId } = req.body;
+  const { id, socketId } = req.body;
 
   if (!id) {
     return res.status(400).json({
@@ -1585,13 +1601,8 @@ app.post('/api/play-song', async (req, res) => {
     });
   }
 
-  const auth = validateTelegramInitData(initData);
-  if (!auth.valid) {
-    return res.status(401).json({
-      success: false,
-      message: `Xác thực Telegram thất bại: ${auth.message}`
-    });
-  }
+  const auth = requireTelegramAdmin(req, res);
+  if (!auth.ok) return;
 
   try {
     const result = await pool.query(`
