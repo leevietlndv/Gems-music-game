@@ -2933,7 +2933,7 @@
       const canSeek = window.isAdmin === true &&
         playbackDurationSec > 0 &&
         currentSongId != null &&
-        currentPlayback?.status === 'playing';
+        ['playing', 'paused'].includes(currentPlayback?.status);
 
       playbackTimeline.disabled = !canSeek;
       playbackTimeline.setAttribute('aria-disabled', canSeek ? 'false' : 'true');
@@ -3063,7 +3063,7 @@
       // Server cũng kiểm tra quyền Admin để chống sửa JS/DevTools.
       if (window.isAdmin !== true) return;
       if (!socket.connected || !currentPlayback || currentPlayback.songId == null) return;
-      if (currentPlayback.status !== 'playing') return;
+      if (!['playing', 'paused'].includes(currentPlayback.status)) return;
       if (playbackTimelineSongId != null && String(playbackTimelineSongId) !== String(currentPlayback.songId)) return;
 
       const duration = Number(playbackDurationSec) || 0;

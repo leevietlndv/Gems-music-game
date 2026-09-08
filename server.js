@@ -2200,8 +2200,9 @@ io.on('connection', (socket) => {
   });
 
   // ==================== PHASE 6B: SYNCHRONIZED SEEK ====================
-  // Chỉ xử lý seek khi songId + playback version còn khớp. Mỗi seek tạo
-  // một playback version mới để vô hiệu hóa các tín hiệu cũ (ví dụ ENDED).
+  // Chỉ xử lý seek khi songId + playback version còn khớp. Admin có thể seek
+  // cả khi đang PLAYING và PAUSED; PAUSED vẫn giữ nguyên trạng thái.
+  // Mỗi seek tạo một playback version mới để vô hiệu hóa các tín hiệu cũ.
   // Không ghi DB và không broadcast currentTime liên tục.
   socket.on('playbackSeek', (payload = {}) => {
     const songId = payload.songId;
@@ -2218,14 +2219,14 @@ io.on('connection', (socket) => {
       if (playbackState.songId == null) return;
       if (String(playbackState.songId) !== String(songId)) return;
       if (Number(playbackState.version) !== version) return;
-      if (playbackState.status !== 'playing') return;
+      if (!['playing', 'paused'].includes(playbackState.status)) return;
 
       const safePosition = Math.max(0, position);
       const seeked = setPlaybackState({
         songId: playbackState.songId,
-        status: 'playing',
+        status: playbackState.status,
         position: safePosition,
-        startedAt: Date.now()
+        startedAt: playbackState.status === 'playing' ? Date.now() : null
       });
 
       io.emit('playbackState', seeked);
