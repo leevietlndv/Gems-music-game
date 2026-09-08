@@ -874,15 +874,56 @@
     }
 
     .playback-time-row {
-      display: flex;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
       align-items: center;
-      justify-content: space-between;
       gap: 8px;
       margin-bottom: 5px;
       color: #ddd;
       font-size: 12px;
       font-weight: 700;
       font-variant-numeric: tabular-nums;
+    }
+
+    #playbackCurrentTime {
+      justify-self: start;
+    }
+
+    #playbackDuration {
+      justify-self: end;
+    }
+
+    .btn-playback-control {
+      width: 38px;
+      min-width: 38px;
+      height: 30px;
+      padding: 0;
+      border: none;
+      outline: none;
+      border-radius: 7px;
+      background: #2e7d32;
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+      box-sizing: border-box;
+      transition: background-color 0.15s ease, transform 0.15s ease;
+    }
+
+    .btn-playback-control:hover {
+      background: #388e3c;
+    }
+
+    .btn-playback-control:active {
+      transform: scale(0.96);
+    }
+
+    .btn-playback-control:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
     }
 
     .playback-time-current {
@@ -1231,6 +1272,7 @@
     <div class="playback-timeline" aria-label="Tiến trình phát nhạc">
       <div class="playback-time-row">
         <span id="playbackCurrentTime" class="playback-time-current">00:00</span>
+        <button id="btnPlaybackControl" class="btn-playback-control admin-only" type="button" aria-label="Tạm dừng" title="Tạm dừng">⏸</button>
         <span id="playbackDuration" class="playback-time-duration">00:00</span>
       </div>
       <input id="playbackTimeline" type="range" min="0" max="0" step="0.1" value="0" aria-label="Thanh thời gian bài hát" disabled>
@@ -1406,6 +1448,7 @@
     const audioNotice = document.getElementById('audioNotice');
     const btnAudioToggle = document.getElementById('btnAudioToggle');
     const btnPlaybackSync = document.getElementById('btnPlaybackSync');
+    const btnPlaybackControl = document.getElementById('btnPlaybackControl');
     const volumeSlider = document.getElementById('volumeSlider');
     const volumeValue = document.getElementById('volumeValue');
     const playbackTimeline = document.getElementById('playbackTimeline');
@@ -1682,6 +1725,7 @@
       // Lưu trạng thái Admin để updateUI() biết có hiện nút Xóa hay không
       window.isAdmin = data.isAdmin === true;
       updatePlaybackTimelineAccess();
+      updatePlaybackControlUI();
       updateVolumeAccess();
 
       if (onlineDetailsToggle) {
@@ -1750,6 +1794,7 @@
         !incomingPlayback ||
         Number(incomingPlayback.version) !== Number(currentPlayback.version);
       currentPlayback = incomingPlayback;
+      updatePlaybackControlUI();
       // Auto-seek đã tắt: không tự chạy drift correction theo interval.
       playbackTimelineSeekPending = false;
       playbackTimelinePendingPosition = null;
@@ -1821,6 +1866,7 @@
         String(pendingLocalPlayback.songId) === String(song.id);
 
       currentPlayback = incomingPlayback || currentPlayback;
+      updatePlaybackControlUI();
 
       if (matchesPendingLocal && youtubeApiPlayer && youtubePlayerReady) {
         // Không load lại video: local player đã được khởi động từ user gesture.
@@ -1861,6 +1907,7 @@
         Number(incomingPlayback.version) !== Number(currentPlayback.version);
 
       currentPlayback = incomingPlayback;
+      updatePlaybackControlUI();
       playbackTimelineSeekPending = false;
       playbackTimelinePendingPosition = null;
 
@@ -2801,6 +2848,75 @@
       return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
     }
 
+    function updatePlaybackControlUI() {
+      if (!btnPlaybackControl) return;
+
+      const isAdmin = window.isAdmin === true;
+      btnPlaybackControl.classList.toggle('admin-only', !isAdmin);
+
+      const status = currentPlayback?.status;
+      const canControl = isAdmin &&
+        currentPlayback?.songId != null &&
+        (status === 'playing' || status === 'paused');
+
+      btnPlaybackControl.disabled = !canControl;
+
+      if (status === 'paused') {
+        btnPlaybackControl.textContent = '▶';
+        btnPlaybackControl.setAttribute('aria-label', 'Tiếp tục phát');
+        btnPlaybackControl.setAttribute('title', 'Tiếp tục phát');
+      } else {
+        btnPlaybackControl.textContent = '⏸';
+        btnPlaybackControl.setAttribute('aria-label', 'Tạm dừng');
+        btnPlaybackControl.setAttribute('title', 'Tạm dừng');
+      }
+    }
+
+    function sendPlaybackControl(action) {
+      if (window.isAdmin !== true) return;
+      if (!socket.connected || !currentPlayback || currentPlayback.songId == null) return;
+
+      const status = currentPlayback.status;
+      if (action === 'pause' && status !== 'playing') return;
+      if (action === 'play' && status !== 'paused') return;
+
+      const payload = {
+        action,
+        songId: currentPlayback.songId,
+        version: currentPlayback.version
+      };
+
+      // Resume phải gọi playVideo() trực tiếp trong user gesture để giảm
+      // nguy cơ YouTube Mobile/WebView chặn autoplay. Server vẫn là nguồn
+      // sự thật và sẽ broadcast playbackState authoritative ngay sau đó.
+      if (action === 'play' && youtubeApiPlayer && youtubePlayerReady) {
+        try {
+          youtubeApiPlayer.seekTo(
+            Math.max(0, Number(currentPlayback.position) || 0),
+            true
+          );
+          youtubeApiPlayer.playVideo();
+        } catch (error) {
+          console.warn('⚠️ Không thể Resume YouTube từ user gesture:', error);
+        }
+      }
+
+      socket.emit('playbackControl', payload);
+    }
+
+    btnPlaybackControl?.addEventListener('click', () => {
+      if (window.isAdmin !== true || !currentPlayback) return;
+
+      if (currentPlayback.status === 'playing') {
+        if (youtubeApiPlayer && youtubePlayerReady) {
+          try { youtubeApiPlayer.pauseVideo(); } catch (error) {}
+        }
+        sendPlaybackControl('pause');
+      } else if (currentPlayback.status === 'paused') {
+        sendPlaybackControl('play');
+      }
+    });
+
     function updatePlaybackTimelineAccess() {
       if (!playbackTimeline) return;
 
@@ -3210,6 +3326,7 @@
       pendingLocalPlayback = null;
       serverClockOffsetMs = 0;
       currentPlayback = null;
+      updatePlaybackControlUI();
       currentPlayingUrl = null;
       currentSongId = null;
       resetPlaybackTimeline();
@@ -3411,6 +3528,7 @@
       currentSongId = winner.id ?? null;
       currentAction = action || null;
       currentPlayback = playback || currentPlayback;
+      updatePlaybackControlUI();
       winnerUser.textContent = winner.user || 'Người dùng';
       playerTitleText.textContent = winner.title || '-';
       renderWinnerAction(currentAction);
