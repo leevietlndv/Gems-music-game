@@ -657,7 +657,7 @@ function enqueueGameMutation(task) {
   return run;
 }
 
-// ==================== REALTIME PLAYBACK STATE (PHASE 6A) ====================
+// ==================== REALTIME PLAYBACK STATE ====================
 // Server là nguồn sự thật cho trạng thái phát. Không lưu vào PostgreSQL và
 // không broadcast currentTime liên tục; client tự tính vị trí từ startedAt.
 const SPIN_ANIMATION_MS = 4000;
@@ -2148,7 +2148,7 @@ io.on('connection', (socket) => {
     console.log(`🔊 Global volume → ${nextVolume}% (Admin socket=${socket.id})`);
   });
 
-  // ==================== PHASE 6E: ADMIN PLAYBACK CONTROL ====================
+  // ==================== ADMIN PLAYBACK CONTROL ====================
   // Pause/Resume dùng chính playbackState + version hiện có. Không ghi DB.
   socket.on('playbackControl', (payload = {}) => {
     if (socket.isAdmin !== true) {
@@ -2199,7 +2199,7 @@ io.on('connection', (socket) => {
     });
   });
 
-  // ==================== PHASE 6B: SYNCHRONIZED SEEK ====================
+  // ==================== SYNCHRONIZED SEEK ====================
   // Chỉ xử lý seek khi songId + playback version còn khớp. Admin có thể seek
   // cả khi đang PLAYING và PAUSED; PAUSED vẫn giữ nguyên trạng thái.
   // Mỗi seek tạo một playback version mới để vô hiệu hóa các tín hiệu cũ.
