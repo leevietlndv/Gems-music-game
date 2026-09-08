@@ -1166,7 +1166,8 @@
 
         gap: 4px;
 
-        padding: clamp(10px, 2.5vw, 13px) clamp(4px, 1.5vw, 8px);
+        /* Giữ nguyên tổng padding, dồn nội dung lên ~2px để cân giữa theo trục Y */
+        padding: clamp(8px, 2vw, 11px) clamp(4px, 1.5vw, 8px) clamp(12px, 3vw, 15px);
 
         font-size: clamp(12px, 3.8vw, 16px);
 
@@ -1184,7 +1185,8 @@
       }
 
       .admin-actions button {
-        padding: 9px 3px;
+        /* Giữ tổng padding 18px, dồn nội dung lên ~1px ở màn hình rất hẹp */
+        padding: 8px 3px 10px;
         gap: 3px;
 
         font-size: 12px;
@@ -1310,7 +1312,7 @@
       </button>
 
       <button id="btnReset" class="btn-reset">
-        🧹 Reset Game
+        ♻️ Reset
       </button>
     </div>
 
