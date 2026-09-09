@@ -483,6 +483,31 @@ function validateTelegramInitData(initData) {
 }
 
 let isFormOpen = true;
+
+// ==================== SCRIPT SESSION TIMER (STEP 4A) ====================
+// Chỉ lưu RAM: Admin xác nhận sẽ bắt đầu một phiên mới.
+// endsAt là mốc thời gian tuyệt đối để mọi client tự đếm ngược đồng bộ.
+let scriptSessionEndsAt = null;
+let scriptSessionTimer = null;
+let scriptSessionToken = 0;
+
+function getScriptSessionState() {
+  return {
+    active: Number.isFinite(scriptSessionEndsAt) && scriptSessionEndsAt > Date.now(),
+    endsAt: Number.isFinite(scriptSessionEndsAt) ? scriptSessionEndsAt : null,
+    serverNow: Date.now()
+  };
+}
+
+function clearScriptSessionTimer() {
+  if (scriptSessionTimer) {
+    clearTimeout(scriptSessionTimer);
+    scriptSessionTimer = null;
+  }
+  scriptSessionEndsAt = null;
+  scriptSessionToken += 1;
+}
+
 let songs = [];
 // Danh sách blacklist được cache trong RAM sau khi tải từ PostgreSQL.
 // Phase 2 bắt đầu sử dụng cache này cho thao tác Admin Delete.
@@ -1286,7 +1311,8 @@ function broadcastState() {
     blockedSongs,
     playback: getPlaybackState(),
     volume: getGlobalVolume(),
-    online: getOnlineSummary()
+    online: getOnlineSummary(),
+    scriptSession: getScriptSessionState()
   });
 }
 
@@ -1852,6 +1878,76 @@ app.post('/api/spin', async (req, res) => {
   }
 });
 
+// ==================== API: SCRIPT SESSION (STEP 4A) ====================
+app.post('/api/script-settings/start-session', async (req, res) => {
+  const auth = requireTelegramAdmin(req, res);
+  if (!auth.ok) return;
+
+  const minutes = Number(req.body?.sessionDurationMinutes);
+  if (!Number.isFinite(minutes) || minutes < 1 || minutes > 24 * 60) {
+    return res.status(400).json({
+      success: false,
+      message: 'Thời lượng phiên phải từ 1 đến 1440 phút.'
+    });
+  }
+
+  try {
+    const result = await enqueueGameMutation(async () => {
+      if (scriptSessionTimer) {
+        clearTimeout(scriptSessionTimer);
+        scriptSessionTimer = null;
+      }
+
+      const token = ++scriptSessionToken;
+      scriptSessionEndsAt = Date.now() + Math.round(minutes * 60 * 1000);
+      const session = getScriptSessionState();
+
+      io.emit('scriptSessionState', session);
+      broadcastState();
+
+      scriptSessionTimer = setTimeout(() => {
+        enqueueGameMutation(async () => {
+          if (token !== scriptSessionToken || !Number.isFinite(scriptSessionEndsAt)) return;
+          if (Date.now() < scriptSessionEndsAt) return;
+
+          // Hết phiên: dùng đúng cơ chế Reset Game hiện tại.
+          await pool.query('DELETE FROM songs');
+          songs = [];
+          lastWinner = null;
+          stopPlayback();
+          lastAction = null;
+          currentHealth = 5;
+          currentLikeCount = 0;
+          currentDislikeCount = 0;
+          clearReplacementCountdown();
+          setAutoPlayState(0);
+          broadcastAutoPlayState();
+
+          scriptSessionEndsAt = null;
+          scriptSessionTimer = null;
+          scriptSessionToken += 1;
+
+          io.emit('scriptSessionState', getScriptSessionState());
+          broadcastState();
+          console.log('⏱️ Hết thời lượng phiên → tự động Reset Game và ngừng phát nhạc.');
+        }).catch(error => {
+          console.error('❌ Lỗi Reset Game tự động khi hết phiên:', error);
+        });
+      }, Math.max(0, scriptSessionEndsAt - Date.now()));
+
+      return { success: true, session };
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Lỗi bắt đầu phiên phát nhạc:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Không thể bắt đầu phiên phát nhạc!'
+    });
+  }
+});
+
 // ==================== API: TOGGLE FORM ====================
 app.post('/api/toggle-form', (req, res) => {
   const auth = requireTelegramAdmin(req, res);
@@ -2037,7 +2133,8 @@ function sendInitialState(socket) {
     blockedSongs,
     playback: getPlaybackState(),
     volume: getGlobalVolume(),
-    online: getOnlineSummary()
+    online: getOnlineSummary(),
+    scriptSession: getScriptSessionState()
   });
 
   socket.emit('volumeState', {
