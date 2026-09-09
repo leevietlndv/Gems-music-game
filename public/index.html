@@ -1517,11 +1517,6 @@
     // playback state authoritative sau khi server xác nhận.
     let pendingLocalPlayback = null;
     let autoplayBlockedNoticeShown = false;
-    // Safari/macOS có thể chặn autoplay có tiếng khi không còn user gesture.
-    // Cờ này chỉ phản ánh mute tạm thời do autoplay policy, KHÔNG ghi đè
-    // lựa chọn âm thanh đã lưu của người dùng.
-    let autoplayPolicyMuted = false;
-    let autoplayMutedFallbackAttempted = false;
 
     let youtubeApiPlayer = null;
     let youtubeApiReady = false;
@@ -2297,8 +2292,6 @@
       };
 
       autoplayBlockedNoticeShown = false;
-      autoplayPolicyMuted = false;
-      autoplayMutedFallbackAttempted = false;
 
       // Không dùng playback state cũ ở đây: server chưa xác nhận thao tác mới.
       currentPlayback = null;
@@ -2530,21 +2523,6 @@
           onReady: (event) => {
             youtubePlayerReady = true;
             console.log('🎬 YouTube Player đã sẵn sàng');
-
-            // Cấp quyền autoplay rõ ràng cho iframe do YouTube IFrame API tạo.
-            // Đặc biệt hữu ích trên Safari/macOS và các WebView nghiêm ngặt.
-            try {
-              const iframe = youtubeApiPlayer.getIframe?.();
-              if (iframe) {
-                iframe.setAttribute(
-                  'allow',
-                  'autoplay; encrypted-media; picture-in-picture'
-                );
-                iframe.setAttribute('playsinline', '');
-              }
-            } catch (error) {
-              console.warn('⚠️ Không thể cập nhật quyền autoplay cho iframe:', error);
-            }
             // Phase 6D.2: Player vừa khởi tạo phải nhận global volume hiện tại
             // ngay cả khi server chưa phát sinh volumeState mới.
             applyGlobalVolumeToPlayer(true);
@@ -2563,33 +2541,11 @@
           onStateChange: onYouTubePlayerStateChange,
           onAutoplayBlocked: () => {
             console.warn('⚠️ YouTube chặn autoplay/playback tự động trên thiết bị này.');
-
-            // Safari thường chặn autoplay có tiếng nhưng cho phép muted autoplay.
-            // Thử fallback muted đúng MỘT lần để video vẫn tiếp tục chạy.
-            // Không thay savedAudioPreference: user chỉ cần bấm nút loa một lần
-            // để khôi phục tiếng bằng một user gesture hợp lệ.
-            if (
-              youtubeApiPlayer &&
-              youtubePlayerReady &&
-              !autoplayMutedFallbackAttempted &&
-              currentPlayback?.status === 'playing'
-            ) {
-              autoplayMutedFallbackAttempted = true;
-              autoplayPolicyMuted = true;
-              try {
-                youtubeApiPlayer.mute();
-                youtubeApiPlayer.playVideo();
-              } catch (error) {
-                console.warn('⚠️ Muted autoplay fallback thất bại:', error);
-              }
-            }
-
             if (!autoplayBlockedNoticeShown) {
               autoplayBlockedNoticeShown = true;
-              audioNotice.textContent = '🔇 Safari đã chặn autoplay có tiếng. Video vẫn tự chạy; bấm nút loa một lần để bật âm thanh.';
+              audioNotice.textContent = '▶️ Thiết bị yêu cầu bạn bấm Play YouTube một lần để cho phép phát nhạc.';
               audioNotice.className = 'audio-notice muted';
             }
-            updateAudioControls();
           },
           onError: (event) => {
             const errorCode = Number(event.data);
@@ -2721,7 +2677,7 @@
     }
 
     function updateAudioControls() {
-      const muted = savedAudioPreference === false || globalVolume === 0 || autoplayPolicyMuted;
+      const muted = savedAudioPreference === false || globalVolume === 0;
       const icon = muted
         ? '🔇'
         : (globalVolume < 50 ? '🔉' : '🔊');
@@ -2754,13 +2710,8 @@
       applyGlobalVolumeToPlayer(true);
 
       if (savedAudioPreference === false || globalVolume === 0) {
-        autoplayPolicyMuted = false;
         youtubeApiPlayer.mute();
       } else {
-        // Hàm này được gọi từ nút âm thanh (user gesture), nên đây là thời điểm
-        // hợp lệ để thoát muted fallback do Safari áp đặt.
-        autoplayPolicyMuted = false;
-        autoplayMutedFallbackAttempted = false;
         youtubeApiPlayer.unMute();
         if (playAfterUnmute) {
           youtubeApiPlayer.playVideo();
@@ -2799,7 +2750,6 @@
 
     btnAudioToggle.addEventListener('click', () => {
       const globallyMuted = globalVolume === 0;
-      const policyMuted = autoplayPolicyMuted;
       const locallyMuted = savedAudioPreference === false;
 
       if (globallyMuted) {
@@ -2809,7 +2759,7 @@
         return;
       }
 
-      if (locallyMuted || policyMuted) {
+      if (locallyMuted) {
         saveAudioPreference(true);
         applyAudioSettings(true);
         audioNotice.textContent = '🔊 Âm thanh: Đang Bật';
@@ -2882,10 +2832,7 @@
     }
 
     function updateAudioNotice(effectiveSound) {
-      if (autoplayPolicyMuted && globalVolume > 0) {
-        audioNotice.textContent = '🔇 Safari đang tạm chặn âm thanh autoplay — bấm nút loa một lần để bật tiếng';
-        audioNotice.className = 'audio-notice muted';
-      } else if (effectiveSound) {
+      if (effectiveSound) {
         audioNotice.textContent = '🔊 Âm thanh: Đang Bật';
         audioNotice.className = 'audio-notice unmuted';
       } else {
@@ -3282,8 +3229,6 @@
       }
 
       autoplayBlockedNoticeShown = false;
-      autoplayPolicyMuted = false;
-      autoplayMutedFallbackAttempted = false;
 
       const effectiveSound = getEffectiveSound(shouldPlaySound);
       const targetPosition = getPlaybackTargetPosition(playback);
@@ -3386,8 +3331,6 @@
       pendingPlayerSound = false;
       pendingPlayerPlayback = null;
       pendingLocalPlayback = null;
-      autoplayPolicyMuted = false;
-      autoplayMutedFallbackAttempted = false;
       serverClockOffsetMs = 0;
       currentPlayback = null;
       updatePlaybackControlUI();

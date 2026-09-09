@@ -657,7 +657,7 @@ function enqueueGameMutation(task) {
   return run;
 }
 
-// ==================== REALTIME PLAYBACK STATE (PHASE 6A) ====================
+// ==================== REALTIME PLAYBACK STATE ====================
 // Server là nguồn sự thật cho trạng thái phát. Không lưu vào PostgreSQL và
 // không broadcast currentTime liên tục; client tự tính vị trí từ startedAt.
 const SPIN_ANIMATION_MS = 4000;
@@ -740,6 +740,27 @@ function startPlayback(songId, position = 0, delayMs = 0) {
     status: 'playing',
     position,
     startedAt
+  });
+}
+
+function getCurrentPlaybackPosition() {
+  if (playbackState.songId == null) return 0;
+  const basePosition = Math.max(0, Number(playbackState.position) || 0);
+  if (playbackState.status !== 'playing') return basePosition;
+
+  const startedAt = Number(playbackState.startedAt);
+  if (!Number.isFinite(startedAt)) return basePosition;
+
+  const elapsed = Math.max(0, (Date.now() - startedAt) / 1000);
+  return basePosition + elapsed;
+}
+
+function pausePlayback() {
+  return setPlaybackState({
+    songId: playbackState.songId,
+    status: 'paused',
+    position: getCurrentPlaybackPosition(),
+    startedAt: null
   });
 }
 
@@ -1507,6 +1528,14 @@ app.post('/api/auto-play-next', async (req, res) => {
       };
     }
 
+    if (playbackState.status === 'paused') {
+      return {
+        success: false,
+        paused: true,
+        message: 'Auto Play tạm dừng vì playback đang ở trạng thái PAUSED.'
+      };
+    }
+
     const availableSongs = songs.filter(song =>
       !currentId || String(song.id) !== currentId
     );
@@ -1590,10 +1619,9 @@ app.post('/api/auto-play-next', async (req, res) => {
 });
 
 // ==================== API: PLAY ONE SONG ====================
-// Tất cả user đều được phép phát.
-// Người bấm Play nghe tiếng; các client khác phát mute.
+// Chỉ Admin được phép phát bài hát thủ công.
 app.post('/api/play-song', async (req, res) => {
-  const { id, initData, socketId } = req.body;
+  const { id, socketId } = req.body;
 
   if (!id) {
     return res.status(400).json({
@@ -1602,13 +1630,8 @@ app.post('/api/play-song', async (req, res) => {
     });
   }
 
-  const auth = validateTelegramInitData(initData);
-  if (!auth.valid) {
-    return res.status(401).json({
-      success: false,
-      message: `Xác thực Telegram thất bại: ${auth.message}`
-    });
-  }
+  const auth = requireTelegramAdmin(req, res);
+  if (!auth.ok) return;
 
   try {
     const result = await pool.query(`
@@ -2125,9 +2148,61 @@ io.on('connection', (socket) => {
     console.log(`🔊 Global volume → ${nextVolume}% (Admin socket=${socket.id})`);
   });
 
-  // ==================== PHASE 6B: SYNCHRONIZED SEEK ====================
-  // Chỉ xử lý seek khi songId + playback version còn khớp. Mỗi seek tạo
-  // một playback version mới để vô hiệu hóa các tín hiệu cũ (ví dụ ENDED).
+  // ==================== ADMIN PLAYBACK CONTROL ====================
+  // Pause/Resume dùng chính playbackState + version hiện có. Không ghi DB.
+  socket.on('playbackControl', (payload = {}) => {
+    if (socket.isAdmin !== true) {
+      console.warn(`⛔ Từ chối playbackControl từ user thường: socket=${socket.id}`);
+      return;
+    }
+
+    const action = payload.action;
+    const songId = payload.songId;
+    const version = Number(payload.version);
+
+    if (!['pause', 'play'].includes(action) || songId == null || !Number.isFinite(version)) {
+      return;
+    }
+
+    enqueueGameMutation(async () => {
+      const current = getPlaybackState();
+
+      // Nếu state đã thay đổi sau khi Admin bấm nút, không được ghi đè state mới.
+      // Gửi state hiện tại riêng cho Admin để UI tự reconcile.
+      if (playbackState.songId == null ||
+          String(playbackState.songId) !== String(songId) ||
+          Number(playbackState.version) !== version) {
+        socket.emit('playbackSync', current);
+        return;
+      }
+
+      let nextPlayback = null;
+
+      if (action === 'pause' && playbackState.status === 'playing') {
+        nextPlayback = pausePlayback();
+      } else if (action === 'play' && playbackState.status === 'paused') {
+        nextPlayback = startPlayback(playbackState.songId, playbackState.position);
+      } else {
+        socket.emit('playbackSync', current);
+        return;
+      }
+
+      io.emit('playbackState', nextPlayback);
+      broadcastState();
+      console.log(
+        action === 'pause'
+          ? `⏸ Playback PAUSED bài #${songId} tại ${nextPlayback.position.toFixed(1)}s`
+          : `▶️ Playback RESUMED bài #${songId} từ ${nextPlayback.position.toFixed(1)}s`
+      );
+    }).catch(error => {
+      console.error('❌ Lỗi xử lý playbackControl:', error);
+    });
+  });
+
+  // ==================== SYNCHRONIZED SEEK ====================
+  // Chỉ xử lý seek khi songId + playback version còn khớp. Admin có thể seek
+  // cả khi đang PLAYING và PAUSED; PAUSED vẫn giữ nguyên trạng thái.
+  // Mỗi seek tạo một playback version mới để vô hiệu hóa các tín hiệu cũ.
   // Không ghi DB và không broadcast currentTime liên tục.
   socket.on('playbackSeek', (payload = {}) => {
     const songId = payload.songId;
@@ -2144,14 +2219,14 @@ io.on('connection', (socket) => {
       if (playbackState.songId == null) return;
       if (String(playbackState.songId) !== String(songId)) return;
       if (Number(playbackState.version) !== version) return;
-      if (playbackState.status !== 'playing') return;
+      if (!['playing', 'paused'].includes(playbackState.status)) return;
 
       const safePosition = Math.max(0, position);
       const seeked = setPlaybackState({
         songId: playbackState.songId,
-        status: 'playing',
+        status: playbackState.status,
         position: safePosition,
-        startedAt: Date.now()
+        startedAt: playbackState.status === 'playing' ? Date.now() : null
       });
 
       io.emit('playbackState', seeked);
