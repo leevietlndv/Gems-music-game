@@ -48,8 +48,7 @@
 
     /* ==================== NAVBAR FRAMEWORK ==================== */
     .app-navbar {
-      position: sticky;
-      top: 8px;
+      position: relative;
       width: 100%;
       max-width: 480px;
       margin: -4px 0 16px;
@@ -151,6 +150,14 @@
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.04em;
+    }
+
+    .form-status-row {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 12px;
+      width: 100%;
     }
 
     .status-badge {
@@ -1308,7 +1315,6 @@
 
   <div class="header">
     <h1>🎵 GEMS Radio</h1>
-    <span id="statusBadge" class="status-badge">⏳ Đang kết nối...</span>
   </div>
 
   <!-- NAVBAR FRAMEWORK: chỉ là lớp điều hướng UI, chưa di chuyển chức năng hiện tại. -->
@@ -1332,7 +1338,9 @@
   </nav>
 
   <div class="card">
-    <div class="card-title">Gửi link bài hát (YouTube)</div>
+    <div class="form-status-row">
+      <span id="statusBadge" class="status-badge">⏳ Đang kết nối...</span>
+    </div>
     <div class="input-group">
       <input type="text" id="songUrl" placeholder="https://www.youtube.com/watch?v=..." />
       <button id="btnSubmit" class="btn-submit">🚀 Gửi bài hát</button>
