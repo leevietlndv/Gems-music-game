@@ -46,6 +46,112 @@
       gap: 8px;
     }
 
+    /* ==================== NAVBAR FRAMEWORK ==================== */
+    .app-navbar {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+      margin: -4px 0 16px;
+      z-index: 1000;
+    }
+
+    .app-navbar-bar {
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 6px 8px 6px 14px;
+      background: #252f42;
+      border: 1px solid #34415a;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+    }
+
+    .app-navbar-title {
+      min-width: 0;
+      color: #64b5f6;
+      font-size: 14px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .app-navbar-toggle {
+      width: 40px;
+      height: 36px;
+      min-width: 40px;
+      padding: 0;
+      border: 1px solid #3b4861;
+      border-radius: 8px;
+      background: #1a2232;
+      color: #fff;
+      font-size: 21px;
+      line-height: 1;
+    }
+
+    .app-navbar-toggle:hover {
+      background: #2d3a52;
+    }
+
+    .app-navbar-toggle:active {
+      transform: scale(0.96);
+    }
+
+    .app-navbar-dropdown {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      width: min(260px, 88vw);
+      padding: 6px;
+      display: none;
+      background: #252f42;
+      border: 1px solid #34415a;
+      border-radius: 10px;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+    }
+
+    .app-navbar-dropdown.open {
+      display: block;
+    }
+
+    .app-navbar-item {
+      width: 100%;
+      min-height: 40px;
+      padding: 9px 10px;
+      border-radius: 7px;
+      background: transparent;
+      color: #eee;
+      font-size: 14px;
+      font-weight: 600;
+      text-align: left;
+      justify-content: flex-start;
+    }
+
+    .app-navbar-item:hover {
+      background: #303d55;
+    }
+
+    .app-navbar-item:active {
+      transform: scale(0.99);
+    }
+
+    .app-navbar-divider {
+      height: 1px;
+      margin: 5px 4px;
+      background: #34415a;
+    }
+
+    .app-navbar-section-label {
+      padding: 6px 10px 4px;
+      color: #888;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
     .status-badge {
       display: inline-block;
       padding: 6px 16px;
@@ -1204,6 +1310,26 @@
     <span id="statusBadge" class="status-badge">⏳ Đang kết nối...</span>
   </div>
 
+  <!-- NAVBAR FRAMEWORK: chỉ là lớp điều hướng UI, chưa di chuyển chức năng hiện tại. -->
+  <nav id="appNavbar" class="app-navbar" aria-label="Điều hướng ứng dụng">
+    <div class="app-navbar-bar">
+      <span class="app-navbar-title">☰ Menu</span>
+      <button id="appNavbarToggle" class="app-navbar-toggle" type="button" aria-label="Mở menu"
+        aria-expanded="false" aria-controls="appNavbarDropdown">☰</button>
+    </div>
+
+    <div id="appNavbarDropdown" class="app-navbar-dropdown" role="menu">
+      <button class="app-navbar-item" type="button" role="menuitem" data-nav-target="playerCard">🎵 Trình phát</button>
+      <button class="app-navbar-item" type="button" role="menuitem" data-nav-target="wheelCanvas">🎡 Vòng quay</button>
+      <button class="app-navbar-item" type="button" role="menuitem" data-nav-target="songList">📋 Danh sách bài hát</button>
+      <button class="app-navbar-item" type="button" role="menuitem" data-nav-target="blacklistBar">🚫 Bài hát đã chặn</button>
+
+      <div class="app-navbar-divider"></div>
+      <div class="app-navbar-section-label">Admin</div>
+      <button class="app-navbar-item admin-only" type="button" role="menuitem" data-nav-target="adminPanel">👑 Quản trị</button>
+    </div>
+  </nav>
+
   <div class="card">
     <div class="card-title">Gửi link bài hát (YouTube)</div>
     <div class="input-group">
@@ -1434,6 +1560,53 @@
     const songUrlInput = document.getElementById('songUrl');
     const btnSubmit = document.getElementById('btnSubmit');
     const btnSpin = document.getElementById('btnSpin');
+    const appNavbarToggle = document.getElementById('appNavbarToggle');
+    const appNavbarDropdown = document.getElementById('appNavbarDropdown');
+    const appNavbarAdminItem = appNavbarDropdown?.querySelector('.app-navbar-item.admin-only');
+
+    function setNavbarOpen(isOpen) {
+      if (!appNavbarDropdown || !appNavbarToggle) return;
+      appNavbarDropdown.classList.toggle('open', isOpen);
+      appNavbarToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      appNavbarToggle.setAttribute('aria-label', isOpen ? 'Đóng menu' : 'Mở menu');
+      appNavbarToggle.textContent = isOpen ? '✕' : '☰';
+    }
+
+    function updateNavbarAdminUI() {
+      if (!appNavbarAdminItem) return;
+      appNavbarAdminItem.classList.toggle('admin-only', window.isAdmin !== true);
+      if (window.isAdmin !== true && appNavbarAdminItem === document.activeElement) {
+        setNavbarOpen(false);
+      }
+    }
+
+    appNavbarToggle?.addEventListener('click', (event) => {
+      event.stopPropagation();
+      setNavbarOpen(!appNavbarDropdown?.classList.contains('open'));
+    });
+
+    appNavbarDropdown?.addEventListener('click', (event) => {
+      const item = event.target.closest('.app-navbar-item');
+      if (!item) return;
+
+      const targetId = item.dataset.navTarget;
+      const target = targetId ? document.getElementById(targetId) : null;
+      if (target) {
+        setNavbarOpen(false);
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!appNavbarDropdown?.classList.contains('open')) return;
+      if (!event.target.closest('#appNavbar')) setNavbarOpen(false);
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') setNavbarOpen(false);
+    });
+
+    updateNavbarAdminUI();
     const btnToggleForm = document.getElementById('btnToggleForm');
     const btnAutoPlay = document.getElementById('btnAutoPlay');
     const btnReset = document.getElementById('btnReset');
@@ -1731,6 +1904,7 @@
 
       // Lưu trạng thái Admin để updateUI() biết có hiện nút Xóa hay không
       window.isAdmin = data.isAdmin === true;
+      updateNavbarAdminUI();
       updatePlaybackTimelineAccess();
       updatePlaybackControlUI();
       updateVolumeAccess();
