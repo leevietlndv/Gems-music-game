@@ -1312,7 +1312,7 @@
       </button>
 
       <button id="btnReset" class="btn-reset">
-        ♻️ Reset
+        🧹 Reset Game
       </button>
     </div>
 
@@ -1970,11 +1970,12 @@
       const shouldPlaySound = data?.initiatorSocketId === socket.id;
       currentAction = data?.action || null;
       startSpinAnimation(
-        data.selectedIndex,
-        data.winner,
+        data?.winner?.id,
+        data?.winner,
         shouldPlaySound,
         data?.action || null,
-        data?.playback || null
+        data?.playback || null,
+        Array.isArray(data?.spinSongs) ? data.spinSongs : null
       );
     });
 
@@ -2444,8 +2445,9 @@
       unblockSong(button.dataset.id);
     });
 
-    function drawWheel() {
-      const numSlices = songs.length;
+    function drawWheel(wheelSongs = songs) {
+      const sourceSongs = Array.isArray(wheelSongs) ? wheelSongs : songs;
+      const numSlices = sourceSongs.length;
       ctx.clearRect(0, 0, 300, 300);
 
       if (numSlices === 0) {
@@ -2481,7 +2483,7 @@
         ctx.textAlign = 'right';
         ctx.fillStyle = '#ffffff';
 
-        let label = songs[i].user || `Bài ${i + 1}`;
+        let label = sourceSongs[i].user || `Bài ${i + 1}`;
         if (label.length > 16) label = label.substring(0, 14) + '...';
 
         let fontSize = 12;
@@ -3777,21 +3779,33 @@
 
     updateAutoPlayButton();
 
-    function startSpinAnimation(targetIndex, winner, shouldPlaySound, action = currentAction, playback = currentPlayback) {
+    function startSpinAnimation(winnerId, winner, shouldPlaySound, action = currentAction, playback = currentPlayback, spinSongs = null) {
       if (isSpinning) return;
       isSpinning = true;
       btnSpin.disabled = true;
 
       clearPlayer();
 
-      const numSlices = songs.length;
-      const sliceAngle = (2 * Math.PI) / numSlices;
-      // Danh sách có thể đã thay đổi trong 4 giây animation (admin xóa bài),
-      // nên kẹp index trong phạm vi hợp lệ để kim không chỉ sai ô.
-      const safeTargetIndex = numSlices > 0
-        ? Math.min(Math.max(0, Number(targetIndex) || 0), numSlices - 1)
-        : 0;
-      const targetSliceStartAngle = safeTargetIndex * sliceAngle;
+      // Freeze đúng snapshot mà server đã dùng để chọn winner.
+      // StateUpdate có thể đến trong 4 giây animation nhưng không được
+      // làm thay đổi các ô/names đang hiển thị của vòng quay hiện tại.
+      const wheelSongs = Array.isArray(spinSongs) && spinSongs.length
+        ? spinSongs.map(song => ({ ...song }))
+        : songs.map(song => ({ ...song }));
+      const numSlices = wheelSongs.length;
+      const sliceAngle = numSlices > 0 ? (2 * Math.PI) / numSlices : 0;
+
+      const targetIndex = wheelSongs.findIndex(
+        song => String(song.id) === String(winnerId)
+      );
+      if (targetIndex < 0 || numSlices === 0) {
+        console.warn('⚠️ Không tìm thấy winner trong snapshot vòng quay:', winnerId);
+        isSpinning = false;
+        btnSpin.disabled = songs.length === 0;
+        return;
+      }
+
+      const targetSliceStartAngle = targetIndex * sliceAngle;
       const targetSliceCenterAngle = targetSliceStartAngle + sliceAngle / 2;
       const extraSpins = 5 * 2 * Math.PI;
       const desiredFinalAngle = (1.5 * Math.PI) - targetSliceCenterAngle;
@@ -3807,7 +3821,7 @@
         const easeOut = 1 - Math.pow(1 - progress, 3);
 
         currentAngle = startAngle + totalRotation * easeOut;
-        drawWheel();
+        drawWheel(wheelSongs);
 
         if (progress < 1) {
           requestAnimationFrame(animateSpin);

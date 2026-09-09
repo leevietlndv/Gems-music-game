@@ -977,8 +977,11 @@ async function performSpin(initiatorSocketId = null, actionUser = null) {
     return { success: false, message: 'Danh sách bài hát đã hết!' };
   }
 
-  const selectedIndex = Math.floor(Math.random() * songs.length);
-  const winner = songs[selectedIndex];
+  // Snapshot chính xác danh sách mà vòng quay phải hiển thị.
+  // Client dùng snapshot này + winner.id để tránh lệch index khi stateUpdate đến.
+  const spinSongs = songs.map(song => ({ ...song }));
+  const selectedIndex = Math.floor(Math.random() * spinSongs.length);
+  const winner = spinSongs[selectedIndex];
   lastWinner = winner;
   startPlayback(winner.id, 0, SPIN_ANIMATION_MS);
   currentHealth = 5;
@@ -990,6 +993,7 @@ async function performSpin(initiatorSocketId = null, actionUser = null) {
   io.emit('triggerSpin', {
     selectedIndex,
     winner,
+    spinSongs,
     initiatorSocketId,
     action: lastAction,
     playback: getPlaybackState()
