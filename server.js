@@ -528,6 +528,18 @@ function clearScriptFormTimer() {
   scriptFormToken += 1;
 }
 
+function normalizeScriptDurationMinutes(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const minutes = Number(value);
+  if (!Number.isFinite(minutes) || minutes < 1 || minutes > 24 * 60) return undefined;
+  return minutes;
+}
+
+function clearScriptTimers() {
+  clearScriptSessionTimer();
+  clearScriptFormTimer();
+}
+
 let songs = [];
 // Danh sách blacklist được cache trong RAM sau khi tải từ PostgreSQL.
 // Phase 2 bắt đầu sử dụng cache này cho thao tác Admin Delete.
@@ -1904,36 +1916,30 @@ app.post('/api/script-settings/start-session', async (req, res) => {
   const auth = requireTelegramAdmin(req, res);
   if (!auth.ok) return;
 
-  const minutes = Number(req.body?.sessionDurationMinutes);
-  const formMinutes = Number(req.body?.formOpenDurationMinutes);
-  if (!Number.isFinite(minutes) || minutes < 1 || minutes > 24 * 60) {
+  const minutes = normalizeScriptDurationMinutes(req.body?.sessionDurationMinutes);
+  const formMinutes = normalizeScriptDurationMinutes(req.body?.formOpenDurationMinutes);
+  if (minutes === undefined) {
     return res.status(400).json({
       success: false,
-      message: 'Thời lượng phiên phải từ 1 đến 1440 phút.'
+      message: 'Thời lượng phiên phải từ 1 đến 1440 phút, hoặc để trống để không giới hạn.'
     });
   }
-  if (!Number.isFinite(formMinutes) || formMinutes < 1 || formMinutes > 24 * 60) {
+  if (formMinutes === undefined) {
     return res.status(400).json({
       success: false,
-      message: 'Thời gian mở form phải từ 1 đến 1440 phút.'
+      message: 'Thời gian mở form phải từ 1 đến 1440 phút, hoặc để trống để không giới hạn.'
     });
   }
 
   try {
     const result = await enqueueGameMutation(async () => {
-      if (scriptSessionTimer) {
-        clearTimeout(scriptSessionTimer);
-        scriptSessionTimer = null;
-      }
-      if (scriptFormTimer) {
-        clearTimeout(scriptFormTimer);
-        scriptFormTimer = null;
-      }
+      clearScriptTimers();
 
-      const sessionToken = ++scriptSessionToken;
-      const formToken = ++scriptFormToken;
-      scriptSessionEndsAt = Date.now() + Math.round(minutes * 60 * 1000);
-      scriptFormEndsAt = Date.now() + Math.round(formMinutes * 60 * 1000);
+      const now = Date.now();
+      const sessionToken = scriptSessionToken;
+      const formToken = scriptFormToken;
+      scriptSessionEndsAt = minutes === null ? null : now + Math.round(minutes * 60 * 1000);
+      scriptFormEndsAt = formMinutes === null ? null : now + Math.round(formMinutes * 60 * 1000);
 
       // Xác nhận kịch bản luôn bắt đầu với form ở trạng thái mở.
       isFormOpen = true;
@@ -1944,52 +1950,56 @@ app.post('/api/script-settings/start-session', async (req, res) => {
       io.emit('scriptSessionState', session);
       broadcastState();
 
-      scriptSessionTimer = setTimeout(() => {
-        enqueueGameMutation(async () => {
-          if (sessionToken !== scriptSessionToken || !Number.isFinite(scriptSessionEndsAt)) return;
-          if (Date.now() < scriptSessionEndsAt) return;
+      if (scriptSessionEndsAt != null) {
+        scriptSessionTimer = setTimeout(() => {
+          enqueueGameMutation(async () => {
+            if (sessionToken !== scriptSessionToken || !Number.isFinite(scriptSessionEndsAt)) return;
+            if (Date.now() < scriptSessionEndsAt) return;
 
-          // Hết phiên: dùng đúng cơ chế Reset Game hiện tại.
-          await pool.query('DELETE FROM songs');
-          songs = [];
-          lastWinner = null;
-          stopPlayback();
-          lastAction = null;
-          currentHealth = 5;
-          currentLikeCount = 0;
-          currentDislikeCount = 0;
-          clearReplacementCountdown();
-          setAutoPlayState(0);
-          broadcastAutoPlayState();
+            // Hết phiên: dùng đúng cơ chế Reset Game hiện tại.
+            await pool.query('DELETE FROM songs');
+            songs = [];
+            lastWinner = null;
+            stopPlayback();
+            lastAction = null;
+            currentHealth = 5;
+            currentLikeCount = 0;
+            currentDislikeCount = 0;
+            clearReplacementCountdown();
+            setAutoPlayState(0);
+            broadcastAutoPlayState();
 
-          scriptSessionEndsAt = null;
-          scriptSessionTimer = null;
-          scriptSessionToken += 1;
+            scriptSessionEndsAt = null;
+            scriptSessionTimer = null;
+            scriptSessionToken += 1;
 
-          io.emit('scriptSessionState', getScriptSessionState());
-          broadcastState();
-          console.log('⏱️ Hết thời lượng phiên → tự động Reset Game và ngừng phát nhạc.');
-        }).catch(error => {
-          console.error('❌ Lỗi Reset Game tự động khi hết phiên:', error);
-        });
-      }, Math.max(0, scriptSessionEndsAt - Date.now()));
+            io.emit('scriptSessionState', getScriptSessionState());
+            broadcastState();
+            console.log('⏱️ Hết thời lượng phiên → tự động Reset Game và ngừng phát nhạc.');
+          }).catch(error => {
+            console.error('❌ Lỗi Reset Game tự động khi hết phiên:', error);
+          });
+        }, Math.max(0, scriptSessionEndsAt - Date.now()));
+      }
 
-      scriptFormTimer = setTimeout(() => {
-        enqueueGameMutation(async () => {
-          if (formToken !== scriptFormToken || !Number.isFinite(scriptFormEndsAt)) return;
-          if (Date.now() < scriptFormEndsAt) return;
+      if (scriptFormEndsAt != null) {
+        scriptFormTimer = setTimeout(() => {
+          enqueueGameMutation(async () => {
+            if (formToken !== scriptFormToken || !Number.isFinite(scriptFormEndsAt)) return;
+            if (Date.now() < scriptFormEndsAt) return;
 
-          isFormOpen = false;
-          scriptFormEndsAt = null;
-          scriptFormTimer = null;
-          scriptFormToken += 1;
+            isFormOpen = false;
+            scriptFormEndsAt = null;
+            scriptFormTimer = null;
+            scriptFormToken += 1;
 
-          broadcastState();
-          console.log('⏱️ Hết thời gian mở form → tự động đóng form.');
-        }).catch(error => {
-          console.error('❌ Lỗi tự động đóng form khi hết thời gian:', error);
-        });
-      }, Math.max(0, scriptFormEndsAt - Date.now()));
+            broadcastState();
+            console.log('⏱️ Hết thời gian mở form → tự động đóng form.');
+          }).catch(error => {
+            console.error('❌ Lỗi tự động đóng form khi hết thời gian:', error);
+          });
+        }, Math.max(0, scriptFormEndsAt - Date.now()));
+      }
 
       return { success: true, session, form };
     });
@@ -2000,6 +2010,34 @@ app.post('/api/script-settings/start-session', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Không thể bắt đầu phiên phát nhạc!'
+    });
+  }
+});
+
+// ==================== API: CANCEL SCRIPT TIMERS ====================
+app.post('/api/script-settings/cancel-session', async (req, res) => {
+  const auth = requireTelegramAdmin(req, res);
+  if (!auth.ok) return;
+
+  try {
+    const result = await enqueueGameMutation(async () => {
+      clearScriptTimers();
+      const session = getScriptSessionState();
+      const form = getScriptFormState();
+
+      io.emit('scriptSessionState', session);
+      broadcastState();
+      console.log('⏹️ Admin đã hủy kịch bản đang đếm. Không reset game và không thay đổi trạng thái form.');
+
+      return { success: true, session, form };
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Lỗi hủy kịch bản:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Không thể hủy kịch bản!'
     });
   }
 });

@@ -207,6 +207,7 @@
       flex: 0 0 auto;
     }
 
+    .script-settings-cancel,
     .script-settings-edit,
     .script-settings-toggle {
       width: 38px;
@@ -221,13 +222,32 @@
       line-height: 1;
     }
 
+    .script-settings-cancel {
+      background: #4a4f58;
+      color: #aeb4bd;
+      cursor: not-allowed;
+    }
+
+    .script-settings-cancel.active {
+      background: #c62828;
+      border-color: #ef5350;
+      color: #fff;
+      cursor: pointer;
+    }
+
     .script-settings-edit:hover,
-    .script-settings-toggle:hover {
+    .script-settings-toggle:hover,
+    .script-settings-cancel.active:hover {
       background: #2d3a52;
     }
 
+    .script-settings-cancel.active:hover {
+      background: #d32f2f;
+    }
+
     .script-settings-edit:active,
-    .script-settings-toggle:active {
+    .script-settings-toggle:active,
+    .script-settings-cancel.active:active {
       transform: scale(0.96);
     }
 
@@ -1673,6 +1693,8 @@
         </div>
 
         <div class="script-settings-actions">
+          <button id="scriptSettingsCancel" class="script-settings-cancel" type="button"
+            aria-label="Hủy kịch bản" title="Chưa có kịch bản đang chạy" disabled>✖</button>
           <button id="scriptSettingsEdit" class="script-settings-edit" type="button"
             aria-label="Chỉnh sửa cài đặt kịch bản" title="Chỉnh sửa">✏️</button>
           <button id="scriptSettingsToggle" class="script-settings-toggle" type="button"
@@ -1822,6 +1844,7 @@
 
     const scriptSettings = document.getElementById('scriptSettings');
     const scriptSettingsToggle = document.getElementById('scriptSettingsToggle');
+    const scriptSettingsCancel = document.getElementById('scriptSettingsCancel');
     const scriptSettingsEdit = document.getElementById('scriptSettingsEdit');
     const scriptSettingsDetails = document.getElementById('scriptSettingsDetails');
     const scriptSettingsConfirm = document.getElementById('scriptSettingsConfirm');
@@ -1829,6 +1852,10 @@
     const sessionDuration = document.getElementById('sessionDuration');
     const formOpenDuration = document.getElementById('formOpenDuration');
 
+    let scriptSessionEndsAt = null;
+    let scriptSessionCountdownTimer = null;
+    let scriptFormEndsAt = null;
+    let scriptFormCountdownTimer = null;
     function formatCountdownHoursMinutes(totalSeconds) {
       const seconds = Math.max(0, Math.ceil(Number(totalSeconds) || 0));
 
@@ -1868,6 +1895,18 @@
       if (scriptSessionEndsAt != null) {
         scriptSessionCountdownTimer = setInterval(updateSessionCountdown, 250);
       }
+      updateScriptSettingsCancelUI();
+    }
+
+    function updateScriptSettingsCancelUI() {
+      if (!scriptSettingsCancel) return;
+      const hasActiveTimer = Number.isFinite(scriptSessionEndsAt) || Number.isFinite(scriptFormEndsAt);
+      scriptSettingsCancel.disabled = !hasActiveTimer || window.isAdmin !== true;
+      scriptSettingsCancel.classList.toggle('active', hasActiveTimer && window.isAdmin === true);
+      scriptSettingsCancel.setAttribute('aria-disabled', scriptSettingsCancel.disabled ? 'true' : 'false');
+      scriptSettingsCancel.title = hasActiveTimer && window.isAdmin === true
+        ? 'Hủy kịch bản đang đếm'
+        : 'Chưa có kịch bản đang chạy';
     }
 
     function updateFormCountdown() {
@@ -1898,6 +1937,7 @@
       if (scriptFormEndsAt != null) {
         scriptFormCountdownTimer = setInterval(updateFormCountdown, 250);
       }
+      updateScriptSettingsCancelUI();
     }
 
     function setScriptSettingsOpen(isOpen) {
@@ -1914,6 +1954,7 @@
       if (!scriptSettings) return;
       scriptSettings.classList.toggle('admin-only', window.isAdmin !== true);
       if (window.isAdmin !== true) setScriptSettingsOpen(false);
+      updateScriptSettingsCancelUI();
     }
 
     scriptSettingsToggle?.addEventListener('click', () => {
@@ -1929,11 +1970,13 @@
     scriptSettingsConfirm?.addEventListener('click', async () => {
       if (window.isAdmin !== true) return;
 
-      const sessionValue = Number(sessionDuration?.value);
-      const formValue = Number(formOpenDuration?.value);
-      if (!Number.isFinite(sessionValue) || sessionValue < 1 ||
-          !Number.isFinite(formValue) || formValue < 1) {
-        alert('Vui lòng nhập thời gian hợp lệ (từ 1 phút trở lên).');
+      const sessionRaw = sessionDuration?.value?.trim() ?? '';
+      const formRaw = formOpenDuration?.value?.trim() ?? '';
+      const sessionValue = sessionRaw === '' ? null : Number(sessionRaw);
+      const formValue = formRaw === '' ? null : Number(formRaw);
+      if ((sessionValue !== null && (!Number.isFinite(sessionValue) || sessionValue < 1)) ||
+          (formValue !== null && (!Number.isFinite(formValue) || formValue < 1))) {
+        alert('Vui lòng nhập thời gian từ 1 phút trở lên, hoặc để trống nếu không giới hạn thời gian.');
         return;
       }
 
@@ -1962,6 +2005,32 @@
         alert('Lỗi kết nối đến server!');
       } finally {
         scriptSettingsConfirm.disabled = false;
+      }
+    });
+
+    scriptSettingsCancel?.addEventListener('click', async () => {
+      if (window.isAdmin !== true || scriptSettingsCancel.disabled) return;
+
+      try {
+        scriptSettingsCancel.disabled = true;
+        const response = await fetch('/api/script-settings/cancel-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ initData: telegramInitData })
+        });
+        const data = await response.json();
+        if (!data.success) {
+          alert(data.message || 'Không thể hủy kịch bản.');
+          updateScriptSettingsCancelUI();
+          return;
+        }
+
+        setSessionCountdownState(data.session);
+        setFormCountdownState(data.form);
+      } catch (error) {
+        console.error('❌ Lỗi hủy kịch bản:', error);
+        alert('Lỗi kết nối đến server!');
+        updateScriptSettingsCancelUI();
       }
     });
 
@@ -2077,10 +2146,6 @@
     // Giữ offset đồng hồ server để timeline UI và nút cập nhật thủ công tính đúng vị trí.
     // Auto-seek đã tắt: không còn drift-correction interval hoặc foreground recovery.
     let serverClockOffsetMs = 0;
-    let scriptSessionEndsAt = null;
-    let scriptSessionCountdownTimer = null;
-    let scriptFormEndsAt = null;
-    let scriptFormCountdownTimer = null;
 
     // Phase 6A.1: giữ dấu vết thao tác Play vừa phát sinh trực tiếp từ user gesture.
     // Dùng để tránh server echo lại làm reload video, đồng thời reconcile theo
