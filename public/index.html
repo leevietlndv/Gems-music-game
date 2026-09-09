@@ -1831,6 +1831,12 @@
 
     function formatCountdownHoursMinutes(totalSeconds) {
       const seconds = Math.max(0, Math.ceil(Number(totalSeconds) || 0));
+
+      // Trên 60 giây: HH:MM. Dưới 60 giây: chỉ hiển thị SS để dễ quan sát.
+      if (seconds < 60) {
+        return String(seconds).padStart(2, '0');
+      }
+
       const hours = Math.floor(seconds / 3600);
       const minutes = Math.floor((seconds % 3600) / 60);
       return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
