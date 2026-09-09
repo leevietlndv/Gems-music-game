@@ -490,6 +490,9 @@ let isFormOpen = true;
 let scriptSessionEndsAt = null;
 let scriptSessionTimer = null;
 let scriptSessionToken = 0;
+let scriptFormEndsAt = null;
+let scriptFormTimer = null;
+let scriptFormToken = 0;
 
 function getScriptSessionState() {
   return {
@@ -506,6 +509,23 @@ function clearScriptSessionTimer() {
   }
   scriptSessionEndsAt = null;
   scriptSessionToken += 1;
+}
+
+function getScriptFormState() {
+  return {
+    active: Number.isFinite(scriptFormEndsAt) && scriptFormEndsAt > Date.now(),
+    endsAt: Number.isFinite(scriptFormEndsAt) ? scriptFormEndsAt : null,
+    serverNow: Date.now()
+  };
+}
+
+function clearScriptFormTimer() {
+  if (scriptFormTimer) {
+    clearTimeout(scriptFormTimer);
+    scriptFormTimer = null;
+  }
+  scriptFormEndsAt = null;
+  scriptFormToken += 1;
 }
 
 let songs = [];
@@ -1312,7 +1332,8 @@ function broadcastState() {
     playback: getPlaybackState(),
     volume: getGlobalVolume(),
     online: getOnlineSummary(),
-    scriptSession: getScriptSessionState()
+    scriptSession: getScriptSessionState(),
+    scriptForm: getScriptFormState()
   });
 }
 
@@ -1878,16 +1899,23 @@ app.post('/api/spin', async (req, res) => {
   }
 });
 
-// ==================== API: SCRIPT SESSION (STEP 4A) ====================
+// ==================== API: SCRIPT SESSION / FORM TIMER ====================
 app.post('/api/script-settings/start-session', async (req, res) => {
   const auth = requireTelegramAdmin(req, res);
   if (!auth.ok) return;
 
   const minutes = Number(req.body?.sessionDurationMinutes);
+  const formMinutes = Number(req.body?.formOpenDurationMinutes);
   if (!Number.isFinite(minutes) || minutes < 1 || minutes > 24 * 60) {
     return res.status(400).json({
       success: false,
       message: 'Thời lượng phiên phải từ 1 đến 1440 phút.'
+    });
+  }
+  if (!Number.isFinite(formMinutes) || formMinutes < 1 || formMinutes > 24 * 60) {
+    return res.status(400).json({
+      success: false,
+      message: 'Thời gian mở form phải từ 1 đến 1440 phút.'
     });
   }
 
@@ -1897,17 +1925,28 @@ app.post('/api/script-settings/start-session', async (req, res) => {
         clearTimeout(scriptSessionTimer);
         scriptSessionTimer = null;
       }
+      if (scriptFormTimer) {
+        clearTimeout(scriptFormTimer);
+        scriptFormTimer = null;
+      }
 
-      const token = ++scriptSessionToken;
+      const sessionToken = ++scriptSessionToken;
+      const formToken = ++scriptFormToken;
       scriptSessionEndsAt = Date.now() + Math.round(minutes * 60 * 1000);
+      scriptFormEndsAt = Date.now() + Math.round(formMinutes * 60 * 1000);
+
+      // Xác nhận kịch bản luôn bắt đầu với form ở trạng thái mở.
+      isFormOpen = true;
+
       const session = getScriptSessionState();
+      const form = getScriptFormState();
 
       io.emit('scriptSessionState', session);
       broadcastState();
 
       scriptSessionTimer = setTimeout(() => {
         enqueueGameMutation(async () => {
-          if (token !== scriptSessionToken || !Number.isFinite(scriptSessionEndsAt)) return;
+          if (sessionToken !== scriptSessionToken || !Number.isFinite(scriptSessionEndsAt)) return;
           if (Date.now() < scriptSessionEndsAt) return;
 
           // Hết phiên: dùng đúng cơ chế Reset Game hiện tại.
@@ -1935,7 +1974,24 @@ app.post('/api/script-settings/start-session', async (req, res) => {
         });
       }, Math.max(0, scriptSessionEndsAt - Date.now()));
 
-      return { success: true, session };
+      scriptFormTimer = setTimeout(() => {
+        enqueueGameMutation(async () => {
+          if (formToken !== scriptFormToken || !Number.isFinite(scriptFormEndsAt)) return;
+          if (Date.now() < scriptFormEndsAt) return;
+
+          isFormOpen = false;
+          scriptFormEndsAt = null;
+          scriptFormTimer = null;
+          scriptFormToken += 1;
+
+          broadcastState();
+          console.log('⏱️ Hết thời gian mở form → tự động đóng form.');
+        }).catch(error => {
+          console.error('❌ Lỗi tự động đóng form khi hết thời gian:', error);
+        });
+      }, Math.max(0, scriptFormEndsAt - Date.now()));
+
+      return { success: true, session, form };
     });
 
     res.json(result);
@@ -1949,13 +2005,29 @@ app.post('/api/script-settings/start-session', async (req, res) => {
 });
 
 // ==================== API: TOGGLE FORM ====================
-app.post('/api/toggle-form', (req, res) => {
+app.post('/api/toggle-form', async (req, res) => {
   const auth = requireTelegramAdmin(req, res);
   if (!auth.ok) return;
 
-  isFormOpen = !isFormOpen;
-  broadcastState();
-  res.json({ success: true, isFormOpen });
+  try {
+    const result = await enqueueGameMutation(async () => {
+      isFormOpen = !isFormOpen;
+
+      // Countdown mở form giữ nguyên mốc thời gian đã xác nhận.
+      // Nếu Admin đóng/mở thủ công trước khi hết giờ, thời gian còn lại
+      // vẫn được giữ nguyên thay vì tạo lại một phiên countdown mới.
+      broadcastState();
+      return { success: true, isFormOpen };
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Lỗi toggle form:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Không thể thay đổi trạng thái form!'
+    });
+  }
 });
 
 // ==================== API: RESET ====================
@@ -2134,7 +2206,8 @@ function sendInitialState(socket) {
     playback: getPlaybackState(),
     volume: getGlobalVolume(),
     online: getOnlineSummary(),
-    scriptSession: getScriptSessionState()
+    scriptSession: getScriptSessionState(),
+    scriptForm: getScriptFormState()
   });
 
   socket.emit('volumeState', {

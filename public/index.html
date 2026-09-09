@@ -1870,6 +1870,36 @@
       }
     }
 
+    function updateFormCountdown() {
+      if (!formCountdown) return;
+
+      if (!Number.isFinite(scriptFormEndsAt)) {
+        formCountdown.hidden = true;
+        formCountdown.textContent = '--:--';
+        return;
+      }
+
+      const remainingMs = Math.max(0, scriptFormEndsAt - (Date.now() + serverClockOffsetMs));
+      formCountdown.hidden = false;
+      formCountdown.textContent = formatCountdownHoursMinutes(remainingMs / 1000);
+    }
+
+    function setFormCountdownState(data = null) {
+      const endsAt = Number(data?.endsAt);
+      scriptFormEndsAt = data?.active === true && Number.isFinite(endsAt) ? endsAt : null;
+
+      if (scriptFormCountdownTimer) {
+        clearInterval(scriptFormCountdownTimer);
+        scriptFormCountdownTimer = null;
+      }
+
+      updateFormCountdown();
+
+      if (scriptFormEndsAt != null) {
+        scriptFormCountdownTimer = setInterval(updateFormCountdown, 250);
+      }
+    }
+
     function setScriptSettingsOpen(isOpen) {
       if (!scriptSettingsDetails || !scriptSettingsToggle) return;
       scriptSettingsDetails.classList.toggle('open', isOpen);
@@ -1914,7 +1944,8 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             initData: telegramInitData,
-            sessionDurationMinutes: sessionValue
+            sessionDurationMinutes: sessionValue,
+            formOpenDurationMinutes: formValue
           })
         });
         const data = await response.json();
@@ -1924,6 +1955,7 @@
         }
 
         setSessionCountdownState(data.session);
+        setFormCountdownState(data.form);
         setScriptSettingsOpen(false);
       } catch (error) {
         console.error('❌ Lỗi bắt đầu phiên phát nhạc:', error);
@@ -2047,6 +2079,8 @@
     let serverClockOffsetMs = 0;
     let scriptSessionEndsAt = null;
     let scriptSessionCountdownTimer = null;
+    let scriptFormEndsAt = null;
+    let scriptFormCountdownTimer = null;
 
     // Phase 6A.1: giữ dấu vết thao tác Play vừa phát sinh trực tiếp từ user gesture.
     // Dùng để tránh server echo lại làm reload video, đồng thời reconcile theo
@@ -2320,10 +2354,12 @@
       }
       updateHealth(typeof data.health === 'number' ? data.health : 5);
 
+      if (data.scriptSession) setSessionCountdownState(data.scriptSession);
+      if (data.scriptForm) setFormCountdownState(data.scriptForm);
+
       if (typeof data.autoPlayMode !== 'undefined') {
         autoPlayMode = Number(data.autoPlayMode) || 0;
         autoPlayControllerSocketId = data.controllerSocketId || null;
-      if (data.scriptSession) setSessionCountdownState(data.scriptSession);
         autoPlayController = window.isAdmin === true &&
           autoPlayControllerSocketId === socket.id;
         autoPlayNextBusy = false;
