@@ -1518,6 +1518,12 @@
     let pendingLocalPlayback = null;
     let autoplayBlockedNoticeShown = false;
 
+    // ==================== AUTOPLAY FALLBACK (TELEGRAM MAC/iOS) ====================
+    // Một số WebView/Safari chặn playVideo() có tiếng nếu không xuất phát từ user gesture.
+    // Khi bị chặn, thử phát muted để Auto Play không bị đứng; user có thể bấm nút loa để bật tiếng.
+    let autoplayMutedFallbackActive = false;
+    let lastMutedAutoplayFallbackKey = null;
+
     let youtubeApiPlayer = null;
     let youtubeApiReady = false;
     let youtubeApiReadyCallbacks = [];
@@ -2541,8 +2547,8 @@
           onStateChange: onYouTubePlayerStateChange,
           onAutoplayBlocked: () => {
             console.warn('⚠️ YouTube chặn autoplay/playback tự động trên thiết bị này.');
-            if (!autoplayBlockedNoticeShown) {
-              autoplayBlockedNoticeShown = true;
+            autoplayBlockedNoticeShown = true;
+            if (!tryMutedAutoplayFallback('onAutoplayBlocked')) {
               audioNotice.textContent = '▶️ Thiết bị yêu cầu bạn bấm Play YouTube một lần để cho phép phát nhạc.';
               audioNotice.className = 'audio-notice muted';
             }
@@ -2626,7 +2632,7 @@
         // Mute là trạng thái riêng của từng thiết bị. Chỉ khi global volume
         // bằng 0 thì player bắt buộc không có tiếng. Khi user đã chọn Bật
         // nhạc, global volume mới được áp dụng nhưng không làm mất preference.
-        if (savedAudioPreference === false || globalVolume === 0) {
+        if (savedAudioPreference === false || globalVolume === 0 || autoplayMutedFallbackActive) {
           youtubeApiPlayer.mute();
         } else if (savedAudioPreference === true) {
           youtubeApiPlayer.unMute();
@@ -2677,7 +2683,7 @@
     }
 
     function updateAudioControls() {
-      const muted = savedAudioPreference === false || globalVolume === 0;
+      const muted = autoplayMutedFallbackActive || savedAudioPreference === false || globalVolume === 0;
       const icon = muted
         ? '🔇'
         : (globalVolume < 50 ? '🔉' : '🔊');
@@ -2707,14 +2713,19 @@
     function applyAudioSettings(playAfterUnmute = false) {
       if (!youtubeApiPlayer || !youtubePlayerReady) return;
 
+      if (savedAudioPreference !== false && globalVolume > 0) {
+        autoplayMutedFallbackActive = false;
+      }
+
       applyGlobalVolumeToPlayer(true);
 
-      if (savedAudioPreference === false || globalVolume === 0) {
+      if (savedAudioPreference === false || globalVolume === 0 || autoplayMutedFallbackActive) {
         youtubeApiPlayer.mute();
       } else {
         youtubeApiPlayer.unMute();
         if (playAfterUnmute) {
           youtubeApiPlayer.playVideo();
+          verifyPlaybackStartedSoon('user-audio-toggle');
         }
       }
 
@@ -2759,12 +2770,23 @@
         return;
       }
 
+      if (autoplayMutedFallbackActive) {
+        autoplayMutedFallbackActive = false;
+        saveAudioPreference(true);
+        applyAudioSettings(true);
+        audioNotice.textContent = '🔊 Đã thử bật âm thanh. Nếu thiết bị vẫn chặn, hãy bấm Play trực tiếp trên YouTube.';
+        audioNotice.className = 'audio-notice unmuted';
+        return;
+      }
+
       if (locallyMuted) {
+        autoplayMutedFallbackActive = false;
         saveAudioPreference(true);
         applyAudioSettings(true);
         audioNotice.textContent = '🔊 Âm thanh: Đang Bật';
         audioNotice.className = 'audio-notice unmuted';
       } else {
+        autoplayMutedFallbackActive = false;
         saveAudioPreference(false);
         applyAudioSettings(false);
         audioNotice.textContent = '🔇 Âm thanh: Đã Tắt';
@@ -2832,6 +2854,12 @@
     }
 
     function updateAudioNotice(effectiveSound) {
+      if (autoplayMutedFallbackActive) {
+        audioNotice.textContent = '🔇 Thiết bị chặn Auto Play có tiếng — đang phát muted. Bấm 🔇 để thử bật âm thanh.';
+        audioNotice.className = 'audio-notice muted';
+        return;
+      }
+
       if (effectiveSound) {
         audioNotice.textContent = '🔊 Âm thanh: Đang Bật';
         audioNotice.className = 'audio-notice unmuted';
@@ -3111,6 +3139,53 @@
       }, { passive: true });
     }
 
+    function getCurrentPlaybackKey() {
+      if (!currentPlayback?.songId || !Number.isFinite(Number(currentPlayback.version))) return null;
+      return `${currentPlayback.songId}:${currentPlayback.version}`;
+    }
+
+    function tryMutedAutoplayFallback(reason = 'autoplay-blocked') {
+      if (!youtubeApiPlayer || !youtubePlayerReady) return false;
+      if (!currentPlayback || currentPlayback.status !== 'playing' || currentPlayback.songId == null) return false;
+      if (currentSongId == null || String(currentSongId) !== String(currentPlayback.songId)) return false;
+      if (savedAudioPreference === false || globalVolume === 0) return false;
+
+      const playbackKey = getCurrentPlaybackKey();
+      if (!playbackKey || lastMutedAutoplayFallbackKey === playbackKey) return false;
+      lastMutedAutoplayFallbackKey = playbackKey;
+
+      try {
+        autoplayMutedFallbackActive = true;
+        youtubeApiPlayer.mute();
+        youtubeApiPlayer.playVideo();
+        audioNotice.textContent = '🔇 Thiết bị chặn Auto Play có tiếng — đang phát muted. Bấm 🔇 để thử bật âm thanh.';
+        audioNotice.className = 'audio-notice muted';
+        updateAudioControls();
+        console.warn(`⚠️ Auto Play fallback muted (${reason}) cho playback ${playbackKey}`);
+        return true;
+      } catch (error) {
+        console.warn('⚠️ Không thể fallback Auto Play muted:', error);
+        return false;
+      }
+    }
+
+    function verifyPlaybackStartedSoon(reason = 'scheduled-play') {
+      const playbackKey = getCurrentPlaybackKey();
+      setTimeout(() => {
+        if (!playbackKey || playbackKey !== getCurrentPlaybackKey()) return;
+        if (!youtubeApiPlayer || !youtubePlayerReady) return;
+        if (!currentPlayback || currentPlayback.status !== 'playing') return;
+
+        try {
+          const playerState = youtubeApiPlayer.getPlayerState?.();
+          if (typeof YT !== 'undefined' && playerState === YT.PlayerState.PLAYING) return;
+          tryMutedAutoplayFallback(reason);
+        } catch (error) {
+          console.warn('⚠️ Không kiểm tra được trạng thái Auto Play:', error);
+        }
+      }, 1200);
+    }
+
     function clearPlaybackStartTimer() {
       playbackScheduleToken += 1;
       if (playbackStartTimer) {
@@ -3154,8 +3229,10 @@
 
         try {
           youtubeApiPlayer.playVideo();
+          verifyPlaybackStartedSoon('schedulePlaybackStart');
         } catch (error) {
           console.warn('⚠️ Không thể bắt đầu playback theo lịch:', error);
+          tryMutedAutoplayFallback('schedulePlaybackStart-error');
         }
       };
 
@@ -3229,6 +3306,7 @@
       }
 
       autoplayBlockedNoticeShown = false;
+      autoplayMutedFallbackActive = false;
 
       const effectiveSound = getEffectiveSound(shouldPlaySound);
       const targetPosition = getPlaybackTargetPosition(playback);
@@ -3286,8 +3364,10 @@
         if (isLocalGesturePlayback && delayMs <= 50) {
           try {
             youtubeApiPlayer.playVideo();
+            verifyPlaybackStartedSoon('local-user-gesture');
           } catch (error) {
             console.warn('⚠️ Không thể phát YouTube trong user gesture:', error);
+            tryMutedAutoplayFallback('local-user-gesture-error');
           }
           if (effectiveSound && globalVolume > 0) {
             try { youtubeApiPlayer.unMute(); } catch (error) {}
@@ -3331,6 +3411,8 @@
       pendingPlayerSound = false;
       pendingPlayerPlayback = null;
       pendingLocalPlayback = null;
+      autoplayMutedFallbackActive = false;
+      lastMutedAutoplayFallbackKey = null;
       serverClockOffsetMs = 0;
       currentPlayback = null;
       updatePlaybackControlUI();
@@ -3569,6 +3651,7 @@
         currentPlayback.status === 'playing'
       ) {
         autoplayBlockedNoticeShown = false;
+        updateAudioControls();
         updatePlaybackTimelineUi();
       }
 
