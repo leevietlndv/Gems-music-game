@@ -152,6 +152,161 @@
       letter-spacing: 0.04em;
     }
 
+    /* ==================== SCRIPT SETTINGS (ADMIN) ==================== */
+    .script-settings {
+      width: 100%;
+      max-width: 480px;
+      margin-top: 10px;
+    }
+
+    .script-settings-bar {
+      min-height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 7px 8px 7px 14px;
+      background: #252f42;
+      border: 1px solid #34415a;
+      border-radius: 10px;
+    }
+
+    .script-settings-summary {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: #eee;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .script-settings-summary-icon {
+      font-size: 19px;
+      flex: 0 0 auto;
+    }
+
+    .script-settings-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 0 0 auto;
+    }
+
+    .script-settings-edit,
+    .script-settings-toggle {
+      width: 38px;
+      height: 36px;
+      min-width: 38px;
+      padding: 0;
+      border: 1px solid #3b4861;
+      border-radius: 8px;
+      background: #1a2232;
+      color: #fff;
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .script-settings-edit:hover,
+    .script-settings-toggle:hover {
+      background: #2d3a52;
+    }
+
+    .script-settings-edit:active,
+    .script-settings-toggle:active {
+      transform: scale(0.96);
+    }
+
+    .script-settings-details {
+      display: none;
+      margin-top: 6px;
+      padding: 12px;
+      background: #252f42;
+      border: 1px solid #34415a;
+      border-radius: 10px;
+    }
+
+    .script-settings-details.open {
+      display: block;
+    }
+
+    .script-settings-field {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .script-settings-field label {
+      color: #eee;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    .script-settings-input-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .script-settings-input {
+      width: 86px;
+      height: 38px;
+      padding: 6px 8px;
+      border: 1px solid #3b4861;
+      border-radius: 8px;
+      background: #1a2232;
+      color: #fff;
+      font-size: 14px;
+      text-align: center;
+    }
+
+    .script-settings-unit {
+      color: #aaa;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .script-settings-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .script-settings-confirm,
+    .script-settings-reset {
+      min-width: 105px;
+      min-height: 38px;
+      padding: 8px 14px;
+      border: 0;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .script-settings-confirm {
+      background: #2e7d32;
+    }
+
+    .script-settings-reset {
+      background: #455a64;
+    }
+
+    @media (max-width: 380px) {
+      .script-settings-field {
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }
+
+      .script-settings-input-wrap {
+        justify-content: flex-start;
+      }
+    }
+
     .form-status-row {
       display: flex;
       justify-content: center;
@@ -1477,6 +1632,49 @@
       <div class="blacklist-detail-title">🚫 Danh sách bài hát đã chặn</div>
       <div id="blacklistList" class="blacklist-list"></div>
     </div>
+
+    <!-- CÀI ĐẶT KỊCH BẢN: UI admin, chưa thay đổi logic server. -->
+    <section id="scriptSettings" class="script-settings admin-only" aria-label="Cài đặt kịch bản">
+      <div class="script-settings-bar">
+        <div class="script-settings-summary">
+          <span class="script-settings-summary-icon" aria-hidden="true">⚙️</span>
+          <span>Cài đặt kịch bản</span>
+        </div>
+
+        <div class="script-settings-actions">
+          <button id="scriptSettingsEdit" class="script-settings-edit" type="button"
+            aria-label="Chỉnh sửa cài đặt kịch bản" title="Chỉnh sửa">✏️</button>
+          <button id="scriptSettingsToggle" class="script-settings-toggle" type="button"
+            aria-label="Mở cài đặt kịch bản" title="Mở cài đặt" aria-expanded="false"
+            aria-controls="scriptSettingsDetails">▼</button>
+        </div>
+      </div>
+
+      <div id="scriptSettingsDetails" class="script-settings-details" aria-hidden="true">
+        <div class="script-settings-field">
+          <label for="sessionDuration">1) Thời lượng phiên phát nhạc</label>
+          <div class="script-settings-input-wrap">
+            <input id="sessionDuration" class="script-settings-input" type="number" min="1" step="1" value="60"
+              inputmode="numeric" aria-label="Thời lượng phiên phát nhạc">
+            <span class="script-settings-unit">phút</span>
+          </div>
+        </div>
+
+        <div class="script-settings-field">
+          <label for="formOpenDuration">2) Thời gian mở form</label>
+          <div class="script-settings-input-wrap">
+            <input id="formOpenDuration" class="script-settings-input" type="number" min="1" step="1" value="30"
+              inputmode="numeric" aria-label="Thời gian mở form">
+            <span class="script-settings-unit">phút</span>
+          </div>
+        </div>
+
+        <div class="script-settings-buttons">
+          <button id="scriptSettingsConfirm" class="script-settings-confirm" type="button">✓ Xác nhận</button>
+          <button id="scriptSettingsReset" class="script-settings-reset" type="button">↺ Đặt lại</button>
+        </div>
+      </div>
+    </section>
   </div>
 
   <script>
@@ -1588,6 +1786,62 @@
         setNavbarOpen(false);
       }
     }
+
+    const scriptSettings = document.getElementById('scriptSettings');
+    const scriptSettingsToggle = document.getElementById('scriptSettingsToggle');
+    const scriptSettingsEdit = document.getElementById('scriptSettingsEdit');
+    const scriptSettingsDetails = document.getElementById('scriptSettingsDetails');
+    const scriptSettingsConfirm = document.getElementById('scriptSettingsConfirm');
+    const scriptSettingsReset = document.getElementById('scriptSettingsReset');
+    const sessionDuration = document.getElementById('sessionDuration');
+    const formOpenDuration = document.getElementById('formOpenDuration');
+
+    function setScriptSettingsOpen(isOpen) {
+      if (!scriptSettingsDetails || !scriptSettingsToggle) return;
+      scriptSettingsDetails.classList.toggle('open', isOpen);
+      scriptSettingsDetails.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+      scriptSettingsToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      scriptSettingsToggle.setAttribute('aria-label', isOpen ? 'Đóng cài đặt kịch bản' : 'Mở cài đặt kịch bản');
+      scriptSettingsToggle.setAttribute('title', isOpen ? 'Đóng cài đặt' : 'Mở cài đặt');
+      scriptSettingsToggle.textContent = isOpen ? '▲' : '▼';
+    }
+
+    function updateScriptSettingsAdminUI() {
+      if (!scriptSettings) return;
+      scriptSettings.classList.toggle('admin-only', window.isAdmin !== true);
+      if (window.isAdmin !== true) setScriptSettingsOpen(false);
+    }
+
+    scriptSettingsToggle?.addEventListener('click', () => {
+      setScriptSettingsOpen(!scriptSettingsDetails?.classList.contains('open'));
+    });
+
+    scriptSettingsEdit?.addEventListener('click', () => {
+      if (window.isAdmin !== true) return;
+      setScriptSettingsOpen(true);
+      sessionDuration?.focus();
+    });
+
+    // Step UI only: chưa gửi dữ liệu lên server cho đến khi chốt quy tắc backend.
+    scriptSettingsConfirm?.addEventListener('click', () => {
+      if (window.isAdmin !== true) return;
+      const sessionValue = Number(sessionDuration?.value);
+      const formValue = Number(formOpenDuration?.value);
+      if (!Number.isFinite(sessionValue) || sessionValue < 1 ||
+          !Number.isFinite(formValue) || formValue < 1) {
+        alert('Vui lòng nhập thời gian hợp lệ (từ 1 phút trở lên).');
+        return;
+      }
+      setScriptSettingsOpen(false);
+    });
+
+    scriptSettingsReset?.addEventListener('click', () => {
+      if (window.isAdmin !== true) return;
+      if (sessionDuration) sessionDuration.value = '60';
+      if (formOpenDuration) formOpenDuration.value = '30';
+    });
+
+    updateScriptSettingsAdminUI();
 
     appNavbarToggle?.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -1914,6 +2168,7 @@
       // Lưu trạng thái Admin để updateUI() biết có hiện nút Xóa hay không
       window.isAdmin = data.isAdmin === true;
       updateNavbarAdminUI();
+      updateScriptSettingsAdminUI();
       updatePlaybackTimelineAccess();
       updatePlaybackControlUI();
       updateVolumeAccess();
