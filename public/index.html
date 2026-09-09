@@ -48,7 +48,8 @@
 
     /* ==================== NAVBAR FRAMEWORK ==================== */
     .app-navbar {
-      position: relative;
+      position: sticky;
+      top: 8px;
       width: 100%;
       max-width: 480px;
       margin: -4px 0 16px;
@@ -1313,7 +1314,7 @@
   <!-- NAVBAR FRAMEWORK: chỉ là lớp điều hướng UI, chưa di chuyển chức năng hiện tại. -->
   <nav id="appNavbar" class="app-navbar" aria-label="Điều hướng ứng dụng">
     <div class="app-navbar-bar">
-      <span class="app-navbar-title">☰ Menu</span>
+      <span class="app-navbar-title">Menu</span>
       <button id="appNavbarToggle" class="app-navbar-toggle" type="button" aria-label="Mở menu"
         aria-expanded="false" aria-controls="appNavbarDropdown">☰</button>
     </div>
