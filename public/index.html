@@ -68,6 +68,20 @@
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
     }
 
+    .app-navbar-session-timer {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      color: #64b5f6;
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
     .app-navbar-title {
       min-width: 0;
       color: #64b5f6;
@@ -308,11 +322,26 @@
     }
 
     .form-status-row {
-      display: flex;
-      justify-content: center;
+      display: grid;
+      grid-template-columns: 1fr auto;
       align-items: center;
+      gap: 10px;
       margin-bottom: 12px;
       width: 100%;
+    }
+
+    .form-status-row .status-badge {
+      justify-self: start;
+    }
+
+    .form-countdown {
+      justify-self: end;
+      color: #64b5f6;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
     }
 
     .status-badge {
@@ -1476,6 +1505,7 @@
   <nav id="appNavbar" class="app-navbar" aria-label="Điều hướng ứng dụng">
     <div class="app-navbar-bar">
       <span class="app-navbar-title">Menu</span>
+      <span id="sessionCountdown" class="app-navbar-session-timer" aria-live="polite" aria-label="Thời gian phiên còn lại">--:--</span>
       <button id="appNavbarToggle" class="app-navbar-toggle" type="button" aria-label="Mở menu"
         aria-expanded="false" aria-controls="appNavbarDropdown">☰</button>
     </div>
@@ -1495,6 +1525,7 @@
   <div class="card">
     <div class="form-status-row">
       <span id="statusBadge" class="status-badge">⏳ Đang kết nối...</span>
+      <span id="formCountdown" class="form-countdown" aria-live="polite" aria-label="Thời gian mở form còn lại" hidden>--:--</span>
     </div>
     <div class="input-group">
       <input type="text" id="songUrl" placeholder="https://www.youtube.com/watch?v=..." />
@@ -1764,6 +1795,8 @@
     };
 
     const statusBadge = document.getElementById('statusBadge');
+    const sessionCountdown = document.getElementById('sessionCountdown');
+    const formCountdown = document.getElementById('formCountdown');
     const songUrlInput = document.getElementById('songUrl');
     const btnSubmit = document.getElementById('btnSubmit');
     const btnSpin = document.getElementById('btnSpin');
@@ -1796,6 +1829,41 @@
     const sessionDuration = document.getElementById('sessionDuration');
     const formOpenDuration = document.getElementById('formOpenDuration');
 
+    function formatCountdownMinutes(totalSeconds) {
+      const seconds = Math.max(0, Math.ceil(Number(totalSeconds) || 0));
+      const minutes = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
+    function updateSessionCountdown() {
+      if (!sessionCountdown) return;
+
+      if (!Number.isFinite(scriptSessionEndsAt)) {
+        sessionCountdown.textContent = '--:--';
+        return;
+      }
+
+      const remainingMs = Math.max(0, scriptSessionEndsAt - (Date.now() + serverClockOffsetMs));
+      sessionCountdown.textContent = formatCountdownMinutes(remainingMs / 1000);
+    }
+
+    function setSessionCountdownState(data = null) {
+      const endsAt = Number(data?.endsAt);
+      scriptSessionEndsAt = data?.active === true && Number.isFinite(endsAt) ? endsAt : null;
+
+      if (scriptSessionCountdownTimer) {
+        clearInterval(scriptSessionCountdownTimer);
+        scriptSessionCountdownTimer = null;
+      }
+
+      updateSessionCountdown();
+
+      if (scriptSessionEndsAt != null) {
+        scriptSessionCountdownTimer = setInterval(updateSessionCountdown, 250);
+      }
+    }
+
     function setScriptSettingsOpen(isOpen) {
       if (!scriptSettingsDetails || !scriptSettingsToggle) return;
       scriptSettingsDetails.classList.toggle('open', isOpen);
@@ -1822,9 +1890,9 @@
       sessionDuration?.focus();
     });
 
-    // Step UI only: chưa gửi dữ liệu lên server cho đến khi chốt quy tắc backend.
-    scriptSettingsConfirm?.addEventListener('click', () => {
+    scriptSettingsConfirm?.addEventListener('click', async () => {
       if (window.isAdmin !== true) return;
+
       const sessionValue = Number(sessionDuration?.value);
       const formValue = Number(formOpenDuration?.value);
       if (!Number.isFinite(sessionValue) || sessionValue < 1 ||
@@ -1832,7 +1900,31 @@
         alert('Vui lòng nhập thời gian hợp lệ (từ 1 phút trở lên).');
         return;
       }
-      setScriptSettingsOpen(false);
+
+      try {
+        scriptSettingsConfirm.disabled = true;
+        const response = await fetch('/api/script-settings/start-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            initData: telegramInitData,
+            sessionDurationMinutes: sessionValue
+          })
+        });
+        const data = await response.json();
+        if (!data.success) {
+          alert(data.message || 'Không thể bắt đầu phiên phát nhạc.');
+          return;
+        }
+
+        setSessionCountdownState(data.session);
+        setScriptSettingsOpen(false);
+      } catch (error) {
+        console.error('❌ Lỗi bắt đầu phiên phát nhạc:', error);
+        alert('Lỗi kết nối đến server!');
+      } finally {
+        scriptSettingsConfirm.disabled = false;
+      }
     });
 
     scriptSettingsReset?.addEventListener('click', () => {
@@ -1947,6 +2039,8 @@
     // Giữ offset đồng hồ server để timeline UI và nút cập nhật thủ công tính đúng vị trí.
     // Auto-seek đã tắt: không còn drift-correction interval hoặc foreground recovery.
     let serverClockOffsetMs = 0;
+    let scriptSessionEndsAt = null;
+    let scriptSessionCountdownTimer = null;
 
     // Phase 6A.1: giữ dấu vết thao tác Play vừa phát sinh trực tiếp từ user gesture.
     // Dùng để tránh server echo lại làm reload video, đồng thời reconcile theo
@@ -2223,6 +2317,7 @@
       if (typeof data.autoPlayMode !== 'undefined') {
         autoPlayMode = Number(data.autoPlayMode) || 0;
         autoPlayControllerSocketId = data.controllerSocketId || null;
+      if (data.scriptSession) setSessionCountdownState(data.scriptSession);
         autoPlayController = window.isAdmin === true &&
           autoPlayControllerSocketId === socket.id;
         autoPlayNextBusy = false;
