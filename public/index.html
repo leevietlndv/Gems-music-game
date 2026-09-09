@@ -1829,11 +1829,11 @@
     const sessionDuration = document.getElementById('sessionDuration');
     const formOpenDuration = document.getElementById('formOpenDuration');
 
-    function formatCountdownMinutes(totalSeconds) {
+    function formatCountdownHoursMinutes(totalSeconds) {
       const seconds = Math.max(0, Math.ceil(Number(totalSeconds) || 0));
-      const minutes = Math.floor(seconds / 60);
-      const secs = seconds % 60;
-      return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
     }
 
     function updateSessionCountdown() {
@@ -1845,7 +1845,7 @@
       }
 
       const remainingMs = Math.max(0, scriptSessionEndsAt - (Date.now() + serverClockOffsetMs));
-      sessionCountdown.textContent = formatCountdownMinutes(remainingMs / 1000);
+      sessionCountdown.textContent = formatCountdownHoursMinutes(remainingMs / 1000);
     }
 
     function setSessionCountdownState(data = null) {
