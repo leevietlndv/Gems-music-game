@@ -4085,23 +4085,42 @@
         // QUAN TRỌNG: authoritative state đang PAUSED/STOPPED thì tuyệt đối
         // không gọi playVideo(). Trước đây nhánh này vẫn tự phát, khiến
         // reload ngay sau khi video ENDED tạo vòng PLAY/PAUSE.
-        try {
-          const cuePosition = playback?.status === 'paused'
-            ? Math.max(0, Number(playback.position) || 0)
-            : 0;
-          if (typeof youtubeApiPlayer.cueVideoById === 'function') {
-            youtubeApiPlayer.cueVideoById(videoId, cuePosition);
-          } else {
-            youtubeApiPlayer.loadVideoById(videoId, cuePosition);
-            youtubeApiPlayer.pauseVideo();
+        //
+        // RIÊNG trường hợp Play từ danh sách bài hát: đây là user gesture thật.
+        // Server chưa trả playback authoritative nên playback = null, nhưng
+        // pendingLocalPlayback đã được tạo ngay trong click handler. Vì vậy
+        // phải gọi playVideo() ngay tại đây, trước khi user activation trên
+        // Android/WebView mất đi. Sau đó server playbackState sẽ reconcile.
+        if (isLocalGesturePlayback) {
+          try {
+            youtubeApiPlayer.playVideo();
+          } catch (error) {
+            console.warn('⚠️ Không thể phát YouTube trong user gesture:', error);
           }
           if (effectiveSound && globalVolume > 0) {
-            youtubeApiPlayer.unMute();
+            try { youtubeApiPlayer.unMute(); } catch (error) {}
           } else {
-            youtubeApiPlayer.mute();
+            try { youtubeApiPlayer.mute(); } catch (error) {}
           }
-        } catch (error) {
-          console.warn('⚠️ Không thể cue YouTube ở trạng thái không phát:', error);
+        } else {
+          try {
+            const cuePosition = playback?.status === 'paused'
+              ? Math.max(0, Number(playback.position) || 0)
+              : 0;
+            if (typeof youtubeApiPlayer.cueVideoById === 'function') {
+              youtubeApiPlayer.cueVideoById(videoId, cuePosition);
+            } else {
+              youtubeApiPlayer.loadVideoById(videoId, cuePosition);
+              youtubeApiPlayer.pauseVideo();
+            }
+            if (effectiveSound && globalVolume > 0) {
+              youtubeApiPlayer.unMute();
+            } else {
+              youtubeApiPlayer.mute();
+            }
+          } catch (error) {
+            console.warn('⚠️ Không thể cue YouTube ở trạng thái không phát:', error);
+          }
         }
       }
 
