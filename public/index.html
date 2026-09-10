@@ -73,9 +73,9 @@
       left: 50%;
       top: 50%;
       transform: translate(-50%, -50%);
-      color: #64b5f6;
+      color: #2e7d32;
       font-size: 18px;
-      font-weight: 800;
+      font-weight: 400;
       letter-spacing: 0.03em;
       white-space: nowrap;
       pointer-events: none;
@@ -206,15 +206,17 @@
     .script-settings-actions {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 14px;
       flex: 0 0 auto;
     }
 
     .script-settings-cancel,
     .script-settings-edit {
-      width: 38px;
+      width: 36px;
       height: 36px;
-      min-width: 38px;
+      min-width: 36px;
+      max-width: 36px;
+      flex: 0 0 36px;
       padding: 0;
       border: 1px solid #3b4861;
       border-radius: 8px;
@@ -356,9 +358,9 @@
 
     .form-countdown {
       justify-self: end;
-      color: #64b5f6;
+      color: #2e7d32;
       font-size: 15px;
-      font-weight: 800;
+      font-weight: 400;
       letter-spacing: 0.05em;
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
@@ -1642,7 +1644,7 @@
 
   <div style="width: 100%; max-width: 480px;">
     <!-- Thêm class admin-only để ẩn nút với người dùng thường -->
-    <button id="btnSpin" class="btn-spin admin-only">🎲 QUAY VÒNG QUAY</button>
+    <button id="btnSpin" class="btn-spin admin-only">🎡 QUAY VÒNG QUAY</button>
 
     <div id="adminPanel" class="admin-actions admin-only">
       <button id="btnToggleForm" class="btn-toggle">
@@ -1654,7 +1656,7 @@
       </button>
 
       <button id="btnReset" class="btn-reset">
-        ♻️ Reset
+        🧹 Reset Game
       </button>
     </div>
 
@@ -1678,7 +1680,7 @@
           <button id="scriptSettingsCancel" class="script-settings-cancel" type="button"
             aria-label="Hủy kịch bản" title="Chưa có kịch bản đang chạy" disabled>✖</button>
           <button id="scriptSettingsEdit" class="script-settings-edit" type="button"
-            aria-label="Chỉnh sửa cài đặt kịch bản" title="Chỉnh sửa">✏️</button>
+            aria-label="Chỉnh sửa cài đặt kịch bản" aria-expanded="false" title="Chỉnh sửa">✏️</button>
         </div>
       </div>
 
@@ -1962,15 +1964,28 @@
       if (window.isAdmin !== true) {
         scriptSettingsDetails?.classList.remove('open');
         scriptSettingsDetails?.setAttribute('aria-hidden', 'true');
+        scriptSettingsEdit?.setAttribute('aria-expanded', 'false');
+        if (scriptSettingsEdit) scriptSettingsEdit.title = 'Chỉnh sửa';
       }
       updateScriptSettingsCancelUI();
     }
 
     scriptSettingsEdit?.addEventListener('click', () => {
-      if (window.isAdmin !== true) return;
-      scriptSettingsDetails?.classList.add('open');
-      scriptSettingsDetails?.setAttribute('aria-hidden', 'false');
-      sessionDuration?.focus();
+      if (window.isAdmin !== true || !scriptSettingsDetails) return;
+
+      const isOpen = scriptSettingsDetails.classList.contains('open');
+      if (isOpen) {
+        scriptSettingsDetails.classList.remove('open');
+        scriptSettingsDetails.setAttribute('aria-hidden', 'true');
+        scriptSettingsEdit.setAttribute('aria-expanded', 'false');
+        scriptSettingsEdit.title = 'Chỉnh sửa';
+      } else {
+        scriptSettingsDetails.classList.add('open');
+        scriptSettingsDetails.setAttribute('aria-hidden', 'false');
+        scriptSettingsEdit.setAttribute('aria-expanded', 'true');
+        scriptSettingsEdit.title = 'Đóng cài đặt';
+        sessionDuration?.focus();
+      }
     });
 
     scriptSettingsConfirm?.addEventListener('click', async () => {
@@ -2007,6 +2022,8 @@
         setFormCountdownState(data.form);
         scriptSettingsDetails?.classList.remove('open');
         scriptSettingsDetails?.setAttribute('aria-hidden', 'true');
+        scriptSettingsEdit?.setAttribute('aria-expanded', 'false');
+        if (scriptSettingsEdit) scriptSettingsEdit.title = 'Chỉnh sửa';
       } catch (error) {
         console.error('❌ Lỗi bắt đầu phiên phát nhạc:', error);
         alert('Lỗi kết nối đến server!');
