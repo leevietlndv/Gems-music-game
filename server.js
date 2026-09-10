@@ -428,6 +428,41 @@ const ADMIN_IDS = new Set(
 
 const bot = BOT_TOKEN ? new Telegraf(BOT_TOKEN) : null;
 
+// Step 8I: cố gắng bổ sung thông tin hồ sơ Telegram khi Owner cấp quyền
+// cho một Telegram ID chưa từng mở Mini App. Nếu Bot API không tra được
+// user (ví dụ user chưa từng tương tác với bot), việc cấp quyền vẫn tiếp tục.
+async function resolveAndUpsertTelegramUser(telegramId) {
+  if (!bot || !telegramId) return false;
+
+  try {
+    const chat = await bot.telegram.getChat(String(telegramId));
+    if (!chat || chat.type !== 'private') return false;
+
+    await pool.query(`
+      INSERT INTO users (telegram_id, username, first_name, last_name)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (telegram_id)
+      DO UPDATE SET
+        username = EXCLUDED.username,
+        first_name = EXCLUDED.first_name,
+        last_name = EXCLUDED.last_name
+    `, [
+      String(telegramId),
+      chat.username || null,
+      chat.first_name || null,
+      chat.last_name || null
+    ]);
+
+    return true;
+  } catch (error) {
+    console.warn(
+      `⚠️ Không thể lấy thông tin Telegram user ${telegramId} từ Bot API:`,
+      error.message
+    );
+    return false;
+  }
+}
+
 async function getAdminRole(telegramId) {
   if (telegramId === null || telegramId === undefined) {
     return null;
@@ -785,9 +820,12 @@ async function addOnlineUser(socket, authUser, deviceInfo = {}, adminRole = unde
 // Step 8F: đồng bộ quyền Admin realtime cho mọi socket đang đăng nhập
 // cùng Telegram ID. HTTP API vẫn kiểm tra DB độc lập; helper này chỉ cập nhật
 // trạng thái quyền đã cache trên socket để grant/revoke có hiệu lực ngay.
-async function refreshRealtimeAdminPermission(telegramId) {
+async function refreshRealtimeAdminPermission(telegramId, knownRole = undefined) {
   const id = String(telegramId);
-  const adminRole = await getAdminRole(id);
+  // Sau grant/revoke, caller đã biết chính xác role vừa ghi vào DB.
+  // Dùng role đó để tránh một DB read-back lỗi làm revoke nhầm quyền realtime
+  // hoặc trả 500 sau khi mutation đã thành công.
+  const adminRole = knownRole === undefined ? await getAdminRole(id) : knownRole;
   const isAdminNow = adminRole === 'owner' || adminRole === 'admin';
   let changed = false;
   let revokedController = false;
@@ -1581,6 +1619,10 @@ app.post('/api/admin-users/grant', async (req, res) => {
       });
     }
 
+    // Cố gắng lấy tên/username từ Telegram trước khi ghi quyền.
+    // Không để lỗi Bot API làm thất bại thao tác cấp quyền.
+    await resolveAndUpsertTelegramUser(targetId);
+
     const result = await pool.query(`
       INSERT INTO admin_users (telegram_id, role, granted_by, created_at, updated_at)
       VALUES ($1, 'admin', $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
@@ -1592,7 +1634,7 @@ app.post('/api/admin-users/grant', async (req, res) => {
       RETURNING telegram_id, role, granted_by, created_at, updated_at
     `, [targetId, ownerId]);
 
-    await refreshRealtimeAdminPermission(targetId);
+    await refreshRealtimeAdminPermission(targetId, 'admin');
 
     await logAdminAudit({
       actorTelegramId: ownerId,
@@ -1662,7 +1704,7 @@ app.post('/api/admin-users/revoke', async (req, res) => {
       });
     }
 
-    await refreshRealtimeAdminPermission(targetId);
+    await refreshRealtimeAdminPermission(targetId, null);
 
     await logAdminAudit({
       actorTelegramId: String(auth.user.id),
@@ -1719,7 +1761,7 @@ app.get('/api/admin-audit-logs', async (req, res) => {
         created_at
       FROM admin_audit_logs
       ORDER BY created_at DESC, id DESC
-      LIMIT 100
+      LIMIT 30
     `);
 
     return res.json({
@@ -1949,6 +1991,10 @@ app.post('/api/submit', async (req, res) => {
 });
 
 // ==================== API: AUTO PLAY MODE ====================
+function canUseAdminSocketForTelegram(socketId, telegramId) {
+  return isSocketOwnedByTelegramUser(socketId, telegramId);
+}
+
 app.post('/api/auto-play-mode', async (req, res) => {
   const { mode, socketId } = req.body;
   const auth = await requireTelegramAdmin(req, res);
@@ -1988,6 +2034,13 @@ app.post('/api/auto-play-mode', async (req, res) => {
     });
   }
 
+  if (!canUseAdminSocketForTelegram(socketId, auth.user.id)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Thiết bị điều khiển không thuộc phiên Admin hiện tại.'
+    });
+  }
+
   const result = await enqueueGameMutation(async () => {
     setAutoPlayState(newMode, socketId);
     broadcastAutoPlayState();
@@ -2024,7 +2077,8 @@ app.post('/api/auto-play-next', async (req, res) => {
     });
   }
 
-  if (!socketId || socketId !== autoPlayControllerSocketId) {
+  if (!socketId || socketId !== autoPlayControllerSocketId ||
+      !canUseAdminSocketForTelegram(socketId, auth.user.id)) {
     return res.status(403).json({
       success: false,
       message: 'Không phải thiết bị Admin đang điều khiển Auto Play.'
@@ -2226,7 +2280,7 @@ app.post('/api/play-song', async (req, res) => {
 
       io.emit('songPlayed', {
         song: freshSong,
-        initiatorSocketId: socketId || null,
+        initiatorSocketId: isSocketOwnedByTelegramUser(socketId, auth.user.id) ? socketId : null,
         action: lastAction,
         health: 5,
         likes: 0,
@@ -2357,7 +2411,8 @@ app.post('/api/spin', async (req, res) => {
       .trim() || 'Người dùng';
 
   try {
-    const result = await enqueueGameMutation(() => performSpin(socketId || null, userName));
+    const initiatorSocketId = isSocketOwnedByTelegramUser(socketId, auth.user.id) ? socketId : null;
+    const result = await enqueueGameMutation(() => performSpin(initiatorSocketId, userName));
     res.json(result);
   } catch (error) {
     console.error('❌ Lỗi Spin:', error);
@@ -2687,6 +2742,25 @@ app.post('/api/unblock-song', async (req, res) => {
 
 
 // ==================== SOCKET.IO ====================
+// Kiểm tra quyền dựa trên trạng thái xác thực của chính socket.
+// Không chỉ dựa vào socket.isAdmin để tránh trạng thái cũ sau re-auth.
+function isAuthenticatedSocketAdmin(socket) {
+  return socket?.authenticated === true && socket?.isAdmin === true;
+}
+
+function isSocketOwnedByTelegramUser(socketId, telegramId) {
+  if (!socketId || telegramId == null) return false;
+  const socket = io.sockets.sockets.get(socketId);
+  const authState = socketAuth.get(socketId);
+  return Boolean(
+    socket &&
+    socket.authenticated === true &&
+    socket.isAdmin === true &&
+    String(socketAuth.get(socketId)?.telegramId) === String(telegramId) &&
+    String(authState?.telegramId) === String(telegramId)
+  );
+}
+
 // Gửi state hiện tại cho 1 socket (dùng sau khi xác thực hoặc cho view-only).
 function sendInitialState(socket) {
   socket.emit('stateUpdate', {
@@ -2719,8 +2793,10 @@ io.on('connection', (socket) => {
   console.log(`🔌 Socket connected: ${socket.id}`);
 
   // Quyền của socket chỉ được xác lập sau khi validate Telegram initData.
-  // Mặc định false để các socket chưa xác thực không thể seek playback.
+  // Mặc định false để các socket chưa xác thực không thể thực hiện thao tác Admin.
+  socket.authenticated = false;
   socket.isAdmin = false;
+  socket.adminRole = null;
 
   // Không emit state cho socket CHƯA xác thực initData — chỉ sau khi
   // authenticate thành công mới gửi state hiện tại (chống rò rỉ dữ liệu
@@ -2729,6 +2805,15 @@ io.on('connection', (socket) => {
   socket.on('authenticate', async (payload = {}) => {
     const initData = payload.initData || '';
     const deviceInfo = payload.deviceInfo || {};
+
+    // Re-authenticate trên cùng socket phải thay thế hoàn toàn identity cũ.
+    // Nếu credential mới không hợp lệ, socket trở về view-only thay vì giữ quyền cũ.
+    if (socket.authenticated === true || socketAuth.has(socket.id)) {
+      removeOnlineUser(socket.id, true);
+    }
+    socket.authenticated = false;
+    socket.isAdmin = false;
+    socket.adminRole = null;
     console.log(
       `🔑 Authenticate received: socket=${socket.id}, initDataLength=${initData.length}`
     );
@@ -2757,6 +2842,7 @@ io.on('connection', (socket) => {
     const telegramId = String(auth.user.id);
     const adminRole = await getAdminRole(telegramId);
     const admin = adminRole === 'owner' || adminRole === 'admin';
+    socket.authenticated = true;
     socket.isAdmin = admin;
     socket.adminRole = adminRole;
 
@@ -2774,7 +2860,8 @@ io.on('connection', (socket) => {
     socket.emit('adminStatus', {
       isAdmin: admin,
       authenticated: true,
-      telegramId
+      telegramId,
+      adminRole: adminRole || null
     });
 
     await addOnlineUser(socket, auth.user, deviceInfo, adminRole);
@@ -2816,7 +2903,7 @@ io.on('connection', (socket) => {
   // Chỉ Admin được phép thay đổi volume chung. User thường bị từ chối ở
   // server ngay cả khi cố tự emit event bằng DevTools.
   socket.on('volumeChange', (payload = {}) => {
-    if (socket.isAdmin !== true) {
+    if (!isAuthenticatedSocketAdmin(socket)) {
       console.warn(`⛔ Từ chối volumeChange từ user thường: socket=${socket.id}`);
       return;
     }
@@ -2831,7 +2918,7 @@ io.on('connection', (socket) => {
   // ==================== ADMIN PLAYBACK CONTROL ====================
   // Pause/Resume dùng chính playbackState + version hiện có. Không ghi DB.
   socket.on('playbackControl', (payload = {}) => {
-    if (socket.isAdmin !== true) {
+    if (!isAuthenticatedSocketAdmin(socket)) {
       console.warn(`⛔ Từ chối playbackControl từ user thường: socket=${socket.id}`);
       return;
     }
@@ -2890,7 +2977,7 @@ io.on('connection', (socket) => {
     const position = Number(payload.position);
 
     if (songId == null || !Number.isFinite(version) || !Number.isFinite(position)) return;
-    if (socket.isAdmin !== true) {
+    if (!isAuthenticatedSocketAdmin(socket)) {
       console.warn(`⛔ Từ chối playbackSeek từ user thường: socket=${socket.id}`);
       return;
     }
@@ -2951,7 +3038,7 @@ io.on('connection', (socket) => {
   socket.on('requestOnlineDetails', () => {
     const authState = socketAuth.get(socket.id);
 
-    if (!authState?.isAdmin) {
+    if (!isAuthenticatedSocketAdmin(socket) || !authState?.isAdmin) {
       return;
     }
 
@@ -3031,5 +3118,7 @@ module.exports = {
   socketPresence,
   socketAuth,
   refreshRealtimeAdminPermission,
+  isAuthenticatedSocketAdmin,
+  isSocketOwnedByTelegramUser,
   logAdminAudit
 };
