@@ -76,10 +76,13 @@
       color: #64b5f6;
       font-size: 18px;
       font-weight: 800;
-      letter-spacing: 0.08em;
-      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.03em;
       white-space: nowrap;
       pointer-events: none;
+    }
+
+    .app-navbar-session-timer[hidden] {
+      display: none;
     }
 
     .app-navbar-title {
@@ -203,13 +206,12 @@
     .script-settings-actions {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 12px;
       flex: 0 0 auto;
     }
 
     .script-settings-cancel,
-    .script-settings-edit,
-    .script-settings-toggle {
+    .script-settings-edit {
       width: 38px;
       height: 36px;
       min-width: 38px;
@@ -236,7 +238,6 @@
     }
 
     .script-settings-edit:hover,
-    .script-settings-toggle:hover,
     .script-settings-cancel.active:hover {
       background: #2d3a52;
     }
@@ -246,7 +247,6 @@
     }
 
     .script-settings-edit:active,
-    .script-settings-toggle:active,
     .script-settings-cancel.active:active {
       transform: scale(0.96);
     }
@@ -1525,7 +1525,7 @@
   <nav id="appNavbar" class="app-navbar" aria-label="Điều hướng ứng dụng">
     <div class="app-navbar-bar">
       <span class="app-navbar-title">Menu</span>
-      <span id="sessionCountdown" class="app-navbar-session-timer" aria-live="polite" aria-label="Thời gian phiên còn lại">--:--</span>
+      <span id="sessionCountdown" class="app-navbar-session-timer" aria-live="polite" aria-label="Thời gian phiên còn lại" hidden>--:--</span>
       <button id="appNavbarToggle" class="app-navbar-toggle" type="button" aria-label="Mở menu"
         aria-expanded="false" aria-controls="appNavbarDropdown">☰</button>
     </div>
@@ -1537,8 +1537,9 @@
       <button class="app-navbar-item" type="button" role="menuitem" data-nav-target="blacklistBar">🚫 Bài hát đã chặn</button>
 
       <div class="app-navbar-divider"></div>
-      <div class="app-navbar-section-label">Admin</div>
+      <div class="app-navbar-section-label admin-only">Admin</div>
       <button class="app-navbar-item admin-only" type="button" role="menuitem" data-nav-target="adminPanel">👑 Quản trị</button>
+      <button class="app-navbar-item admin-only" type="button" role="menuitem" data-nav-target="scriptSettings">⚙️ Cài đặt kịch bản</button>
     </div>
   </nav>
 
@@ -1665,6 +1666,13 @@
       </div>
     </div>
 
+    <!-- STEP 7.2: CÀI ĐẶT KỊCH BẢN đặt phía trên thanh Bài hát đã chặn. -->
+    <section id="scriptSettings" class="script-settings admin-only" aria-label="Cài đặt kịch bản">
+      <div class="script-settings-bar">
+        <div class="script-settings-summary">
+          <span class="script-settings-summary-icon" aria-hidden="true">⚙️</span>
+          <span>Cài đặt kịch bản</span>
+      
     <div id="blacklistBar" class="blacklist-bar">
       <div class="blacklist-summary">
         <span>🚫</span>
@@ -1684,22 +1692,13 @@
       <div id="blacklistList" class="blacklist-list"></div>
     </div>
 
-    <!-- CÀI ĐẶT KỊCH BẢN: UI admin, chưa thay đổi logic server. -->
-    <section id="scriptSettings" class="script-settings admin-only" aria-label="Cài đặt kịch bản">
-      <div class="script-settings-bar">
-        <div class="script-settings-summary">
-          <span class="script-settings-summary-icon" aria-hidden="true">⚙️</span>
-          <span>Cài đặt kịch bản</span>
-        </div>
+  </div>
 
         <div class="script-settings-actions">
           <button id="scriptSettingsCancel" class="script-settings-cancel" type="button"
             aria-label="Hủy kịch bản" title="Chưa có kịch bản đang chạy" disabled>✖</button>
           <button id="scriptSettingsEdit" class="script-settings-edit" type="button"
             aria-label="Chỉnh sửa cài đặt kịch bản" title="Chỉnh sửa">✏️</button>
-          <button id="scriptSettingsToggle" class="script-settings-toggle" type="button"
-            aria-label="Mở cài đặt kịch bản" title="Mở cài đặt" aria-expanded="false"
-            aria-controls="scriptSettingsDetails">▼</button>
         </div>
       </div>
 
@@ -1824,7 +1823,8 @@
     const btnSpin = document.getElementById('btnSpin');
     const appNavbarToggle = document.getElementById('appNavbarToggle');
     const appNavbarDropdown = document.getElementById('appNavbarDropdown');
-    const appNavbarAdminItem = appNavbarDropdown?.querySelector('.app-navbar-item.admin-only');
+    const appNavbarAdminItems = appNavbarDropdown?.querySelectorAll('.app-navbar-item.admin-only');
+    const appNavbarAdminSection = appNavbarDropdown?.querySelector('.app-navbar-section-label.admin-only');
 
     function setNavbarOpen(isOpen) {
       if (!appNavbarDropdown || !appNavbarToggle) return;
@@ -1835,15 +1835,20 @@
     }
 
     function updateNavbarAdminUI() {
-      if (!appNavbarAdminItem) return;
-      appNavbarAdminItem.classList.toggle('admin-only', window.isAdmin !== true);
-      if (window.isAdmin !== true && appNavbarAdminItem === document.activeElement) {
+      const isAdmin = window.isAdmin === true;
+
+      appNavbarAdminItems?.forEach((item) => {
+        item.classList.toggle('admin-only', !isAdmin);
+      });
+
+      appNavbarAdminSection?.classList.toggle('admin-only', !isAdmin);
+
+      if (!isAdmin && appNavbarDropdown?.querySelector(':focus')) {
         setNavbarOpen(false);
       }
     }
 
     const scriptSettings = document.getElementById('scriptSettings');
-    const scriptSettingsToggle = document.getElementById('scriptSettingsToggle');
     const scriptSettingsCancel = document.getElementById('scriptSettingsCancel');
     const scriptSettingsEdit = document.getElementById('scriptSettingsEdit');
     const scriptSettingsDetails = document.getElementById('scriptSettingsDetails');
@@ -1856,29 +1861,39 @@
     let scriptSessionCountdownTimer = null;
     let scriptFormEndsAt = null;
     let scriptFormCountdownTimer = null;
-    function formatCountdownHoursMinutes(totalSeconds) {
+    function formatCountdownDetailed(totalSeconds) {
       const seconds = Math.max(0, Math.ceil(Number(totalSeconds) || 0));
 
-      // Trên 60 giây: HH:MM. Dưới 60 giây: chỉ hiển thị SS để dễ quan sát.
-      if (seconds < 60) {
-        return String(seconds).padStart(2, '0');
+      // Từ 1 giờ trở lên: hiển thị theo giờ + phút.
+      if (seconds >= 3600) {
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        return minutes > 0
+          ? `${hours} giờ ${minutes} phút`
+          : `${hours} giờ`;
       }
 
-      const hours = Math.floor(seconds / 3600);
-      const minutes = Math.floor((seconds % 3600) / 60);
-      return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+      // Từ 1 phút đến dưới 1 giờ: chỉ hiển thị số phút.
+      if (seconds >= 60) {
+        return `${Math.floor(seconds / 60)} phút`;
+      }
+
+      // Dưới 1 phút: chỉ hiển thị số giây.
+      return `${seconds} giây`;
     }
 
     function updateSessionCountdown() {
       if (!sessionCountdown) return;
 
       if (!Number.isFinite(scriptSessionEndsAt)) {
-        sessionCountdown.textContent = '--:--';
+        sessionCountdown.hidden = true;
+        sessionCountdown.textContent = '';
         return;
       }
 
+      sessionCountdown.hidden = false;
       const remainingMs = Math.max(0, scriptSessionEndsAt - (Date.now() + serverClockOffsetMs));
-      sessionCountdown.textContent = formatCountdownHoursMinutes(remainingMs / 1000);
+      sessionCountdown.textContent = formatCountdownDetailed(remainingMs / 1000);
     }
 
     function setSessionCountdownState(data = null) {
@@ -1914,13 +1929,13 @@
 
       if (!Number.isFinite(scriptFormEndsAt)) {
         formCountdown.hidden = true;
-        formCountdown.textContent = '--:--';
+        formCountdown.textContent = '';
         return;
       }
 
       const remainingMs = Math.max(0, scriptFormEndsAt - (Date.now() + serverClockOffsetMs));
       formCountdown.hidden = false;
-      formCountdown.textContent = formatCountdownHoursMinutes(remainingMs / 1000);
+      formCountdown.textContent = formatCountdownDetailed(remainingMs / 1000);
     }
 
     function setFormCountdownState(data = null) {
@@ -1941,13 +1956,9 @@
     }
 
     function setScriptSettingsOpen(isOpen) {
-      if (!scriptSettingsDetails || !scriptSettingsToggle) return;
+      if (!scriptSettingsDetails) return;
       scriptSettingsDetails.classList.toggle('open', isOpen);
       scriptSettingsDetails.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
-      scriptSettingsToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-      scriptSettingsToggle.setAttribute('aria-label', isOpen ? 'Đóng cài đặt kịch bản' : 'Mở cài đặt kịch bản');
-      scriptSettingsToggle.setAttribute('title', isOpen ? 'Đóng cài đặt' : 'Mở cài đặt');
-      scriptSettingsToggle.textContent = isOpen ? '▲' : '▼';
     }
 
     function updateScriptSettingsAdminUI() {
@@ -1956,10 +1967,6 @@
       if (window.isAdmin !== true) setScriptSettingsOpen(false);
       updateScriptSettingsCancelUI();
     }
-
-    scriptSettingsToggle?.addEventListener('click', () => {
-      setScriptSettingsOpen(!scriptSettingsDetails?.classList.contains('open'));
-    });
 
     scriptSettingsEdit?.addEventListener('click', () => {
       if (window.isAdmin !== true) return;
