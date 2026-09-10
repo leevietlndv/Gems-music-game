@@ -471,9 +471,9 @@
 
     .form-countdown {
       justify-self: end;
-      color: #2e7d32;
+      color: #00e676;
       font-size: 15px;
-      font-weight: 400;
+      font-weight: 650;
       letter-spacing: 0.05em;
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
@@ -1650,6 +1650,7 @@
       <button class="app-navbar-item" type="button" role="menuitem" data-nav-target="wheelCanvas">🎡 Vòng quay</button>
       <button class="app-navbar-item" type="button" role="menuitem" data-nav-target="songList">📋 Danh sách bài hát</button>
       <button class="app-navbar-item" type="button" role="menuitem" data-nav-target="blacklistBar">🚫 Bài hát đã chặn</button>
+      <button class="app-navbar-item" type="button" role="menuitem" data-nav-action="copyTelegramId">🔑 Lấy Telegram ID</button>
 
       <div class="app-navbar-divider"></div>
       <div class="app-navbar-section-label admin-only">Admin</div>
@@ -1758,7 +1759,7 @@
 
   <div style="width: 100%; max-width: 480px;">
     <!-- Thêm class admin-only để ẩn nút với người dùng thường -->
-    <button id="btnSpin" class="btn-spin admin-only">🎡 QUAY VÒNG QUAY</button>
+    <button id="btnSpin" class="btn-spin admin-only">🎲 QUAY VÒNG QUAY</button>
 
     <div id="adminPanel" class="admin-actions admin-only">
       <button id="btnToggleForm" class="btn-toggle">
@@ -1770,7 +1771,7 @@
       </button>
 
       <button id="btnReset" class="btn-reset">
-        🧹 Reset Game
+        ♻️ Reset
       </button>
     </div>
 
@@ -2198,9 +2199,60 @@
       setNavbarOpen(!appNavbarDropdown?.classList.contains('open'));
     });
 
-    appNavbarDropdown?.addEventListener('click', (event) => {
+    async function copyTelegramIdToClipboard() {
+      const telegramUser = getTelegramUserData();
+      const telegramId = telegramUser?.id;
+
+      if (telegramId === null || telegramId === undefined || telegramId === '') {
+        alert('⚠️ Không lấy được Telegram ID. Vui lòng mở ứng dụng từ Telegram Mini App.');
+        return;
+      }
+
+      const text = String(telegramId);
+      let copied = false;
+
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(text);
+          copied = true;
+        }
+      } catch (error) {
+        console.warn('⚠️ Clipboard API không khả dụng:', error);
+      }
+
+      if (!copied) {
+        try {
+          const textarea = document.createElement('textarea');
+          textarea.value = text;
+          textarea.setAttribute('readonly', '');
+          textarea.style.position = 'fixed';
+          textarea.style.opacity = '0';
+          document.body.appendChild(textarea);
+          textarea.select();
+          copied = document.execCommand('copy');
+          textarea.remove();
+        } catch (error) {
+          console.warn('⚠️ Không thể dùng clipboard fallback:', error);
+        }
+      }
+
+      if (copied) {
+        alert(`✅ Đã copy Telegram ID: ${text}`);
+      } else {
+        alert(`⚠️ Không thể tự copy. Telegram ID của bạn là: ${text}`);
+      }
+    }
+
+    appNavbarDropdown?.addEventListener('click', async (event) => {
       const item = event.target.closest('.app-navbar-item');
       if (!item) return;
+
+      const navAction = item.dataset.navAction;
+      if (navAction === 'copyTelegramId') {
+        setNavbarOpen(false);
+        await copyTelegramIdToClipboard();
+        return;
+      }
 
       const targetUrl = item.getAttribute('href');
       if (targetUrl) {
