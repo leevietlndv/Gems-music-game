@@ -210,7 +210,6 @@
       flex: 0 0 auto;
     }
 
-    .script-settings-cancel,
     .script-settings-edit {
       width: 36px;
       height: 36px;
@@ -226,31 +225,139 @@
       line-height: 1;
     }
 
-    .script-settings-cancel {
-      background: #4a4f58;
-      color: #aeb4bd;
+    /* Công tắc kịch bản: ON = đang có ít nhất một timer, OFF = không chạy. */
+    .script-settings-toggle {
+      position: relative;
+      width: 72px;
+      height: 36px;
+      min-width: 72px;
+      max-width: 72px;
+      flex: 0 0 72px;
+      padding: 0;
+      border: 1px solid #3b4861;
+      border-radius: 18px;
+      background: #d32f2f;
+      color: #fff;
       cursor: not-allowed;
+      overflow: hidden;
+      transition: background 0.15s ease, border-color 0.15s ease;
     }
 
-    .script-settings-cancel.active {
-      background: #c62828;
-      border-color: #ef5350;
-      color: #fff;
+    .script-settings-toggle .script-toggle-label {
+      position: absolute;
+      top: 0;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: 0.02em;
+      pointer-events: none;
+      transition: opacity 0.15s ease;
+    }
+
+    .script-settings-toggle .script-toggle-label-off {
+      right: 8px;
+      opacity: 1;
+    }
+
+    .script-settings-toggle .script-toggle-label-on {
+      left: 9px;
+      opacity: 0;
+    }
+
+    .script-settings-toggle .script-toggle-knob {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+      transition: transform 0.15s ease;
+      pointer-events: none;
+    }
+
+    .script-settings-toggle.active {
+      background: #2e7d32;
+      border-color: #43a047;
       cursor: pointer;
     }
 
-    .script-settings-edit:hover,
-    .script-settings-cancel.active:hover {
+    .script-settings-toggle.active .script-toggle-label-off {
+      opacity: 0;
+    }
+
+    .script-settings-toggle.active .script-toggle-label-on {
+      opacity: 1;
+    }
+
+    .script-settings-toggle.active .script-toggle-knob {
+      transform: translateX(36px);
+    }
+
+    .script-settings-toggle.active:hover {
+      background: #388e3c;
+    }
+
+    .script-settings-edit:hover {
       background: #2d3a52;
     }
 
-    .script-settings-cancel.active:hover {
-      background: #d32f2f;
+    .script-settings-edit:active,
+    .script-settings-toggle.active:active {
+      transform: scale(0.96);
     }
 
-    .script-settings-edit:active,
-    .script-settings-cancel.active:active {
+    /* Nút quay lên đầu trang, chỉ hiện khi đã cuộn gần cuối nội dung. */
+    .back-to-top {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      width: 42px;
+      height: 42px;
+      min-width: 42px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #3b4861;
+      border-radius: 10px;
+      background: #252f42;
+      color: #fff;
+      font-size: 22px;
+      line-height: 1;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translateY(8px);
+      transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
+      z-index: 1200;
+    }
+
+    .back-to-top.visible {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+
+    .back-to-top:hover {
+      background: #2d3a52;
+    }
+
+    .back-to-top:active {
       transform: scale(0.96);
+    }
+
+    @media (max-width: 480px) {
+      .back-to-top {
+        right: 12px;
+        bottom: 12px;
+      }
     }
 
     .script-settings-details {
@@ -1677,8 +1784,12 @@
         </div>
 
         <div class="script-settings-actions">
-          <button id="scriptSettingsCancel" class="script-settings-cancel" type="button"
-            aria-label="Hủy kịch bản" title="Chưa có kịch bản đang chạy" disabled>✖</button>
+          <button id="scriptSettingsCancel" class="script-settings-toggle" type="button"
+            aria-label="Kịch bản đang tắt" title="Chưa có kịch bản đang chạy" aria-pressed="false" disabled>
+            <span class="script-toggle-label script-toggle-label-on" aria-hidden="true">ON</span>
+            <span class="script-toggle-label script-toggle-label-off" aria-hidden="true">OFF</span>
+            <span class="script-toggle-knob" aria-hidden="true"></span>
+          </button>
           <button id="scriptSettingsEdit" class="script-settings-edit" type="button"
             aria-label="Chỉnh sửa cài đặt kịch bản" aria-expanded="false" title="Chỉnh sửa">✏️</button>
         </div>
@@ -1919,11 +2030,18 @@
     function updateScriptSettingsCancelUI() {
       if (!scriptSettingsCancel) return;
       const hasActiveTimer = Number.isFinite(scriptSessionEndsAt) || Number.isFinite(scriptFormEndsAt);
-      scriptSettingsCancel.disabled = !hasActiveTimer || window.isAdmin !== true;
-      scriptSettingsCancel.classList.toggle('active', hasActiveTimer && window.isAdmin === true);
+      const isAdminUser = window.isAdmin === true;
+      const isOn = hasActiveTimer && isAdminUser;
+
+      // OFF chỉ là trạng thái không có kịch bản; để bật lại, Admin dùng Edit → Xác nhận.
+      // Khi ON, bấm công tắc sẽ thực hiện đúng chức năng Hủy kịch bản hiện có.
+      scriptSettingsCancel.disabled = !hasActiveTimer || !isAdminUser;
+      scriptSettingsCancel.classList.toggle('active', isOn);
       scriptSettingsCancel.setAttribute('aria-disabled', scriptSettingsCancel.disabled ? 'true' : 'false');
-      scriptSettingsCancel.title = hasActiveTimer && window.isAdmin === true
-        ? 'Hủy kịch bản đang đếm'
+      scriptSettingsCancel.setAttribute('aria-pressed', isOn ? 'true' : 'false');
+      scriptSettingsCancel.setAttribute('aria-label', isOn ? 'Kịch bản đang bật' : 'Kịch bản đang tắt');
+      scriptSettingsCancel.title = isOn
+        ? 'Tắt và hủy kịch bản đang đếm'
         : 'Chưa có kịch bản đang chạy';
     }
 
@@ -2033,6 +2151,8 @@
     });
 
     scriptSettingsCancel?.addEventListener('click', async () => {
+      // Công tắc chỉ cho phép chuyển ON → OFF bằng chức năng Hủy kịch bản hiện có.
+      // OFF → ON không tự khởi chạy với giá trị mặc định; Admin cần mở Edit và Xác nhận.
       if (window.isAdmin !== true || scriptSettingsCancel.disabled) return;
 
       try {
@@ -4575,12 +4695,28 @@
       }
     });
 
+    const backToTop = document.getElementById('backToTop');
+    const updateBackToTopUI = () => {
+      if (!backToTop) return;
+      const nearBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 180;
+      backToTop.classList.toggle('visible', nearBottom && window.scrollY > 120);
+    };
+
+    window.addEventListener('scroll', updateBackToTopUI, { passive: true });
+    window.addEventListener('resize', updateBackToTopUI);
+    backToTop?.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    updateBackToTopUI();
+
     // Chỉ kết nối SAU KHI toàn bộ socket.on(...) đã được đăng ký.
     // Tránh trường hợp socket kết nối quá sớm và event connect bị bỏ lỡ.
     console.log('🚀 Bắt đầu kết nối Socket.IO...');
     setConnectionStatus('⏳ Đang kết nối máy chủ...');
     socket.connect();
   </script>
+  <button id="backToTop" class="back-to-top" type="button" aria-label="Lên đầu trang" title="Lên đầu trang">↑</button>
+
 </body>
 
 </html>
