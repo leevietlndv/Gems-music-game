@@ -176,6 +176,29 @@ async function initDatabase() {
     ON admin_users (role)
   `);
 
+  // Step 8H: Audit log cho các thay đổi quyền Admin.
+  // Log là append-only về mặt ứng dụng: không có API sửa/xóa log.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS admin_audit_logs (
+      id BIGSERIAL PRIMARY KEY,
+      actor_telegram_id TEXT NOT NULL,
+      action TEXT NOT NULL CHECK (action IN ('grant_admin', 'revoke_admin')),
+      target_telegram_id TEXT,
+      details JSONB,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_created_at
+    ON admin_audit_logs (created_at DESC)
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_target
+    ON admin_audit_logs (target_telegram_id)
+  `);
+
   // Phiên bản vote mới: LIKE = +1, DISLIKE = -1.
   // Bản health-v1 cũ dùng ngược dấu, nên chỉ đảo dấu đúng một lần.
   // Chạy trong transaction để không bao giờ đảo dấu 2 lần nếu server
@@ -471,6 +494,29 @@ function normalizeManagedTelegramId(value) {
   return id;
 }
 
+// Step 8H: Ghi audit cho thay đổi quyền Admin.
+// Audit failure không làm hỏng thao tác grant/revoke đã thành công,
+// nhưng luôn được ghi log server để có thể phát hiện và xử lý.
+async function logAdminAudit({ actorTelegramId, action, targetTelegramId = null, details = null }) {
+  try {
+    await pool.query(`
+      INSERT INTO admin_audit_logs (
+        actor_telegram_id, action, target_telegram_id, details
+      )
+      VALUES ($1, $2, $3, $4::jsonb)
+    `, [
+      String(actorTelegramId),
+      action,
+      targetTelegramId == null ? null : String(targetTelegramId),
+      details == null ? null : JSON.stringify(details)
+    ]);
+    return true;
+  } catch (error) {
+    console.error('❌ Không thể ghi Admin audit log:', error.message);
+    return false;
+  }
+}
+
 // Step 8D: ghi nhận user Telegram sau khi authenticate thành công.
 // Chỉ dùng registry users để lưu thông tin cơ bản + thời điểm hoạt động gần nhất.
 // Không thay đổi quyền Admin và không tạo thêm state người dùng ở RAM.
@@ -731,8 +777,71 @@ async function addOnlineUser(socket, authUser, deviceInfo = {}, adminRole = unde
   socketPresence.set(socket.id, telegramId);
   socketAuth.set(socket.id, {
     telegramId,
+    adminRole: adminRole || null,
     isAdmin: (adminRole === 'owner' || adminRole === 'admin')
   });
+}
+
+// Step 8F: đồng bộ quyền Admin realtime cho mọi socket đang đăng nhập
+// cùng Telegram ID. HTTP API vẫn kiểm tra DB độc lập; helper này chỉ cập nhật
+// trạng thái quyền đã cache trên socket để grant/revoke có hiệu lực ngay.
+async function refreshRealtimeAdminPermission(telegramId) {
+  const id = String(telegramId);
+  const adminRole = await getAdminRole(id);
+  const isAdminNow = adminRole === 'owner' || adminRole === 'admin';
+  let changed = false;
+  let revokedController = false;
+
+  for (const [socketId, authState] of socketAuth.entries()) {
+    if (String(authState?.telegramId) !== id) continue;
+
+    const socket = io.sockets.sockets.get(socketId);
+    if (!socket) continue;
+
+    const wasAdmin = socket.isAdmin === true;
+    const roleChanged = socket.adminRole !== adminRole;
+    const adminChanged = wasAdmin !== isAdminNow;
+
+    socket.adminRole = adminRole;
+    socket.isAdmin = isAdminNow;
+    authState.adminRole = adminRole;
+    authState.isAdmin = isAdminNow;
+
+    if (roleChanged || adminChanged) {
+      changed = true;
+      socket.emit('adminStatus', {
+        isAdmin: isAdminNow,
+        authenticated: true,
+        telegramId: id,
+        adminRole: adminRole || null,
+        realtime: true
+      });
+    }
+
+    if (!isAdminNow && socket.id === autoPlayControllerSocketId) {
+      revokedController = true;
+    }
+  }
+
+  // Admin bị revoke không thể tiếp tục giữ quyền điều khiển Auto Play.
+  // Không reset playback/song; chỉ tắt Auto Play controller.
+  if (revokedController) {
+    setAutoPlayState(0);
+    broadcastAutoPlayState();
+    broadcastState();
+    console.log(`⏹ Auto Play tự tắt vì quyền Admin của ${id} đã bị thu hồi.`);
+  }
+
+  if (changed) {
+    broadcastOnlineSummary();
+  }
+
+  return {
+    telegramId: id,
+    adminRole,
+    isAdmin: isAdminNow,
+    changed
+  };
 }
 
 function removeOnlineUser(socketId, shouldBroadcast = true) {
@@ -1483,6 +1592,17 @@ app.post('/api/admin-users/grant', async (req, res) => {
       RETURNING telegram_id, role, granted_by, created_at, updated_at
     `, [targetId, ownerId]);
 
+    await refreshRealtimeAdminPermission(targetId);
+
+    await logAdminAudit({
+      actorTelegramId: ownerId,
+      action: 'grant_admin',
+      targetTelegramId: targetId,
+      details: {
+        role: 'admin'
+      }
+    });
+
     return res.json({
       success: true,
       message: 'Đã cấp quyền Admin.',
@@ -1542,6 +1662,17 @@ app.post('/api/admin-users/revoke', async (req, res) => {
       });
     }
 
+    await refreshRealtimeAdminPermission(targetId);
+
+    await logAdminAudit({
+      actorTelegramId: String(auth.user.id),
+      action: 'revoke_admin',
+      targetTelegramId: targetId,
+      details: {
+        role: 'admin'
+      }
+    });
+
     return res.json({
       success: true,
       message: 'Đã thu hồi quyền Admin.',
@@ -1552,6 +1683,54 @@ app.post('/api/admin-users/revoke', async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Không thể thu hồi quyền Admin.'
+    });
+  }
+});
+
+// Step 8H: Owner-only audit history.
+// Chỉ trả về log gần nhất; không có API sửa/xóa log.
+app.get('/api/admin-audit-logs', async (req, res) => {
+  const initData = req.query?.initData || '';
+  const auth = validateTelegramInitData(initData);
+
+  if (!auth.valid) {
+    return res.status(401).json({
+      success: false,
+      message: `Xác thực Telegram thất bại: ${auth.message}`
+    });
+  }
+
+  const requesterId = String(auth.user.id);
+  if ((await getAdminRole(requesterId)) !== 'owner') {
+    return res.status(403).json({
+      success: false,
+      message: 'Chỉ Owner mới có quyền xem Audit Log.'
+    });
+  }
+
+  try {
+    const result = await pool.query(`
+      SELECT
+        id,
+        actor_telegram_id,
+        action,
+        target_telegram_id,
+        details,
+        created_at
+      FROM admin_audit_logs
+      ORDER BY created_at DESC, id DESC
+      LIMIT 100
+    `);
+
+    return res.json({
+      success: true,
+      logs: result.rows
+    });
+  } catch (error) {
+    console.error('❌ Không thể lấy Admin audit log:', error.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Không thể lấy Audit Log.'
     });
   }
 });
@@ -2850,5 +3029,7 @@ module.exports = {
   getOnlineDetails,
   onlineUsers,
   socketPresence,
-  socketAuth
+  socketAuth,
+  refreshRealtimeAdminPermission,
+  logAdminAudit
 };

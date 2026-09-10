@@ -52,13 +52,18 @@
     <section class="card" id="refreshCard" hidden>
       <button id="refreshButton" class="btn-secondary" type="button">↻ Làm mới danh sách</button>
     </section>
+    <section class="card" id="auditCard" hidden>
+      <h2 class="section-title">🧾 Admin Audit Log</h2>
+      <div id="auditList" class="admin-list"><div class="empty">Đang tải...</div></div>
+      <div class="hint">Chỉ Owner xem được 100 thao tác quản trị gần nhất. Audit Log không có chức năng sửa hoặc xóa.</div>
+    </section>
   </main>
   <script>
     const tg = window.Telegram?.WebApp;
     if (tg) { try { tg.ready(); } catch(e) {} try { tg.expand(); } catch(e) {} }
     let telegramInitData = tg?.initData || '';
     function resolveTelegramInitData() { const data=tg?.initData||''; if(data) telegramInitData=data; return telegramInitData; }
-    const statusEl=document.getElementById('status'), adminListEl=document.getElementById('adminList'), grantCard=document.getElementById('grantCard'), refreshCard=document.getElementById('refreshCard'), telegramIdInput=document.getElementById('telegramIdInput'), grantButton=document.getElementById('grantButton'), refreshButton=document.getElementById('refreshButton');
+    const statusEl=document.getElementById('status'), adminListEl=document.getElementById('adminList'), grantCard=document.getElementById('grantCard'), refreshCard=document.getElementById('refreshCard'), auditCard=document.getElementById('auditCard'), auditListEl=document.getElementById('auditList'), telegramIdInput=document.getElementById('telegramIdInput'), grantButton=document.getElementById('grantButton'), refreshButton=document.getElementById('refreshButton');
     let ownerAuthorized=false;
     function setStatus(message,type='info'){ statusEl.textContent=message; statusEl.className=`status ${type}`; }
     function escapeHtml(value){ return String(value??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;'); }
@@ -72,14 +77,42 @@
       }).join('');
       adminListEl.querySelectorAll('.revoke-button').forEach(btn=>btn.addEventListener('click',()=>revokeAdmin(btn.dataset.telegramId)));
     }
+    function formatAuditDate(value){
+      if(!value) return '—';
+      const date=new Date(value);
+      if(Number.isNaN(date.getTime())) return String(value);
+      return date.toLocaleString('vi-VN');
+    }
+    function auditActionLabel(action){
+      return action==='grant_admin'?'Cấp quyền Admin':action==='revoke_admin'?'Thu hồi quyền Admin':action;
+    }
+    function renderAuditLogs(logs){
+      if(!Array.isArray(logs)||logs.length===0){ auditListEl.innerHTML='<div class="empty">Chưa có Audit Log.</div>'; return; }
+      auditListEl.innerHTML=logs.map(log=>{
+        const action=escapeHtml(auditActionLabel(log.action));
+        const actor=escapeHtml(log.actor_telegram_id);
+        const target=escapeHtml(log.target_telegram_id||'—');
+        const created=escapeHtml(formatAuditDate(log.created_at));
+        return `<div class="admin-row"><div class="admin-info"><div class="admin-name">${action}</div><div class="admin-meta">Owner: ${actor} · Đối tượng: ${target}</div><div class="admin-meta">${created}</div></div></div>`;
+      }).join('');
+    }
+    async function fetchAuditLogs(){
+      if(!ownerAuthorized||!telegramInitData) return false;
+      try{
+        const response=await fetch(`/api/admin-audit-logs?initData=${encodeURIComponent(telegramInitData)}`,{method:'GET',cache:'no-store'}), data=await response.json().catch(()=>({}));
+        if(!response.ok||data.success!==true){ auditListEl.innerHTML='<div class="empty">Không thể tải Audit Log.</div>'; return false; }
+        renderAuditLogs(data.logs);
+        return true;
+      }catch(error){ console.error('Audit log error:',error); auditListEl.innerHTML='<div class="empty">Lỗi kết nối Audit Log.</div>'; return false; }
+    }
     async function fetchAdmins(){
       resolveTelegramInitData();
       if(!telegramInitData){ setStatus('⚠️ Không nhận được Telegram initData. Hãy mở trang từ Telegram Mini App.','error'); adminListEl.innerHTML='<div class="empty">Không thể xác thực.</div>'; return false; }
       setStatus('⏳ Đang tải danh sách Admin...');
       try{
         const response=await fetch(`/api/admin-users?initData=${encodeURIComponent(telegramInitData)}`,{method:'GET',cache:'no-store'}), data=await response.json().catch(()=>({}));
-        if(!response.ok||data.success!==true){ ownerAuthorized=false; grantCard.hidden=true; refreshCard.hidden=true; adminListEl.innerHTML='<div class="empty">Bạn không có quyền truy cập trang quản lý Admin.</div>'; setStatus(`❌ ${data.message||'Không thể tải danh sách Admin.'}`,'error'); return false; }
-        ownerAuthorized=true; grantCard.hidden=false; refreshCard.hidden=false; renderAdmins(data.admins); setStatus('✅ Đã xác thực Owner.','success'); return true;
+        if(!response.ok||data.success!==true){ ownerAuthorized=false; grantCard.hidden=true; refreshCard.hidden=true; auditCard.hidden=true; adminListEl.innerHTML='<div class="empty">Bạn không có quyền truy cập trang quản lý Admin.</div>'; setStatus(`❌ ${data.message||'Không thể tải danh sách Admin.'}`,'error'); return false; }
+        ownerAuthorized=true; grantCard.hidden=false; refreshCard.hidden=false; auditCard.hidden=false; renderAdmins(data.admins); await fetchAuditLogs(); setStatus('✅ Đã xác thực Owner.','success'); return true;
       }catch(error){ console.error('Admin list error:',error); setStatus('❌ Lỗi kết nối máy chủ.','error'); return false; }
     }
     async function grantAdmin(){
