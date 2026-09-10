@@ -1642,7 +1642,7 @@
 
   <div style="width: 100%; max-width: 480px;">
     <!-- Thêm class admin-only để ẩn nút với người dùng thường -->
-    <button id="btnSpin" class="btn-spin admin-only">🎡 QUAY VÒNG QUAY</button>
+    <button id="btnSpin" class="btn-spin admin-only">🎲 QUAY VÒNG QUAY</button>
 
     <div id="adminPanel" class="admin-actions admin-only">
       <button id="btnToggleForm" class="btn-toggle">
@@ -1666,33 +1666,13 @@
       </div>
     </div>
 
-    <!-- STEP 7.2: CÀI ĐẶT KỊCH BẢN đặt phía trên thanh Bài hát đã chặn. -->
+    <!-- CÀI ĐẶT KỊCH BẢN: UI admin, chưa thay đổi logic server. -->
     <section id="scriptSettings" class="script-settings admin-only" aria-label="Cài đặt kịch bản">
       <div class="script-settings-bar">
         <div class="script-settings-summary">
           <span class="script-settings-summary-icon" aria-hidden="true">⚙️</span>
           <span>Cài đặt kịch bản</span>
-      
-    <div id="blacklistBar" class="blacklist-bar">
-      <div class="blacklist-summary">
-        <span>🚫</span>
-        <span>Đã chặn</span>
-        <strong id="blacklistCount">0</strong>
-        <span>bài hát</span>
-      </div>
-
-      <button id="blacklistDetailsToggle" class="blacklist-details-toggle" type="button"
-        title="Xem danh sách bài hát đã chặn" aria-expanded="false" aria-controls="blacklistDetails">
-        <span id="blacklistToggleIcon" class="blacklist-toggle-icon" aria-hidden="true">▼</span>
-      </button>
-    </div>
-
-    <div id="blacklistDetails" class="blacklist-details">
-      <div class="blacklist-detail-title">🚫 Danh sách bài hát đã chặn</div>
-      <div id="blacklistList" class="blacklist-list"></div>
-    </div>
-
-  </div>
+        </div>
 
         <div class="script-settings-actions">
           <button id="scriptSettingsCancel" class="script-settings-cancel" type="button"
@@ -1727,6 +1707,27 @@
         </div>
       </div>
     </section>
+
+    <div id="blacklistBar" class="blacklist-bar">
+      <div class="blacklist-summary">
+        <span>🚫</span>
+        <span>Đã chặn</span>
+        <strong id="blacklistCount">0</strong>
+        <span>bài hát</span>
+      </div>
+
+      <button id="blacklistDetailsToggle" class="blacklist-details-toggle" type="button"
+        title="Xem danh sách bài hát đã chặn" aria-expanded="false" aria-controls="blacklistDetails">
+        <span id="blacklistToggleIcon" class="blacklist-toggle-icon" aria-hidden="true">▼</span>
+      </button>
+    </div>
+
+    <div id="blacklistDetails" class="blacklist-details">
+      <div class="blacklist-detail-title">🚫 Danh sách bài hát đã chặn</div>
+      <div id="blacklistList" class="blacklist-list"></div>
+    </div>
+
+
   </div>
 
   <script>
@@ -1955,22 +1956,20 @@
       updateScriptSettingsCancelUI();
     }
 
-    function setScriptSettingsOpen(isOpen) {
-      if (!scriptSettingsDetails) return;
-      scriptSettingsDetails.classList.toggle('open', isOpen);
-      scriptSettingsDetails.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
-    }
-
     function updateScriptSettingsAdminUI() {
       if (!scriptSettings) return;
       scriptSettings.classList.toggle('admin-only', window.isAdmin !== true);
-      if (window.isAdmin !== true) setScriptSettingsOpen(false);
+      if (window.isAdmin !== true) {
+        scriptSettingsDetails?.classList.remove('open');
+        scriptSettingsDetails?.setAttribute('aria-hidden', 'true');
+      }
       updateScriptSettingsCancelUI();
     }
 
     scriptSettingsEdit?.addEventListener('click', () => {
       if (window.isAdmin !== true) return;
-      setScriptSettingsOpen(true);
+      scriptSettingsDetails?.classList.add('open');
+      scriptSettingsDetails?.setAttribute('aria-hidden', 'false');
       sessionDuration?.focus();
     });
 
@@ -2006,7 +2005,8 @@
 
         setSessionCountdownState(data.session);
         setFormCountdownState(data.form);
-        setScriptSettingsOpen(false);
+        scriptSettingsDetails?.classList.remove('open');
+        scriptSettingsDetails?.setAttribute('aria-hidden', 'true');
       } catch (error) {
         console.error('❌ Lỗi bắt đầu phiên phát nhạc:', error);
         alert('Lỗi kết nối đến server!');
