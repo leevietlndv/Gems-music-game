@@ -146,6 +146,12 @@
       justify-content: flex-start;
     }
 
+    a.app-navbar-item {
+      display: block;
+      box-sizing: border-box;
+      text-decoration: none;
+    }
+
     .app-navbar-item:hover {
       background: #303d55;
     }
@@ -1648,6 +1654,7 @@
       <div class="app-navbar-divider"></div>
       <div class="app-navbar-section-label admin-only">Admin</div>
       <button class="app-navbar-item admin-only" type="button" role="menuitem" data-nav-target="adminPanel">👑 Quản trị</button>
+      <a class="app-navbar-item admin-only" href="/public/admin.html" role="menuitem">👥 Quản lý Admin</a>
       <button class="app-navbar-item admin-only" type="button" role="menuitem" data-nav-target="scriptSettings">⚙️ Cài đặt kịch bản</button>
     </div>
   </nav>
@@ -2194,6 +2201,12 @@
     appNavbarDropdown?.addEventListener('click', (event) => {
       const item = event.target.closest('.app-navbar-item');
       if (!item) return;
+
+      const targetUrl = item.getAttribute('href');
+      if (targetUrl) {
+        setNavbarOpen(false);
+        return;
+      }
 
       const targetId = item.dataset.navTarget;
       const target = targetId ? document.getElementById(targetId) : null;
