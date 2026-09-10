@@ -147,6 +147,35 @@ async function initDatabase() {
     ON blocked_songs (video_id)
   `);
 
+  // Step 8B: Database Foundation cho hệ thống quản lý Admin.
+  // Chỉ tạo schema, chưa thay đổi isAdmin() và chưa chuyển ADMIN_IDS sang DB.
+  // users là registry Telegram user; admin_users lưu role owner/admin.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      telegram_id TEXT PRIMARY KEY,
+      username TEXT,
+      first_name TEXT,
+      last_name TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      last_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS admin_users (
+      telegram_id TEXT PRIMARY KEY,
+      role TEXT NOT NULL CHECK (role IN ('owner', 'admin')),
+      granted_by TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_admin_users_role
+    ON admin_users (role)
+  `);
+
   // Phiên bản vote mới: LIKE = +1, DISLIKE = -1.
   // Bản health-v1 cũ dùng ngược dấu, nên chỉ đảo dấu đúng một lần.
   // Chạy trong transaction để không bao giờ đảo dấu 2 lần nếu server
