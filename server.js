@@ -437,6 +437,63 @@ async function isAdmin(telegramId) {
   return role === 'owner' || role === 'admin';
 }
 
+// Step 8E: Owner-only authorization for Admin management.
+// ADMIN_IDS luôn là owner bootstrap/emergency; owner trong DB cũng được bảo vệ.
+async function requireTelegramOwner(req, res) {
+  const initData = req.body?.initData || '';
+  const auth = validateTelegramInitData(initData);
+
+  if (!auth.valid) {
+    res.status(401).json({
+      success: false,
+      message: `Xác thực Telegram thất bại: ${auth.message}`
+    });
+    return { ok: false };
+  }
+
+  const telegramId = String(auth.user.id);
+  const role = await getAdminRole(telegramId);
+
+  if (role !== 'owner') {
+    res.status(403).json({
+      success: false,
+      message: 'Chỉ Owner mới có quyền quản lý Admin.'
+    });
+    return { ok: false };
+  }
+
+  return { ok: true, user: auth.user, role };
+}
+
+function normalizeManagedTelegramId(value) {
+  const id = String(value ?? '').trim();
+  if (!/^\d+$/.test(id) || id.length > 32) return null;
+  return id;
+}
+
+// Step 8D: ghi nhận user Telegram sau khi authenticate thành công.
+// Chỉ dùng registry users để lưu thông tin cơ bản + thời điểm hoạt động gần nhất.
+// Không thay đổi quyền Admin và không tạo thêm state người dùng ở RAM.
+async function upsertTelegramUser(authUser) {
+  if (!authUser?.id) return;
+
+  await pool.query(`
+    INSERT INTO users (telegram_id, username, first_name, last_name, last_seen_at)
+    VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+    ON CONFLICT (telegram_id)
+    DO UPDATE SET
+      username = EXCLUDED.username,
+      first_name = EXCLUDED.first_name,
+      last_name = EXCLUDED.last_name,
+      last_seen_at = CURRENT_TIMESTAMP
+  `, [
+    String(authUser.id),
+    authUser.username || null,
+    authUser.first_name || null,
+    authUser.last_name || null
+  ]);
+}
+
 function validateTelegramInitData(initData) {
   if (!initData || !BOT_TOKEN) {
     return {
@@ -1330,6 +1387,174 @@ async function requireTelegramAdmin(req, res) {
 
   return { ok: true, user: auth.user };
 }
+
+// ==================== ADMIN MANAGEMENT (STEP 8E) ====================
+// Owner-only core APIs. UI và realtime revoke được để sang các bước tiếp theo.
+
+app.get('/api/admin-users', async (req, res) => {
+  // GET không có body, nên lấy initData từ query chỉ dành cho endpoint này.
+  const initData = req.query?.initData || '';
+  const auth = validateTelegramInitData(initData);
+
+  if (!auth.valid) {
+    return res.status(401).json({
+      success: false,
+      message: `Xác thực Telegram thất bại: ${auth.message}`
+    });
+  }
+
+  const requesterId = String(auth.user.id);
+  if ((await getAdminRole(requesterId)) !== 'owner') {
+    return res.status(403).json({
+      success: false,
+      message: 'Chỉ Owner mới có quyền xem danh sách Admin.'
+    });
+  }
+
+  try {
+    const result = await pool.query(`
+      SELECT
+        a.telegram_id,
+        a.role,
+        a.granted_by,
+        a.created_at,
+        a.updated_at,
+        u.username,
+        u.first_name,
+        u.last_name,
+        u.last_seen_at
+      FROM admin_users a
+      LEFT JOIN users u ON u.telegram_id = a.telegram_id
+      ORDER BY
+        CASE WHEN a.role = 'owner' THEN 0 ELSE 1 END,
+        a.created_at ASC,
+        a.telegram_id ASC
+    `);
+
+    return res.json({
+      success: true,
+      admins: result.rows
+    });
+  } catch (error) {
+    console.error('❌ Không thể lấy danh sách Admin:', error.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Không thể lấy danh sách Admin.'
+    });
+  }
+});
+
+app.post('/api/admin-users/grant', async (req, res) => {
+  const auth = await requireTelegramOwner(req, res);
+  if (!auth.ok) return;
+
+  const targetId = normalizeManagedTelegramId(req.body?.telegramId);
+  if (!targetId) {
+    return res.status(400).json({
+      success: false,
+      message: 'Telegram ID không hợp lệ.'
+    });
+  }
+
+  const ownerId = String(auth.user.id);
+
+  try {
+    // Không cho phép dùng API Admin để thay đổi role owner.
+    const existing = await pool.query(
+      'SELECT role FROM admin_users WHERE telegram_id = $1 LIMIT 1',
+      [targetId]
+    );
+
+    if (existing.rows[0]?.role === 'owner' || ADMIN_IDS.has(targetId)) {
+      return res.status(409).json({
+        success: false,
+        message: 'Tài khoản này là Owner được bảo vệ, không cần cấp quyền Admin.'
+      });
+    }
+
+    const result = await pool.query(`
+      INSERT INTO admin_users (telegram_id, role, granted_by, created_at, updated_at)
+      VALUES ($1, 'admin', $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ON CONFLICT (telegram_id)
+      DO UPDATE SET
+        role = 'admin',
+        granted_by = EXCLUDED.granted_by,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING telegram_id, role, granted_by, created_at, updated_at
+    `, [targetId, ownerId]);
+
+    return res.json({
+      success: true,
+      message: 'Đã cấp quyền Admin.',
+      admin: result.rows[0]
+    });
+  } catch (error) {
+    console.error('❌ Không thể cấp quyền Admin:', error.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Không thể cấp quyền Admin.'
+    });
+  }
+});
+
+app.post('/api/admin-users/revoke', async (req, res) => {
+  const auth = await requireTelegramOwner(req, res);
+  if (!auth.ok) return;
+
+  const targetId = normalizeManagedTelegramId(req.body?.telegramId);
+  if (!targetId) {
+    return res.status(400).json({
+      success: false,
+      message: 'Telegram ID không hợp lệ.'
+    });
+  }
+
+  try {
+    // Owner/bootstrap owner luôn được bảo vệ khỏi revoke qua API này.
+    if (ADMIN_IDS.has(targetId)) {
+      return res.status(409).json({
+        success: false,
+        message: 'Không thể thu hồi Owner bootstrap/emergency.'
+      });
+    }
+
+    const existing = await pool.query(
+      'SELECT role FROM admin_users WHERE telegram_id = $1 LIMIT 1',
+      [targetId]
+    );
+
+    if (existing.rows[0]?.role === 'owner') {
+      return res.status(409).json({
+        success: false,
+        message: 'Không thể thu hồi quyền Owner.'
+      });
+    }
+
+    const result = await pool.query(
+      `DELETE FROM admin_users WHERE telegram_id = $1 AND role = 'admin' RETURNING telegram_id, role`,
+      [targetId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy tài khoản Admin để thu hồi.'
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Đã thu hồi quyền Admin.',
+      admin: result.rows[0]
+    });
+  } catch (error) {
+    console.error('❌ Không thể thu hồi quyền Admin:', error.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Không thể thu hồi quyền Admin.'
+    });
+  }
+});
 
 // ==================== YOUTUBE TITLE ====================
 async function getYouTubeTitle(url) {
@@ -2357,6 +2582,15 @@ io.on('connection', (socket) => {
     socket.adminRole = adminRole;
 
     console.log(`🔐 Telegram ID: ${telegramId} | Admin: ${admin}`);
+
+    // Step 8D: chỉ upsert user sau khi Telegram initData đã được xác thực.
+    // Nếu ghi registry thất bại, không làm mất phiên đăng nhập/socket hiện tại;
+    // lỗi được log để không ảnh hưởng playback và các tính năng realtime.
+    try {
+      await upsertTelegramUser(auth.user);
+    } catch (error) {
+      console.error('❌ Không thể cập nhật users registry:', error.message);
+    }
 
     socket.emit('adminStatus', {
       isAdmin: admin,
