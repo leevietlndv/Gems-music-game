@@ -405,12 +405,36 @@ const ADMIN_IDS = new Set(
 
 const bot = BOT_TOKEN ? new Telegraf(BOT_TOKEN) : null;
 
-function isAdmin(telegramId) {
+async function getAdminRole(telegramId) {
   if (telegramId === null || telegramId === undefined) {
-    return false;
+    return null;
   }
 
-  return ADMIN_IDS.has(String(telegramId));
+  const id = String(telegramId);
+
+  // ADMIN_IDS vẫn được giữ làm bootstrap/emergency owner.
+  // Nếu DB gặp sự cố, các ID này vẫn giữ được quyền quản trị.
+  if (ADMIN_IDS.has(id)) {
+    return 'owner';
+  }
+
+  try {
+    const result = await pool.query(
+      'SELECT role FROM admin_users WHERE telegram_id = $1 LIMIT 1',
+      [id]
+    );
+    return result.rows[0]?.role || null;
+  } catch (error) {
+    // Không mở quyền cho user khi DB lỗi. Chỉ ADMIN_IDS được phép
+    // tiếp tục hoạt động nhờ cơ chế emergency ở trên.
+    console.error('❌ Không thể kiểm tra quyền Admin từ database:', error.message);
+    return null;
+  }
+}
+
+async function isAdmin(telegramId) {
+  const role = await getAdminRole(telegramId);
+  return role === 'owner' || role === 'admin';
 }
 
 function validateTelegramInitData(initData) {
@@ -618,7 +642,7 @@ function detectDeviceType(deviceInfo = {}) {
   return 'phone';
 }
 
-function addOnlineUser(socket, authUser, deviceInfo = {}) {
+async function addOnlineUser(socket, authUser, deviceInfo = {}, adminRole = undefined) {
   const telegramId = String(authUser.id);
   const userName =
     [authUser.first_name, authUser.last_name]
@@ -650,7 +674,7 @@ function addOnlineUser(socket, authUser, deviceInfo = {}) {
   socketPresence.set(socket.id, telegramId);
   socketAuth.set(socket.id, {
     telegramId,
-    isAdmin: isAdmin(telegramId)
+    isAdmin: (adminRole === 'owner' || adminRole === 'admin')
   });
 }
 
@@ -1141,11 +1165,11 @@ async function performSpin(initiatorSocketId = null, actionUser = null) {
   });
 
   // Mọi lệnh quản trị (spin/toggle/reset/list) chỉ dành cho Admin.
-  const requireBotAdmin = (ctx) => isAdmin(ctx.from?.id);
+  const requireBotAdmin = async (ctx) => isAdmin(ctx.from?.id);
   const denyNonAdmin = (ctx) => ctx.reply('⛔ Lệnh này chỉ dành cho Admin.');
 
   bot.command('spin', async (ctx) => {
-    if (!requireBotAdmin(ctx)) return denyNonAdmin(ctx);
+    if (!(await requireBotAdmin(ctx))) return denyNonAdmin(ctx);
     const result = await enqueueGameMutation(() => performSpin());
     if (!result.success) {
       ctx.reply(`⚠️ ${result.message}`);
@@ -1154,15 +1178,15 @@ async function performSpin(initiatorSocketId = null, actionUser = null) {
     }
   });
 
-  bot.command('toggle', (ctx) => {
-    if (!requireBotAdmin(ctx)) return denyNonAdmin(ctx);
+  bot.command('toggle', async (ctx) => {
+    if (!(await requireBotAdmin(ctx))) return denyNonAdmin(ctx);
     isFormOpen = !isFormOpen;
     broadcastState();
     ctx.reply(`📢 Trạng thái form: ${isFormOpen ? '🟢 Đang MỞ' : '🔴 Đã ĐÓNG'}`);
   });
 
   bot.command('reset', async (ctx) => {
-    if (!requireBotAdmin(ctx)) return denyNonAdmin(ctx);
+    if (!(await requireBotAdmin(ctx))) return denyNonAdmin(ctx);
     await pool.query('DELETE FROM songs');
 
     songs = [];
@@ -1176,8 +1200,8 @@ async function performSpin(initiatorSocketId = null, actionUser = null) {
     ctx.reply('🧹 Đã xóa sạch danh sách bài hát!');
   });
 
-  bot.command('list', (ctx) => {
-    if (!requireBotAdmin(ctx)) return denyNonAdmin(ctx);
+  bot.command('list', async (ctx) => {
+    if (!(await requireBotAdmin(ctx))) return denyNonAdmin(ctx);
     if (songs.length === 0) {
       return ctx.reply('📋 Danh sách bài hát hiện đang trống.');
     }
@@ -1283,7 +1307,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 
 // ==================== ADMIN AUTH HELPER ====================
-function requireTelegramAdmin(req, res) {
+async function requireTelegramAdmin(req, res) {
   const initData = req.body?.initData || '';
   const auth = validateTelegramInitData(initData);
 
@@ -1296,7 +1320,7 @@ function requireTelegramAdmin(req, res) {
   }
 
   const telegramId = String(auth.user.id);
-  if (!isAdmin(telegramId)) {
+  if (!(await isAdmin(telegramId))) {
     res.status(403).json({
       success: false,
       message: 'Bạn không có quyền Admin.'
@@ -1523,7 +1547,7 @@ app.post('/api/submit', async (req, res) => {
 // ==================== API: AUTO PLAY MODE ====================
 app.post('/api/auto-play-mode', async (req, res) => {
   const { mode, socketId } = req.body;
-  const auth = requireTelegramAdmin(req, res);
+  const auth = await requireTelegramAdmin(req, res);
   if (!auth.ok) return;
 
   const newMode = Number(mode);
@@ -1585,7 +1609,7 @@ app.post('/api/auto-play-mode', async (req, res) => {
 // ==================== API: AUTO PLAY NEXT ====================
 app.post('/api/auto-play-next', async (req, res) => {
   const { socketId, expectedSongId } = req.body;
-  const auth = requireTelegramAdmin(req, res);
+  const auth = await requireTelegramAdmin(req, res);
   if (!auth.ok) return;
 
   if (autoPlayMode === 0) {
@@ -1722,7 +1746,7 @@ app.post('/api/play-song', async (req, res) => {
     });
   }
 
-  const auth = requireTelegramAdmin(req, res);
+  const auth = await requireTelegramAdmin(req, res);
   if (!auth.ok) return;
 
   try {
@@ -1918,7 +1942,7 @@ app.post('/api/song-vote', async (req, res) => {
 
 // ==================== API: SPIN ====================
 app.post('/api/spin', async (req, res) => {
-  const auth = requireTelegramAdmin(req, res);
+  const auth = await requireTelegramAdmin(req, res);
   if (!auth.ok) return;
 
   const { socketId } = req.body || {};
@@ -1942,7 +1966,7 @@ app.post('/api/spin', async (req, res) => {
 
 // ==================== API: SCRIPT SESSION / FORM TIMER ====================
 app.post('/api/script-settings/start-session', async (req, res) => {
-  const auth = requireTelegramAdmin(req, res);
+  const auth = await requireTelegramAdmin(req, res);
   if (!auth.ok) return;
 
   const minutes = normalizeScriptDurationMinutes(req.body?.sessionDurationMinutes);
@@ -2045,7 +2069,7 @@ app.post('/api/script-settings/start-session', async (req, res) => {
 
 // ==================== API: CANCEL SCRIPT TIMERS ====================
 app.post('/api/script-settings/cancel-session', async (req, res) => {
-  const auth = requireTelegramAdmin(req, res);
+  const auth = await requireTelegramAdmin(req, res);
   if (!auth.ok) return;
 
   try {
@@ -2073,7 +2097,7 @@ app.post('/api/script-settings/cancel-session', async (req, res) => {
 
 // ==================== API: TOGGLE FORM ====================
 app.post('/api/toggle-form', async (req, res) => {
-  const auth = requireTelegramAdmin(req, res);
+  const auth = await requireTelegramAdmin(req, res);
   if (!auth.ok) return;
 
   try {
@@ -2099,7 +2123,7 @@ app.post('/api/toggle-form', async (req, res) => {
 
 // ==================== API: RESET ====================
 app.post('/api/reset', async (req, res) => {
-  const auth = requireTelegramAdmin(req, res);
+  const auth = await requireTelegramAdmin(req, res);
   if (!auth.ok) return;
 
   try {
@@ -2136,7 +2160,7 @@ app.post('/api/reset', async (req, res) => {
 
 // ==================== API: DELETE ONE SONG ====================
 app.post('/api/delete-song', async (req, res) => {
-  const auth = requireTelegramAdmin(req, res);
+  const auth = await requireTelegramAdmin(req, res);
   if (!auth.ok) return;
 
   const { id } = req.body;
@@ -2195,7 +2219,7 @@ app.post('/api/delete-song', async (req, res) => {
 
 // ==================== API: UNBLOCK ONE SONG ====================
 app.post('/api/unblock-song', async (req, res) => {
-  const auth = requireTelegramAdmin(req, res);
+  const auth = await requireTelegramAdmin(req, res);
   if (!auth.ok) return;
 
   const { id } = req.body || {};
@@ -2298,7 +2322,7 @@ io.on('connection', (socket) => {
   // authenticate thành công mới gửi state hiện tại (chống rò rỉ dữ liệu
   // cho bất kỳ ai mở kết nối websocket thuần).
 
-  socket.on('authenticate', (payload = {}) => {
+  socket.on('authenticate', async (payload = {}) => {
     const initData = payload.initData || '';
     const deviceInfo = payload.deviceInfo || {};
     console.log(
@@ -2327,8 +2351,10 @@ io.on('connection', (socket) => {
     }
 
     const telegramId = String(auth.user.id);
-    const admin = isAdmin(telegramId);
+    const adminRole = await getAdminRole(telegramId);
+    const admin = adminRole === 'owner' || adminRole === 'admin';
     socket.isAdmin = admin;
+    socket.adminRole = adminRole;
 
     console.log(`🔐 Telegram ID: ${telegramId} | Admin: ${admin}`);
 
@@ -2338,7 +2364,7 @@ io.on('connection', (socket) => {
       telegramId
     });
 
-    addOnlineUser(socket, auth.user, deviceInfo);
+    await addOnlineUser(socket, auth.user, deviceInfo, adminRole);
     broadcastOnlineSummary();
 
     // Gửi state hiện tại cho socket vừa xác thực.
