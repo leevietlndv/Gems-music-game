@@ -623,20 +623,32 @@ function validateTelegramInitData(initData) {
 
     const authDate = Number(params.get('auth_date'));
 
-    if (!authDate) {
+    if (!Number.isSafeInteger(authDate) || authDate <= 0) {
       return {
         valid: false,
-        message: 'Thiếu auth_date'
+        message: 'auth_date không hợp lệ'
       };
     }
 
     const maxAge = 24 * 60 * 60;
+    const maxFutureSkew = 60;
     const now = Math.floor(Date.now() / 1000);
+    const age = now - authDate;
 
-    if (now - authDate > maxAge) {
+    if (age > maxAge) {
       return {
         valid: false,
         message: 'Telegram initData đã hết hạn'
+      };
+    }
+
+    // Không chấp nhận initData có auth_date nằm quá xa trong tương lai.
+    // Điều này tránh việc một credential có timestamp bất thường vượt qua
+    // kiểm tra tuổi chỉ vì phép tính `now - authDate` cho ra số âm.
+    if (age < -maxFutureSkew) {
+      return {
+        valid: false,
+        message: 'Telegram initData có auth_date không hợp lệ'
       };
     }
 
@@ -650,6 +662,13 @@ function validateTelegramInitData(initData) {
     }
 
     const user = JSON.parse(userRaw);
+
+    if (!user || typeof user !== 'object' || Array.isArray(user)) {
+      return {
+        valid: false,
+        message: 'Thông tin user Telegram không hợp lệ'
+      };
+    }
 
     if (!user.id) {
       return {
@@ -1761,7 +1780,7 @@ app.get('/api/admin-audit-logs', async (req, res) => {
         created_at
       FROM admin_audit_logs
       ORDER BY created_at DESC, id DESC
-      LIMIT 30
+      LIMIT 100
     `);
 
     return res.json({
@@ -1901,80 +1920,86 @@ app.post('/api/submit', async (req, res) => {
   }
 
   try {
-    // Phase 4A: kiểm tra blacklist ngay trên PostgreSQL trước khi cho phép INSERT.
-    // Không chỉ dựa vào mảng blockedSongs trong RAM để tránh trường hợp state cũ.
-    const blockedResult = await pool.query(
-      `
-        SELECT
-          id,
-          title,
-          url,
-          blocked_reason AS "blockedReason"
-        FROM blocked_songs
-        WHERE video_id = $1
-        LIMIT 1
-      `,
-      [youtubeVideoId]
-    );
-
-    if (blockedResult.rowCount > 0) {
-      const blockedSong = blockedResult.rows[0];
-      const reasonText = blockedSong.blockedReason === 'health_zero'
-        ? 'Sức khỏe của bài hát đã về 0.'
-        : 'Bài hát đã bị Admin chặn.';
-
-      console.log(
-        `🚫 Từ chối submit bài đã blacklist: video_id=${youtubeVideoId}`
-      );
-
-      return res.json({
-        success: false,
-        message: `🚫 Bài hát này đang nằm trong blacklist. ${reasonText} Bạn cần được Admin gỡ chặn trước khi gửi lại.`
-      });
-    }
-
     const title = await getYouTubeTitle(cleanUrl);
 
-    // ON CONFLICT: chống race-condition — hai request submit cùng bài
-    // đồng thời thì chỉ một dòng được ghi, request kia báo trùng.
-    const result = await pool.query(
-      `
-        INSERT INTO songs (
-          url,
-          video_id,
-          title,
-          user_name,
-          telegram_id
-        )
-        VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (video_id) DO NOTHING
-        RETURNING
-          id,
-          url,
-          title,
-          user_name AS user,
-          telegram_id AS "telegramId",
-          created_at
-      `,
-      [
-        cleanUrl,
-        youtubeVideoId,
-        title,
-        userName,
-        String(telegramUser.id)
-      ]
-    );
+    // Phase 8J: serialize phần kiểm tra blacklist + INSERT + cập nhật cache.
+    // Request lấy title không giữ mutation queue; chỉ phần state mutation mới
+    // được tuần tự hóa để tránh race giữa submit/delete/unblock/reset.
+    const result = await enqueueGameMutation(async () => {
+      // Kiểm tra blacklist lại ngay trước INSERT để tránh TOCTOU race.
+      const blockedResult = await pool.query(
+        `
+          SELECT
+            id,
+            title,
+            url,
+            blocked_reason AS "blockedReason"
+          FROM blocked_songs
+          WHERE video_id = $1
+          LIMIT 1
+        `,
+        [youtubeVideoId]
+      );
 
-    if (result.rowCount === 0) {
-      return res.json({
-        success: false,
-        message: '⚠️ Bài hát này đã tồn tại trong danh sách!'
-      });
-    }
+      if (blockedResult.rowCount > 0) {
+        const blockedSong = blockedResult.rows[0];
+        const reasonText = blockedSong.blockedReason === 'health_zero'
+          ? 'Sức khỏe của bài hát đã về 0.'
+          : 'Bài hát đã bị Admin chặn.';
 
-    songs.push(result.rows[0]);
-    songs.sort((a, b) => Number(a.id) - Number(b.id));
-    broadcastState();
+        console.log(
+          `🚫 Từ chối submit bài đã blacklist: video_id=${youtubeVideoId}`
+        );
+
+        return {
+          success: false,
+          message: `🚫 Bài hát này đang nằm trong blacklist. ${reasonText} Bạn cần được Admin gỡ chặn trước khi gửi lại.`
+        };
+      }
+
+      // ON CONFLICT: chống race-condition — hai request submit cùng bài
+      // đồng thời thì chỉ một dòng được ghi, request kia báo trùng.
+      const insertResult = await pool.query(
+        `
+          INSERT INTO songs (
+            url,
+            video_id,
+            title,
+            user_name,
+            telegram_id
+          )
+          VALUES ($1, $2, $3, $4, $5)
+          ON CONFLICT (video_id) DO NOTHING
+          RETURNING
+            id,
+            url,
+            title,
+            user_name AS user,
+            telegram_id AS "telegramId",
+            created_at
+        `,
+        [
+          cleanUrl,
+          youtubeVideoId,
+          title,
+          userName,
+          String(telegramUser.id)
+        ]
+      );
+
+      if (insertResult.rowCount === 0) {
+        return {
+          success: false,
+          message: '⚠️ Bài hát này đã tồn tại trong danh sách!'
+        };
+      }
+
+      songs.push(insertResult.rows[0]);
+      songs.sort((a, b) => Number(a.id) - Number(b.id));
+      broadcastState();
+
+      return { success: true };
+    });
 
     console.log(
       `🎵 Đã lưu bài hát #${result.rows[0].id} vào PostgreSQL: ${cleanUrl}`
@@ -2692,40 +2717,50 @@ app.post('/api/unblock-song', async (req, res) => {
   }
 
   try {
-    const result = await pool.query(`
-      DELETE FROM blocked_songs
-      WHERE id = $1
-      RETURNING
-        id,
-        video_id AS "videoId",
-        url,
-        title,
-        user_name AS user,
-        telegram_id AS "telegramId",
-        blocked_reason AS "blockedReason",
-        blocked_at AS "blockedAt"
-    `, [normalizedId]);
+    const result = await enqueueGameMutation(async () => {
+      const deleteResult = await pool.query(`
+        DELETE FROM blocked_songs
+        WHERE id = $1
+        RETURNING
+          id,
+          video_id AS "videoId",
+          url,
+          title,
+          user_name AS user,
+          telegram_id AS "telegramId",
+          blocked_reason AS "blockedReason",
+          blocked_at AS "blockedAt"
+      `, [normalizedId]);
 
-    if (result.rowCount === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Không tìm thấy bài hát trong blacklist!'
-      });
-    }
+      if (deleteResult.rowCount === 0) {
+        return {
+          success: false,
+          status: 404,
+          message: 'Không tìm thấy bài hát trong blacklist!'
+        };
+      }
 
-    const unblockedSong = result.rows[0];
+      const unblockedSong = deleteResult.rows[0];
 
-    blockedSongs = blockedSongs.filter(
-      item => String(item.id) !== String(normalizedId)
-    );
+      blockedSongs = blockedSongs.filter(
+        item => String(item.id) !== String(normalizedId)
+      );
 
-    // Gỡ chặn KHÔNG tự động đưa bài hát trở lại danh sách songs.
-    broadcastState();
+      // Gỡ chặn KHÔNG tự động đưa bài hát trở lại danh sách songs.
+      broadcastState();
 
-    console.log(
-      `🔓 Admin đã gỡ chặn bài hát #${normalizedId}: ${unblockedSong.title || unblockedSong.url}`
-    );
+      console.log(
+        `🔓 Admin đã gỡ chặn bài hát #${normalizedId}: ${unblockedSong.title || unblockedSong.url}`
+      );
 
+      return {
+        success: true,
+        message: 'Đã gỡ chặn bài hát! Hãy gửi lại link nếu muốn thêm bài này.',
+        song: unblockedSong
+      };
+    });
+
+    if (result.status) return res.status(result.status).json(result);
     return res.json({
       success: true,
       message: 'Đã gỡ chặn bài hát! Hãy gửi lại link nếu muốn thêm bài này.',
