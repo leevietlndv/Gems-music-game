@@ -2384,6 +2384,37 @@
     // Vì vậy luôn kiểm tra window.YT ở nhiều thời điểm.
     window.onYouTubeIframeAPIReady = flushYouTubeApiCallbacks;
 
+    // ==================== iOS AUTO PLAY DIAGNOSTIC (Step 8K) ====================
+    // Chỉ ghi nhận event/order để xác định chính xác iOS chặn ở đâu.
+    // Không thay đổi playback flow của Step 8J.
+    const iosAutoPlayDiagnostic = {
+      enabled: /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
+      events: [],
+      blocked: false,
+      record(label, details = {}) {
+        if (!this.enabled) return;
+        const entry = {
+          time: new Date().toISOString(),
+          label,
+          songId: currentSongId ?? null,
+          playbackVersion: currentPlayback?.version ?? null,
+          playbackStatus: currentPlayback?.status ?? null,
+          youtubeState: (youtubeApiPlayer && typeof youtubeApiPlayer.getPlayerState === 'function')
+            ? youtubeApiPlayer.getPlayerState() : null,
+          ...details
+        };
+        this.events.push(entry);
+        if (this.events.length > 80) this.events.shift();
+        console.log('🍎 [Step 8K]', label, entry);
+      }
+    };
+
+    if (iosAutoPlayDiagnostic.enabled) {
+      window.__gemsIOSAutoPlayDiagnostic = iosAutoPlayDiagnostic;
+      iosAutoPlayDiagnostic.record('diagnostic_ready');
+    }
+
     // ==================== AUTO PLAY ====================
     // 0 = Tắt
     // 1 = Tuần tự
@@ -2983,6 +3014,12 @@
         });
 
         const data = await res.json();
+        iosAutoPlayDiagnostic.record('auto_play_next_response', {
+          success: data.success === true,
+          nextSongId: data.song?.id ?? null,
+          nextVideoUrl: data.song?.url ?? null,
+          stopAutoPlay: data.stopAutoPlay === true
+        });
 
         if (!data.success) {
           alert(data.message || 'Không thể gỡ chặn bài hát!');
@@ -3391,6 +3428,8 @@
           },
           onStateChange: onYouTubePlayerStateChange,
           onAutoplayBlocked: () => {
+            iosAutoPlayDiagnostic.record('youtube_autoplay_blocked');
+            iosAutoPlayDiagnostic.blocked = true;
             console.warn('⚠️ YouTube chặn autoplay/playback tự động trên thiết bị này.');
             if (!autoplayBlockedNoticeShown) {
               autoplayBlockedNoticeShown = true;
@@ -4112,6 +4151,13 @@
         pendingLocalPlayback &&
         String(pendingLocalPlayback.songId) === String(song.id);
 
+      iosAutoPlayDiagnostic.record('load_song_into_player', {
+        songId: song.id ?? null,
+        hasAuthoritativePlayback,
+        playbackStatus: playback?.status ?? null,
+        isLocalGesturePlayback: !!isLocalGesturePlayback
+      });
+
       // Mobile/WebView: khi user vừa tap Play, ưu tiên chuỗi mute -> load -> play
       // -> unmute trong cùng call stack. Cách này cho trình duyệt cơ hội xem
       // playVideo() là hành động phát được khởi tạo bởi user gesture.
@@ -4135,6 +4181,7 @@
           : 0;
 
         if (isLocalGesturePlayback && delayMs <= 50) {
+          iosAutoPlayDiagnostic.record('playVideo_call');
           try {
             youtubeApiPlayer.playVideo();
           } catch (error) {
@@ -4157,6 +4204,7 @@
         // phải gọi playVideo() ngay tại đây, trước khi user activation trên
         // Android/WebView mất đi. Sau đó server playbackState sẽ reconcile.
         if (isLocalGesturePlayback) {
+          iosAutoPlayDiagnostic.record('playVideo_call');
           try {
             youtubeApiPlayer.playVideo();
           } catch (error) {
@@ -4425,6 +4473,7 @@
 
     function onYouTubePlayerStateChange(event) {
       console.log('🎬 YouTube state:', event.data);
+      iosAutoPlayDiagnostic.record('youtube_state_change', { state: event.data });
       if (event.data !== (typeof YT !== 'undefined' ? YT.PlayerState.ENDED : -1)) {
         refreshPlaybackDuration();
         updatePlaybackTimelineUi();
@@ -4447,6 +4496,7 @@
         event.data === YT.PlayerState.ENDED
       ) {
         console.log('🏁 BÀI HÁT ĐÃ KẾT THÚC');
+        iosAutoPlayDiagnostic.record('youtube_ended');
 
         // Báo server ngay khi YouTube kết thúc. Server sẽ xác nhận đúng
         // songId + playback version rồi chuyển authoritative state sang
@@ -4504,6 +4554,7 @@
 
       autoPlayNextBusy = true;
       const endedSongId = lastWinnerId();
+      iosAutoPlayDiagnostic.record('auto_play_next_request', { endedSongId });
 
       try {
         const res = await fetch('/api/auto-play-next', {
@@ -4533,6 +4584,9 @@
           return;
         }
 
+        iosAutoPlayDiagnostic.record('auto_play_next_success', {
+          nextSongId: data.song?.id ?? null
+        });
         console.log('▶️ Auto Play chuyển bài:', data.song);
       } catch (error) {
         console.error('❌ Lỗi Auto Play:', error);
