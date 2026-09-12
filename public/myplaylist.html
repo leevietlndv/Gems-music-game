@@ -367,9 +367,17 @@ function attachDnD(){
   document.querySelectorAll('.song-list').forEach(list=>{
     let dragged=null;
     list.querySelectorAll('.song').forEach(el=>{
-      el.addEventListener('dragstart',()=>{
-        if(reorderInFlight.has(String(list.dataset.songList)))return;
-        dragged=el;el.classList.add('dragging')
+      el.addEventListener('dragstart',e=>{
+        if(reorderInFlight.has(String(list.dataset.songList))){
+          e.preventDefault();
+          return;
+        }
+        dragged=el;
+        el.classList.add('dragging');
+        if(e.dataTransfer){
+          e.dataTransfer.effectAllowed='move';
+          e.dataTransfer.setData('text/plain',String(el.dataset.songId||''));
+        }
       });
       el.addEventListener('dragend',async()=>{
         el.classList.remove('dragging');
@@ -391,8 +399,9 @@ function attachDnD(){
         dragged=null
       });
       el.addEventListener('dragover',e=>{
-        e.preventDefault();
         if(!dragged||dragged===el)return;
+        e.preventDefault();
+        if(e.dataTransfer)e.dataTransfer.dropEffect='move';
         const rect=el.getBoundingClientRect();
         const after=e.clientY>rect.top+rect.height/2;
         list.insertBefore(dragged,after?el.nextSibling:el)
