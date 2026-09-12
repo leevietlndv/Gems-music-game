@@ -23,7 +23,7 @@ h1{font-size:24px;text-align:center;margin:8px 0 6px}.subtitle{text-align:center
 input{width:100%;height:42px;border:1px solid #46536b;border-radius:8px;background:#182031;color:#fff;padding:0 12px;font-size:14px;outline:none}input:focus{border-color:#64b5f6}
 button{border:0;cursor:pointer}.primary{width:100%;height:42px;border-radius:8px;background:#2e7d32;color:#fff;font-weight:700;font-size:14px;margin-top:10px}.secondary{height:36px;border-radius:7px;background:#34415a;color:#fff;padding:0 11px;font-weight:600}.danger{background:#8e3030}.ghost{background:transparent;color:#9ecbff;padding:5px 6px;font-size:13px}
 .section-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}.section-head h2{font-size:17px}.count{color:#91a0b7;font-size:12px}
-.playlist{border:1px solid #3a4860;border-radius:10px;background:#202a3b;margin-bottom:10px;overflow:hidden}.playlist-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 12px}.playlist-name{font-size:15px;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.playlist-actions{display:flex;gap:4px;flex-shrink:0}.playlist-actions button{background:transparent;color:#c9d4e5;font-size:16px;padding:5px}.playlist-body{padding:0 10px 10px;border-top:1px solid #334057}.song-list{padding-top:8px;min-height:8px}.song{display:flex;align-items:center;gap:8px;background:#29364b;border:1px solid #3b4960;border-radius:9px;padding:7px;margin-bottom:7px;cursor:grab}.song.dragging{opacity:.45}.drag{color:#8290a6;font-size:18px;width:18px;text-align:center;flex-shrink:0}.thumb{width:72px;height:42px;object-fit:cover;border-radius:6px;background:#111827;flex-shrink:0}.song-main{min-width:0;flex:1}.song-title{font-size:13px;font-weight:600;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.song-id{font-size:10px;color:#8190a6;margin-top:3px}.song-actions{display:flex;flex-direction:column;gap:3px}.song-actions button{background:transparent;color:#c9d4e5;padding:4px;font-size:16px}.song-actions button:disabled{opacity:.5;cursor:not-allowed}.song-actions button.send-gems-sent{opacity:.38;filter:grayscale(.35)}.empty{color:#7f8ca1;text-align:center;padding:16px 8px;font-size:13px}
+.playlist{border:1px solid #3a4860;border-radius:10px;background:#202a3b;margin-bottom:10px;overflow:hidden}.playlist-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 12px}.playlist-name{font-size:15px;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.playlist-actions{display:flex;gap:4px;flex-shrink:0}.playlist-actions button{background:transparent;color:#c9d4e5;font-size:16px;padding:5px}.playlist-body{padding:0 10px 10px;border-top:1px solid #334057}.song-list{padding-top:8px;min-height:8px}.song{display:flex;align-items:center;gap:8px;background:#29364b;border:1px solid #3b4960;border-radius:9px;padding:7px;margin-bottom:7px;cursor:grab}.song.dragging{opacity:.45}.song.touch-dragging{opacity:.72;box-shadow:0 8px 22px rgba(0,0,0,.28);position:relative;z-index:20}.song-list.touch-drag-active{user-select:none}.drag{color:#8290a6;font-size:18px;width:18px;text-align:center;flex-shrink:0;cursor:grab;touch-action:none}.drag:active{cursor:grabbing}.thumb{width:72px;height:42px;object-fit:cover;border-radius:6px;background:#111827;flex-shrink:0}.song-main{min-width:0;flex:1}.song-title{font-size:13px;font-weight:600;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.song-id{font-size:10px;color:#8190a6;margin-top:3px}.song-actions{display:flex;flex-direction:column;gap:3px}.song-actions button{background:transparent;color:#c9d4e5;padding:4px;font-size:16px}.song-actions button:disabled{opacity:.5;cursor:not-allowed}.song-actions button.send-gems-sent{opacity:.38;filter:grayscale(.35)}.empty{color:#7f8ca1;text-align:center;padding:16px 8px;font-size:13px}
 .add-row{display:flex;gap:7px;margin-top:10px}.add-row input{flex:1}.add-row button{height:42px;width:45px;border-radius:8px;background:#2e7d32;color:#fff;font-size:18px;font-weight:700}.playlist-footer{display:flex;align-items:center;justify-content:space-between;margin-top:8px;color:#7f8ca1;font-size:11px}.busy{opacity:.6;pointer-events:none}
 .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:18px;z-index:100}.modal{width:100%;max-width:420px;background:#252f42;border:1px solid #46536b;border-radius:12px;padding:16px;box-shadow:0 15px 45px rgba(0,0,0,.5)}.modal h3{font-size:17px;margin-bottom:8px}.modal p{color:#aeb9ca;font-size:13px;line-height:1.5;margin-bottom:12px}.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}.modal-actions button{height:38px;padding:0 13px;border-radius:7px;font-weight:700}.cancel{background:#34415a;color:#fff}.confirm{background:#2e7d32;color:#fff}
 </style>
@@ -169,7 +169,145 @@ async function sendSongToGems(pid,sid,btn){
   }
 }
 async function deleteSong(pid,sid){if(!confirm('Xóa bài hát này khỏi playlist?'))return;try{await api(`/api/my-playlists/${pid}/songs/${sid}`,{method:'DELETE'});await loadPlaylists()}catch(e){alert(e.message)}}
-function attachDnD(){document.querySelectorAll('.song-list').forEach(list=>{let dragged=null;list.querySelectorAll('.song').forEach(el=>{el.addEventListener('dragstart',()=>{dragged=el;el.classList.add('dragging')});el.addEventListener('dragend',async()=>{el.classList.remove('dragging');if(!dragged)return;const ids=[...list.querySelectorAll('.song')].map(x=>Number(x.dataset.songId));try{await api(`/api/my-playlists/${list.dataset.songList}/songs/reorder`,{method:'PATCH',body:{songIds:ids}})}catch(e){alert(e.message);await loadPlaylists()}dragged=null});el.addEventListener('dragover',e=>{e.preventDefault();if(!dragged||dragged===el)return;const rect=el.getBoundingClientRect();const after=e.clientY>rect.top+rect.height/2;list.insertBefore(dragged,after?el.nextSibling:el)})})})}
+const reorderInFlight=new Set();
+async function saveReorder(list,previousHtml){
+  const pid=String(list.dataset.songList);
+  if(reorderInFlight.has(pid))return false;
+  const ids=[...list.querySelectorAll('.song')].map(x=>Number(x.dataset.songId));
+  if(ids.length<2)return true;
+  reorderInFlight.add(pid);
+  list.dataset.reorderBusy='1';
+  try{
+    await api(`/api/my-playlists/${pid}/songs/reorder`,{method:'PATCH',body:{songIds:ids}});
+    return true;
+  }catch(e){
+    list.innerHTML=previousHtml;
+    attachDnD();
+    alert(e.message||'Không thể lưu thứ tự bài hát.');
+    return false;
+  }finally{
+    reorderInFlight.delete(pid);
+    delete list.dataset.reorderBusy;
+  }
+}
+function moveSongByPoint(list,dragged,clientY){
+  const items=[...list.querySelectorAll('.song')].filter(x=>x!==dragged);
+  let target=null;
+  for(const el of items){
+    const rect=el.getBoundingClientRect();
+    if(clientY<rect.top+rect.height/2){target=el;break}
+  }
+  if(target)list.insertBefore(dragged,target);
+  else list.appendChild(dragged);
+}
+function attachTouchDnD(list){
+  if(!window.PointerEvent)return;
+  let dragged=null,placeholder=null,startY=0,startX=0,active=false,longPressTimer=null,previousHtml='';
+  const cleanup=()=>{
+    clearTimeout(longPressTimer);
+    longPressTimer=null;
+    if(dragged)dragged.classList.remove('touch-dragging');
+    list.classList.remove('touch-drag-active');
+    if(placeholder){placeholder.remove();placeholder=null}
+    dragged=null;
+    active=false;
+  };
+  list.querySelectorAll('.drag').forEach(handle=>{
+    handle.addEventListener('pointerdown',e=>{
+      if(e.pointerType==='mouse')return;
+      if(reorderInFlight.has(String(list.dataset.songList)))return;
+      const song=handle.closest('.song');
+      if(!song)return;
+      startY=e.clientY;startX=e.clientX;
+      previousHtml=list.innerHTML;
+      clearTimeout(longPressTimer);
+      longPressTimer=setTimeout(()=>{
+        active=true;
+        dragged=song;
+        dragged.classList.add('touch-dragging');
+        list.classList.add('touch-drag-active');
+        placeholder=document.createElement('div');
+        placeholder.className='song';
+        placeholder.style.height=`${dragged.getBoundingClientRect().height}px`;
+        placeholder.style.opacity='.12';
+        placeholder.style.marginBottom='7px';
+        dragged.parentNode.insertBefore(placeholder,dragged);
+        dragged.style.width=`${dragged.getBoundingClientRect().width}px`;
+        dragged.setPointerCapture?.(e.pointerId);
+      },180);
+    });
+    handle.addEventListener('pointermove',e=>{
+      if(e.pointerType==='mouse')return;
+      if(!active){
+        if(Math.hypot(e.clientX-startX,e.clientY-startY)>8){
+          clearTimeout(longPressTimer);
+        }
+        return;
+      }
+      e.preventDefault();
+      if(!dragged)return;
+      moveSongByPoint(list,dragged,e.clientY);
+    },{passive:false});
+    const finish=async e=>{
+      if(e.pointerType==='mouse')return;
+      clearTimeout(longPressTimer);
+      if(!active)return;
+      e.preventDefault();
+      if(dragged)dragged.style.width='';
+      const ok=await saveReorder(list,previousHtml);
+      cleanup();
+      if(!ok)return;
+    };
+    handle.addEventListener('pointerup',finish,{passive:false});
+    handle.addEventListener('pointercancel',e=>{
+      clearTimeout(longPressTimer);
+      if(!active)return;
+      if(dragged)dragged.style.width='';
+      list.innerHTML=previousHtml;
+      cleanup();
+      attachDnD();
+    },{passive:false});
+  });
+}
+function attachDnD(){
+  document.querySelectorAll('.song-list').forEach(list=>{
+    let dragged=null;
+    list.querySelectorAll('.song').forEach(el=>{
+      el.addEventListener('dragstart',()=>{
+        if(reorderInFlight.has(String(list.dataset.songList)))return;
+        dragged=el;el.classList.add('dragging')
+      });
+      el.addEventListener('dragend',async()=>{
+        el.classList.remove('dragging');
+        if(!dragged)return;
+        const previousHtml=list.dataset.previousHtml||'';
+        delete list.dataset.previousHtml;
+        const ids=[...list.querySelectorAll('.song')].map(x=>Number(x.dataset.songId));
+        if(ids.length>1){
+          reorderInFlight.add(String(list.dataset.songList));
+          try{
+            await api(`/api/my-playlists/${list.dataset.songList}/songs/reorder`,{method:'PATCH',body:{songIds:ids}});
+          }catch(e){
+            if(previousHtml){list.innerHTML=previousHtml;attachDnD()}
+            alert(e.message||'Không thể lưu thứ tự bài hát.');
+          }finally{
+            reorderInFlight.delete(String(list.dataset.songList));
+          }
+        }
+        dragged=null
+      });
+      el.addEventListener('dragover',e=>{
+        e.preventDefault();
+        if(!dragged||dragged===el)return;
+        const rect=el.getBoundingClientRect();
+        const after=e.clientY>rect.top+rect.height/2;
+        list.insertBefore(dragged,after?el.nextSibling:el)
+      });
+      el.addEventListener('dragstart',()=>{list.dataset.previousHtml=list.innerHTML});
+    });
+    attachTouchDnD(list);
+  });
+}
 $('createPlaylistBtn').addEventListener('click',createPlaylist);
 $('registerBtn').addEventListener('click',async()=>{const id=$('registerTelegramId').value.trim();if(!/^\d+$/.test(id)){alert('Telegram ID chỉ được chứa chữ số.');return}const b=$('registerBtn');b.disabled=true;b.textContent='⏳ Đang đăng ký...';try{await api('/api/my-playlist/register',{method:'POST',body:{telegramId:id}});await loadPlaylists()}catch(e){alert(e.message)}finally{b.disabled=false;b.textContent='🔐 Đăng ký và mở My Playlist'}});
 $('playlists').addEventListener('click',async e=>{const btn=e.target.closest('button');if(!btn)return;const box=e.target.closest('.playlist');if(!box)return;const id=Number(box.dataset.playlistId);const p=state.playlists.find(x=>Number(x.id)===id);const action=btn.dataset.action;if(action==='rename')return renamePlaylist(id,p?.name||'');if(action==='delete')return deletePlaylist(id,p?.name||'playlist');if(action==='send-gems'){const song=e.target.closest('.song');return sendSongToGems(id,Number(song.dataset.songId),btn)}if(action==='delete-song'){const song=e.target.closest('.song');return deleteSong(id,Number(song.dataset.songId))}if(action==='add'){const input=box.querySelector(`[data-add-input="${id}"]`);return addSong(id,input)}});
