@@ -190,6 +190,14 @@ function connectGemsSocket(){
   gemsSocket.on('stateUpdate',data=>{
     updateGemsStatusFromSharedSongs(data?.songs||[]);
   });
+  gemsSocket.on('myPlaylistChanged',async()=>{
+    try{
+      await loadPlaylists();
+      applyGemsStatusToButtons();
+    }catch(e){
+      console.error('❌ Không thể đồng bộ My Playlist realtime:',e);
+    }
+  });
 }
 async function boot(){
   resolveInitData();

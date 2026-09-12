@@ -1913,6 +1913,15 @@ function broadcastState() {
 }
 
 
+// ==================== MY PLAYLIST REALTIME SYNC ====================
+function broadcastMyPlaylistChanged(telegramId, payload = {}) {
+  if (!telegramId) return;
+  io.to(`myplaylist:${String(telegramId)}`).emit('myPlaylistChanged', {
+    ...payload,
+    telegramId: String(telegramId)
+  });
+}
+
 // ==================== MY PLAYLIST PHASE 1 ====================
 // My Playlist registration is independent from Admin permission.
 // The Telegram ID that determines ownership always comes from validated initData.
@@ -2073,6 +2082,11 @@ app.post('/api/my-playlists', async (req, res) => {
         updated_at AS "updatedAt"
     `, [auth.telegramId, name]);
 
+    broadcastMyPlaylistChanged(auth.telegramId, {
+      action: 'create_playlist',
+      playlistId: result.rows[0].id
+    });
+
     return res.status(201).json({ success: true, playlist: result.rows[0] });
   } catch (error) {
     console.error('❌ Không thể tạo My Playlist:', error);
@@ -2108,6 +2122,12 @@ app.patch('/api/my-playlists/:id', async (req, res) => {
     if (result.rowCount === 0) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy playlist.' });
     }
+
+    broadcastMyPlaylistChanged(auth.telegramId, {
+      action: 'rename_playlist',
+      playlistId
+    });
+
     return res.json({ success: true, playlist: result.rows[0] });
   } catch (error) {
     console.error('❌ Không thể đổi tên My Playlist:', error);
@@ -2134,6 +2154,12 @@ app.delete('/api/my-playlists/:id', async (req, res) => {
     if (result.rowCount === 0) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy playlist.' });
     }
+
+    broadcastMyPlaylistChanged(auth.telegramId, {
+      action: 'delete_playlist',
+      playlistId
+    });
+
     return res.json({ success: true, deletedPlaylistId: result.rows[0].id });
   } catch (error) {
     console.error('❌ Không thể xóa My Playlist:', error);
@@ -2257,6 +2283,12 @@ app.post('/api/my-playlists/:id/songs', async (req, res) => {
       [playlistId, auth.telegramId]
     );
 
+    broadcastMyPlaylistChanged(auth.telegramId, {
+      action: 'add_song',
+      playlistId,
+      songId: result.rows[0].id
+    });
+
     return res.status(201).json({ success: true, song: result.rows[0] });
   } catch (error) {
     console.error('❌ Không thể thêm bài hát vào My Playlist:', error);
@@ -2293,6 +2325,12 @@ app.delete('/api/my-playlists/:id/songs/:songId', async (req, res) => {
       'UPDATE playlists SET updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND telegram_id = $2',
       [playlistId, auth.telegramId]
     );
+
+    broadcastMyPlaylistChanged(auth.telegramId, {
+      action: 'delete_song',
+      playlistId,
+      songId: result.rows[0].id
+    });
 
     return res.json({ success: true, deletedSongId: result.rows[0].id });
   } catch (error) {
@@ -2369,6 +2407,12 @@ app.patch('/api/my-playlists/:id/songs/reorder', async (req, res) => {
     );
 
     await client.query('COMMIT');
+
+    broadcastMyPlaylistChanged(auth.telegramId, {
+      action: 'reorder_songs',
+      playlistId
+    });
+
     return res.json({ success: true, songIds: normalizedSongIds });
   } catch (error) {
     try { await client.query('ROLLBACK'); } catch (_) {}
@@ -3397,6 +3441,11 @@ io.on('connection', (socket) => {
     socket.authenticated = true;
     socket.isAdmin = admin;
     socket.adminRole = adminRole;
+    socket.telegramId = telegramId;
+
+    // Room riêng cho My Playlist của chính Telegram user này.
+    // telegramId lấy từ initData đã được server xác thực.
+    socket.join(`myplaylist:${telegramId}`);
 
     console.log(`🔐 Telegram ID: ${telegramId} | Admin: ${admin}`);
 
