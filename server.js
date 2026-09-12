@@ -2207,6 +2207,45 @@ app.get('/api/my-playlists/:id/songs', async (req, res) => {
       ORDER BY ps.position ASC, ps.id ASC
     `, [playlistId]);
 
+    // Phase 4A.1: tự bổ sung title cho các bài cũ chưa có title.
+    // Chỉ gọi YouTube cho những dòng thiếu title; title đã có sẽ không gọi lại.
+    const missingTitleSongs = songsResult.rows.filter(song => !String(song.title || '').trim());
+    let titleUpdated = false;
+
+    if (missingTitleSongs.length > 0) {
+      const resolvedTitles = await Promise.all(
+        missingTitleSongs.map(async song => ({
+          id: song.id,
+          title: await getYouTubeTitle(song.youtubeUrl)
+        }))
+      );
+
+      for (const item of resolvedTitles) {
+        const resolvedTitle = String(item.title || '').trim();
+        if (!resolvedTitle || resolvedTitle === 'Bài hát YouTube') continue;
+
+        const updateResult = await pool.query(
+          `UPDATE playlist_songs
+           SET title = $1
+           WHERE id = $2 AND playlist_id = $3 AND (title IS NULL OR BTRIM(title) = '')`,
+          [resolvedTitle, item.id, playlistId]
+        );
+
+        if (updateResult.rowCount > 0) {
+          titleUpdated = true;
+          const song = songsResult.rows.find(row => Number(row.id) === Number(item.id));
+          if (song) song.title = resolvedTitle;
+        }
+      }
+    }
+
+    if (titleUpdated && typeof broadcastMyPlaylistChanged === 'function') {
+      broadcastMyPlaylistChanged(auth.telegramId, {
+        action: 'update_song_title',
+        playlistId
+      });
+    }
+
     return res.json({
       success: true,
       playlist: playlistResult.rows[0],
@@ -2236,7 +2275,8 @@ app.post('/api/my-playlists/:id/songs', async (req, res) => {
     return res.status(400).json({ success: false, message: 'Link YouTube không hợp lệ.' });
   }
 
-  const title = String(req.body?.title ?? '').trim().slice(0, 500) || null;
+  const requestedTitle = String(req.body?.title ?? '').trim().slice(0, 500) || null;
+  const title = requestedTitle || await getYouTubeTitle(youtubeUrl);
   const thumbnailUrl = String(req.body?.thumbnailUrl ?? '').trim().slice(0, 1000) ||
     `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`;
 
