@@ -1599,6 +1599,83 @@ async function requireTelegramAdmin(req, res) {
   return { ok: true, user: auth.user };
 }
 
+// ==================== MY PLAYLIST USER MANAGEMENT (PHASE 4B) ====================
+// Read-only: Admin/Owner được xem danh sách tài khoản đã đăng ký My Playlist.
+// Quyền được xác thực từ Telegram initData ở server; không nhận telegramId từ client.
+app.get('/api/my-playlist-users', async (req, res) => {
+  const initData = req.query?.initData || '';
+  const auth = validateTelegramInitData(initData);
+
+  if (!auth.valid) {
+    return res.status(401).json({
+      success: false,
+      message: `Xác thực Telegram thất bại: ${auth.message}`
+    });
+  }
+
+  const requesterId = String(auth.user.id);
+  const requesterRole = await getAdminRole(requesterId);
+
+  if (requesterRole !== 'owner' && requesterRole !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      message: 'Bạn không có quyền xem danh sách người dùng My Playlist.'
+    });
+  }
+
+  const search = String(req.query?.search || '').trim().slice(0, 100);
+
+  try {
+    const result = await pool.query(`
+      SELECT
+        m.telegram_id,
+        m.registered_at,
+        m.last_seen_at,
+        u.username,
+        u.first_name,
+        u.last_name,
+        COUNT(DISTINCT p.id)::INTEGER AS playlist_count,
+        COUNT(ps.id)::INTEGER AS song_count
+      FROM my_playlist_users m
+      LEFT JOIN users u
+        ON u.telegram_id = m.telegram_id
+      LEFT JOIN playlists p
+        ON p.telegram_id = m.telegram_id
+      LEFT JOIN playlist_songs ps
+        ON ps.playlist_id = p.id
+      WHERE (
+        $1 = ''
+        OR m.telegram_id ILIKE '%' || $1 || '%'
+        OR COALESCE(u.username, '') ILIKE '%' || $1 || '%'
+        OR COALESCE(u.first_name, '') ILIKE '%' || $1 || '%'
+        OR COALESCE(u.last_name, '') ILIKE '%' || $1 || '%'
+      )
+      GROUP BY
+        m.telegram_id,
+        m.registered_at,
+        m.last_seen_at,
+        u.username,
+        u.first_name,
+        u.last_name
+      ORDER BY m.registered_at DESC, m.telegram_id ASC
+      LIMIT 200
+    `, [search]);
+
+    return res.json({
+      success: true,
+      requesterRole,
+      total: result.rows.length,
+      users: result.rows
+    });
+  } catch (error) {
+    console.error('❌ Không thể lấy danh sách người dùng My Playlist:', error.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Không thể lấy danh sách người dùng My Playlist.'
+    });
+  }
+});
+
 // ==================== ADMIN MANAGEMENT (STEP 8E) ====================
 // Owner-only core APIs. UI và realtime revoke được để sang các bước tiếp theo.
 

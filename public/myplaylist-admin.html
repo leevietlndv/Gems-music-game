@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>GEMS Radio — Quản lý My Playlist</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;padding:0 12px 28px;font-family:Arial,sans-serif;background:#172033;color:#eef3f9}
+    .container{width:100%;max-width:980px;margin:0 auto}
+    .nav{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 2px 12px}
+    .nav-title{font-size:17px;font-weight:700}.nav a{color:#9ecbff;text-decoration:none;font-size:13px}
+    h1{margin:8px 0 4px;font-size:22px}.subtitle{color:#9aa8bc;font-size:13px;margin-bottom:14px}
+    .card{background:#202a3b;border:1px solid #34425a;border-radius:11px;padding:13px;margin-bottom:12px}
+    .status{font-size:13px;line-height:1.45}.status.success{color:#7ddc8a}.status.error{color:#ff8f8f}.status.info{color:#aebbd0}
+    .toolbar{display:flex;gap:8px;align-items:center}.search{flex:1;min-width:0;height:40px;border:1px solid #42516a;border-radius:8px;background:#182235;color:#eef3f9;padding:0 11px;font-size:14px;outline:none}.search:focus{border-color:#6ea8df}
+    .refresh{height:40px;padding:0 12px;border:0;border-radius:8px;background:#34445d;color:#fff;font-weight:600;cursor:pointer}.refresh:disabled{opacity:.55;cursor:not-allowed}
+    .summary{display:flex;justify-content:space-between;gap:8px;color:#9aa8bc;font-size:12px;margin-top:9px}
+    .user-list{display:grid;gap:9px}.user-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:start;background:#29364b;border:1px solid #3b4960;border-radius:9px;padding:11px}
+    .user-main{min-width:0}.user-name{font-size:14px;font-weight:700;overflow-wrap:anywhere}.user-id{font-size:11px;color:#a8b6ca;margin-top:4px;overflow-wrap:anywhere}.user-meta{font-size:11px;color:#8f9eb4;margin-top:6px;line-height:1.55}
+    .stats{display:flex;flex-direction:column;align-items:flex-end;gap:5px;white-space:nowrap}.badge{display:inline-block;padding:4px 7px;border-radius:999px;background:#34445d;color:#c9d7e8;font-size:11px}
+    .empty{color:#8492a8;text-align:center;padding:18px 8px;font-size:13px}.hidden{display:none!important}
+    @media(max-width:620px){body{padding-left:9px;padding-right:9px}.toolbar{flex-direction:column;align-items:stretch}.refresh{width:100%}.user-row{grid-template-columns:1fr}.stats{flex-direction:row;align-items:center;justify-content:flex-start;flex-wrap:wrap}.summary{flex-direction:column;gap:3px}}
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="nav"><span class="nav-title">👥 Quản lý My Playlist</span><a href="/myplaylist.html">← My Playlist</a></div>
+  <h1>Người dùng My Playlist</h1>
+  <div class="subtitle">Chỉ Admin/Owner được xem. Trang này hiện chỉ có chức năng xem và tìm kiếm.</div>
+
+  <section class="card">
+    <div id="status" class="status info">⏳ Đang xác thực quyền Admin...</div>
+  </section>
+
+  <section id="content" class="hidden">
+    <section class="card">
+      <div class="toolbar">
+        <input id="search" class="search" type="search" autocomplete="off" placeholder="Tìm Telegram ID, username hoặc tên..." maxlength="100">
+        <button id="refresh" class="refresh" type="button">↻ Làm mới</button>
+      </div>
+      <div class="summary"><span id="role"></span><span id="count">0 người dùng</span></div>
+    </section>
+
+    <section class="card">
+      <div id="userList" class="user-list"><div class="empty">Đang tải...</div></div>
+    </section>
+  </section>
+</div>
+
+<script>
+const tg=window.Telegram?.WebApp;if(tg){try{tg.ready()}catch(e){}try{tg.expand()}catch(e){}}
+let initData=tg?.initData||'';
+function resolveInitData(){const data=tg?.initData||'';if(data)initData=data;return initData}
+const $=id=>document.getElementById(id);
+function esc(s){return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
+function formatDate(value){if(!value)return '—';const d=new Date(value);if(Number.isNaN(d.getTime()))return String(value);return d.toLocaleString('vi-VN')}
+function displayName(user){const full=[user.first_name,user.last_name].filter(Boolean).join(' ').trim();return full||(user.username?'@'+user.username:'Chưa có tên Telegram')}
+function setStatus(text,type='info'){$('status').textContent=text;$('status').className='status '+type}
+function renderUsers(users){
+  if(!Array.isArray(users)||users.length===0){$('userList').innerHTML='<div class="empty">Không tìm thấy người dùng My Playlist.</div>';$('count').textContent='0 người dùng';return}
+  $('count').textContent=`${users.length} người dùng`;
+  $('userList').innerHTML=users.map(user=>{
+    const username=user.username?`@${esc(user.username)}`:'Chưa có username';
+    const name=esc(displayName(user));
+    const id=esc(user.telegram_id);
+    const playlists=Number(user.playlist_count)||0;
+    const songs=Number(user.song_count)||0;
+    return `<div class="user-row"><div class="user-main"><div class="user-name">${name}</div><div class="user-id">${username} · Telegram ID: ${id}</div><div class="user-meta">Đăng ký: ${esc(formatDate(user.registered_at))}<br>Lần cuối hoạt động: ${esc(formatDate(user.last_seen_at))}</div></div><div class="stats"><span class="badge">📁 ${playlists} playlist</span><span class="badge">🎵 ${songs} bài hát</span></div></div>`;
+  }).join('');
+}
+let searchTimer=null;
+async function loadUsers(){
+  resolveInitData();
+  if(!initData){setStatus('⚠️ Không nhận được Telegram initData. Hãy mở trang từ Telegram Mini App.','error');return}
+  $('refresh').disabled=true;
+  const search=String($('search').value||'').trim();
+  try{
+    const response=await fetch(`/api/my-playlist-users?initData=${encodeURIComponent(initData)}&search=${encodeURIComponent(search)}`,{method:'GET',cache:'no-store'});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok||data.success!==true){$('content').classList.add('hidden');setStatus(`❌ ${data.message||'Không thể tải danh sách người dùng My Playlist.'}`,'error');return}
+    $('content').classList.remove('hidden');
+    $('role').textContent=data.requesterRole==='owner'?'Quyền: Owner':'Quyền: Admin';
+    renderUsers(data.users||[]);
+    setStatus('✅ Đã xác thực quyền quản trị.','success');
+  }catch(error){console.error('My Playlist user management error:',error);setStatus('❌ Lỗi kết nối máy chủ.','error')}
+  finally{$('refresh').disabled=false}
+}
+$('refresh').addEventListener('click',loadUsers);
+$('search').addEventListener('input',()=>{clearTimeout(searchTimer);searchTimer=setTimeout(loadUsers,300)});
+function waitForTelegramInitData(){
+  if(resolveInitData()){loadUsers();return}
+  const startedAt=Date.now();
+  const timer=setInterval(()=>{if(resolveInitData()){clearInterval(timer);loadUsers();return}if(Date.now()-startedAt>=15000){clearInterval(timer);loadUsers()}},250);
+}
+waitForTelegramInitData();
+</script>
+</body>
+</html>
