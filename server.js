@@ -2164,16 +2164,21 @@ app.get('/api/my-playlists/:id/songs', async (req, res) => {
 
     const songsResult = await pool.query(`
       SELECT
-        id,
-        youtube_video_id AS "youtubeVideoId",
-        youtube_url AS "youtubeUrl",
-        title,
-        thumbnail_url AS "thumbnailUrl",
-        position,
-        created_at AS "createdAt"
-      FROM playlist_songs
-      WHERE playlist_id = $1
-      ORDER BY position ASC, id ASC
+        ps.id,
+        ps.youtube_video_id AS "youtubeVideoId",
+        ps.youtube_url AS "youtubeUrl",
+        ps.title,
+        ps.thumbnail_url AS "thumbnailUrl",
+        ps.position,
+        ps.created_at AS "createdAt",
+        EXISTS (
+          SELECT 1
+          FROM songs s
+          WHERE s.video_id = ps.youtube_video_id
+        ) AS "inGems"
+      FROM playlist_songs ps
+      WHERE ps.playlist_id = $1
+      ORDER BY ps.position ASC, ps.id ASC
     `, [playlistId]);
 
     return res.json({
@@ -2507,8 +2512,9 @@ app.post('/api/submit', async (req, res) => {
       return { success: true, song: insertResult.rows[0] };
     });
 
-    // Nếu mutation trả về lỗi nghiệp vụ (ví dụ bài đã tồn tại),
-    // trả nguyên kết quả về client thay vì cố truy cập result.song.id.
+    // Trả nguyên kết quả nghiệp vụ cho client.
+    // Duplicate/blacklist không có result.song nên không được
+    // truy cập result.song ở nhánh thất bại.
     if (!result.success) {
       return res.json(result);
     }
