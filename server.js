@@ -199,6 +199,51 @@ async function initDatabase() {
     ON admin_audit_logs (target_telegram_id)
   `);
 
+  // My Playlist Phase 1: registry người dùng đã kích hoạt My Playlist.
+  // Tách độc lập khỏi admin_users để revoke quyền Admin không làm mất quyền
+  // sử dụng hoặc dữ liệu playlist cá nhân.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS my_playlist_users (
+      telegram_id TEXT PRIMARY KEY,
+      registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      last_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS playlists (
+      id SERIAL PRIMARY KEY,
+      telegram_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_playlists_telegram_id
+    ON playlists (telegram_id)
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS playlist_songs (
+      id SERIAL PRIMARY KEY,
+      playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+      youtube_video_id TEXT NOT NULL,
+      youtube_url TEXT NOT NULL,
+      title TEXT,
+      thumbnail_url TEXT,
+      position INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT uq_playlist_song_video UNIQUE (playlist_id, youtube_video_id)
+    )
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_playlist_songs_playlist_position
+    ON playlist_songs (playlist_id, position, id)
+  `);
+
   // Phiên bản vote mới: LIKE = +1, DISLIKE = -1.
   // Bản health-v1 cũ dùng ngược dấu, nên chỉ đảo dấu đúng một lần.
   // Chạy trong transaction để không bao giờ đảo dấu 2 lần nếu server
@@ -1867,6 +1912,467 @@ function broadcastState() {
   });
 }
 
+
+// ==================== MY PLAYLIST PHASE 1 ====================
+// My Playlist registration is independent from Admin permission.
+// The Telegram ID that determines ownership always comes from validated initData.
+async function requireMyPlaylistUser(req, res, { autoRegisterAdmin = true } = {}) {
+  const initData = req.body?.initData || req.query?.initData || '';
+  const auth = validateTelegramInitData(initData);
+
+  if (!auth.valid) {
+    res.status(401).json({
+      success: false,
+      message: `Xác thực Telegram thất bại: ${auth.message}`
+    });
+    return { ok: false };
+  }
+
+  const telegramId = String(auth.user.id);
+  const adminRole = await getAdminRole(telegramId);
+  const isAdminUser = adminRole === 'owner' || adminRole === 'admin';
+
+  try {
+    if (autoRegisterAdmin && isAdminUser) {
+      await pool.query(`
+        INSERT INTO my_playlist_users (telegram_id)
+        VALUES ($1)
+        ON CONFLICT (telegram_id)
+        DO UPDATE SET last_seen_at = CURRENT_TIMESTAMP
+      `, [telegramId]);
+      return { ok: true, user: auth.user, telegramId, adminRole, registered: true };
+    }
+
+    const result = await pool.query(`
+      SELECT telegram_id
+      FROM my_playlist_users
+      WHERE telegram_id = $1
+      LIMIT 1
+    `, [telegramId]);
+
+    if (result.rowCount === 0) {
+      res.status(403).json({
+        success: false,
+        code: 'MY_PLAYLIST_NOT_REGISTERED',
+        message: 'Bạn chưa đăng ký My Playlist.'
+      });
+      return { ok: false };
+    }
+
+    await pool.query(`
+      UPDATE my_playlist_users
+      SET last_seen_at = CURRENT_TIMESTAMP
+      WHERE telegram_id = $1
+    `, [telegramId]);
+
+    return { ok: true, user: auth.user, telegramId, adminRole, registered: true };
+  } catch (error) {
+    console.error('❌ Không thể kiểm tra My Playlist user:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Không thể kiểm tra đăng ký My Playlist.'
+    });
+    return { ok: false };
+  }
+}
+
+app.post('/api/my-playlist/register', async (req, res) => {
+  const initData = req.body?.initData || '';
+  const auth = validateTelegramInitData(initData);
+
+  if (!auth.valid) {
+    return res.status(401).json({
+      success: false,
+      message: `Xác thực Telegram thất bại: ${auth.message}`
+    });
+  }
+
+  const telegramId = String(auth.user.id);
+  const submittedTelegramId = normalizeManagedTelegramId(req.body?.telegramId);
+
+  try {
+    const adminRole = await getAdminRole(telegramId);
+    const isAdminUser = adminRole === 'owner' || adminRole === 'admin';
+
+    // Admin/Owner được đăng ký tự động; không cần nhập ID.
+    if (!isAdminUser && submittedTelegramId !== telegramId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Telegram ID không khớp với tài khoản Telegram hiện tại.'
+      });
+    }
+
+    await pool.query(`
+      INSERT INTO my_playlist_users (telegram_id)
+      VALUES ($1)
+      ON CONFLICT (telegram_id)
+      DO UPDATE SET last_seen_at = CURRENT_TIMESTAMP
+    `, [telegramId]);
+
+    return res.json({
+      success: true,
+      telegramId,
+      registered: true,
+      autoRegistered: isAdminUser
+    });
+  } catch (error) {
+    console.error('❌ Không thể đăng ký My Playlist:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Không thể đăng ký My Playlist.'
+    });
+  }
+});
+
+app.get('/api/my-playlists', async (req, res) => {
+  const auth = await requireMyPlaylistUser(req, res);
+  if (!auth.ok) return;
+
+  try {
+    const result = await pool.query(`
+      SELECT
+        p.id,
+        p.name,
+        p.created_at AS "createdAt",
+        p.updated_at AS "updatedAt",
+        COUNT(ps.id)::INTEGER AS "songCount"
+      FROM playlists p
+      LEFT JOIN playlist_songs ps ON ps.playlist_id = p.id
+      WHERE p.telegram_id = $1
+      GROUP BY p.id
+      ORDER BY p.created_at ASC, p.id ASC
+    `, [auth.telegramId]);
+
+    return res.json({ success: true, playlists: result.rows });
+  } catch (error) {
+    console.error('❌ Không thể tải My Playlists:', error);
+    return res.status(500).json({ success: false, message: 'Không thể tải playlist.' });
+  }
+});
+
+app.post('/api/my-playlists', async (req, res) => {
+  const auth = await requireMyPlaylistUser(req, res);
+  if (!auth.ok) return;
+
+  const name = String(req.body?.name ?? '').trim();
+  if (!name || name.length > 100) {
+    return res.status(400).json({
+      success: false,
+      message: 'Tên playlist phải từ 1 đến 100 ký tự.'
+    });
+  }
+
+  try {
+    const result = await pool.query(`
+      INSERT INTO playlists (telegram_id, name)
+      VALUES ($1, $2)
+      RETURNING
+        id,
+        name,
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+    `, [auth.telegramId, name]);
+
+    return res.status(201).json({ success: true, playlist: result.rows[0] });
+  } catch (error) {
+    console.error('❌ Không thể tạo My Playlist:', error);
+    return res.status(500).json({ success: false, message: 'Không thể tạo playlist.' });
+  }
+});
+
+app.patch('/api/my-playlists/:id', async (req, res) => {
+  const auth = await requireMyPlaylistUser(req, res);
+  if (!auth.ok) return;
+
+  const playlistId = Number.parseInt(req.params.id, 10);
+  const name = String(req.body?.name ?? '').trim();
+  if (!Number.isInteger(playlistId) || playlistId <= 0) {
+    return res.status(400).json({ success: false, message: 'ID playlist không hợp lệ.' });
+  }
+  if (!name || name.length > 100) {
+    return res.status(400).json({ success: false, message: 'Tên playlist phải từ 1 đến 100 ký tự.' });
+  }
+
+  try {
+    const result = await pool.query(`
+      UPDATE playlists
+      SET name = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2 AND telegram_id = $3
+      RETURNING
+        id,
+        name,
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+    `, [name, playlistId, auth.telegramId]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy playlist.' });
+    }
+    return res.json({ success: true, playlist: result.rows[0] });
+  } catch (error) {
+    console.error('❌ Không thể đổi tên My Playlist:', error);
+    return res.status(500).json({ success: false, message: 'Không thể cập nhật playlist.' });
+  }
+});
+
+app.delete('/api/my-playlists/:id', async (req, res) => {
+  const auth = await requireMyPlaylistUser(req, res);
+  if (!auth.ok) return;
+
+  const playlistId = Number.parseInt(req.params.id, 10);
+  if (!Number.isInteger(playlistId) || playlistId <= 0) {
+    return res.status(400).json({ success: false, message: 'ID playlist không hợp lệ.' });
+  }
+
+  try {
+    const result = await pool.query(`
+      DELETE FROM playlists
+      WHERE id = $1 AND telegram_id = $2
+      RETURNING id
+    `, [playlistId, auth.telegramId]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy playlist.' });
+    }
+    return res.json({ success: true, deletedPlaylistId: result.rows[0].id });
+  } catch (error) {
+    console.error('❌ Không thể xóa My Playlist:', error);
+    return res.status(500).json({ success: false, message: 'Không thể xóa playlist.' });
+  }
+});
+
+app.get('/api/my-playlists/:id/songs', async (req, res) => {
+  const auth = await requireMyPlaylistUser(req, res);
+  if (!auth.ok) return;
+
+  const playlistId = Number.parseInt(req.params.id, 10);
+  if (!Number.isInteger(playlistId) || playlistId <= 0) {
+    return res.status(400).json({ success: false, message: 'ID playlist không hợp lệ.' });
+  }
+
+  try {
+    const playlistResult = await pool.query(`
+      SELECT id, name
+      FROM playlists
+      WHERE id = $1 AND telegram_id = $2
+      LIMIT 1
+    `, [playlistId, auth.telegramId]);
+
+    if (playlistResult.rowCount === 0) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy playlist.' });
+    }
+
+    const songsResult = await pool.query(`
+      SELECT
+        id,
+        youtube_video_id AS "youtubeVideoId",
+        youtube_url AS "youtubeUrl",
+        title,
+        thumbnail_url AS "thumbnailUrl",
+        position,
+        created_at AS "createdAt"
+      FROM playlist_songs
+      WHERE playlist_id = $1
+      ORDER BY position ASC, id ASC
+    `, [playlistId]);
+
+    return res.json({
+      success: true,
+      playlist: playlistResult.rows[0],
+      songs: songsResult.rows
+    });
+  } catch (error) {
+    console.error('❌ Không thể tải bài hát My Playlist:', error);
+    return res.status(500).json({ success: false, message: 'Không thể tải bài hát.' });
+  }
+});
+
+app.post('/api/my-playlists/:id/songs', async (req, res) => {
+  const auth = await requireMyPlaylistUser(req, res);
+  if (!auth.ok) return;
+
+  const playlistId = Number.parseInt(req.params.id, 10);
+  const youtubeUrl = String(req.body?.youtubeUrl ?? req.body?.url ?? '').trim();
+  if (!Number.isInteger(playlistId) || playlistId <= 0) {
+    return res.status(400).json({ success: false, message: 'ID playlist không hợp lệ.' });
+  }
+  if (!youtubeUrl || youtubeUrl.length > 500) {
+    return res.status(400).json({ success: false, message: 'Link YouTube không hợp lệ.' });
+  }
+
+  const videoId = getYouTubeVideoId(youtubeUrl);
+  if (!videoId) {
+    return res.status(400).json({ success: false, message: 'Link YouTube không hợp lệ.' });
+  }
+
+  const title = String(req.body?.title ?? '').trim().slice(0, 500) || null;
+  const thumbnailUrl = String(req.body?.thumbnailUrl ?? '').trim().slice(0, 1000) ||
+    `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`;
+
+  try {
+    const playlistResult = await pool.query(`
+      SELECT id
+      FROM playlists
+      WHERE id = $1 AND telegram_id = $2
+      LIMIT 1
+    `, [playlistId, auth.telegramId]);
+    if (playlistResult.rowCount === 0) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy playlist.' });
+    }
+
+    const maxPositionResult = await pool.query(`
+      SELECT COALESCE(MAX(position), -1) AS max_position
+      FROM playlist_songs
+      WHERE playlist_id = $1
+    `, [playlistId]);
+    const nextPosition = Number(maxPositionResult.rows[0].max_position) + 1;
+
+    const result = await pool.query(`
+      INSERT INTO playlist_songs (
+        playlist_id, youtube_video_id, youtube_url, title, thumbnail_url, position
+      )
+      VALUES ($1, $2, $3, $4, $5, $6)
+      ON CONFLICT (playlist_id, youtube_video_id) DO NOTHING
+      RETURNING
+        id,
+        youtube_video_id AS "youtubeVideoId",
+        youtube_url AS "youtubeUrl",
+        title,
+        thumbnail_url AS "thumbnailUrl",
+        position,
+        created_at AS "createdAt"
+    `, [playlistId, videoId, youtubeUrl, title, thumbnailUrl, nextPosition]);
+
+    if (result.rowCount === 0) {
+      return res.status(409).json({ success: false, message: 'Bài hát này đã có trong playlist.' });
+    }
+
+    await pool.query(
+      'UPDATE playlists SET updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND telegram_id = $2',
+      [playlistId, auth.telegramId]
+    );
+
+    return res.status(201).json({ success: true, song: result.rows[0] });
+  } catch (error) {
+    console.error('❌ Không thể thêm bài hát vào My Playlist:', error);
+    return res.status(500).json({ success: false, message: 'Không thể thêm bài hát vào playlist.' });
+  }
+});
+
+app.delete('/api/my-playlists/:id/songs/:songId', async (req, res) => {
+  const auth = await requireMyPlaylistUser(req, res);
+  if (!auth.ok) return;
+
+  const playlistId = Number.parseInt(req.params.id, 10);
+  const songId = Number.parseInt(req.params.songId, 10);
+  if (!Number.isInteger(playlistId) || playlistId <= 0 || !Number.isInteger(songId) || songId <= 0) {
+    return res.status(400).json({ success: false, message: 'ID playlist/bài hát không hợp lệ.' });
+  }
+
+  try {
+    const result = await pool.query(`
+      DELETE FROM playlist_songs ps
+      USING playlists p
+      WHERE ps.id = $1
+        AND ps.playlist_id = p.id
+        AND p.id = $2
+        AND p.telegram_id = $3
+      RETURNING ps.id
+    `, [songId, playlistId, auth.telegramId]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy bài hát trong playlist.' });
+    }
+
+    await pool.query(
+      'UPDATE playlists SET updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND telegram_id = $2',
+      [playlistId, auth.telegramId]
+    );
+
+    return res.json({ success: true, deletedSongId: result.rows[0].id });
+  } catch (error) {
+    console.error('❌ Không thể xóa bài hát My Playlist:', error);
+    return res.status(500).json({ success: false, message: 'Không thể xóa bài hát.' });
+  }
+});
+
+app.patch('/api/my-playlists/:id/songs/reorder', async (req, res) => {
+  const auth = await requireMyPlaylistUser(req, res);
+  if (!auth.ok) return;
+
+  const playlistId = Number.parseInt(req.params.id, 10);
+  const songIds = Array.isArray(req.body?.songIds) ? req.body.songIds : null;
+  if (!Number.isInteger(playlistId) || playlistId <= 0 || !songIds || songIds.length === 0) {
+    return res.status(400).json({ success: false, message: 'Danh sách thứ tự bài hát không hợp lệ.' });
+  }
+
+  const normalizedSongIds = songIds.map(id => Number.parseInt(id, 10));
+  if (normalizedSongIds.some(id => !Number.isInteger(id) || id <= 0) ||
+      new Set(normalizedSongIds).size !== normalizedSongIds.length) {
+    return res.status(400).json({ success: false, message: 'Danh sách thứ tự bài hát không hợp lệ.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const playlistResult = await client.query(`
+      SELECT id
+      FROM playlists
+      WHERE id = $1 AND telegram_id = $2
+      FOR UPDATE
+    `, [playlistId, auth.telegramId]);
+    if (playlistResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: 'Không tìm thấy playlist.' });
+    }
+
+    const songsResult = await client.query(`
+      SELECT id
+      FROM playlist_songs
+      WHERE playlist_id = $1
+      ORDER BY position ASC, id ASC
+    `, [playlistId]);
+    const existingIds = songsResult.rows.map(row => Number(row.id));
+
+    if (existingIds.length !== normalizedSongIds.length ||
+        existingIds.some(id => !normalizedSongIds.includes(id))) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        message: 'Danh sách sắp xếp không khớp với playlist hiện tại.'
+      });
+    }
+
+    // Đưa position về khoảng trống trước khi gán lại thứ tự, tránh UNIQUE/index
+    // tương lai trên position bị va chạm trong cùng một statement/transaction.
+    await client.query(
+      'UPDATE playlist_songs SET position = position + $1 WHERE playlist_id = $2',
+      [normalizedSongIds.length + 1, playlistId]
+    );
+
+    for (let index = 0; index < normalizedSongIds.length; index += 1) {
+      await client.query(
+        'UPDATE playlist_songs SET position = $1 WHERE id = $2 AND playlist_id = $3',
+        [index, normalizedSongIds[index], playlistId]
+      );
+    }
+
+    await client.query(
+      'UPDATE playlists SET updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+      [playlistId]
+    );
+
+    await client.query('COMMIT');
+    return res.json({ success: true, songIds: normalizedSongIds });
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    console.error('❌ Không thể lưu thứ tự My Playlist:', error);
+    return res.status(500).json({ success: false, message: 'Không thể lưu thứ tự playlist.' });
+  } finally {
+    client.release();
+  }
+});
 
 // ==================== API: SUBMIT SONG ====================
 app.post('/api/submit', async (req, res) => {
