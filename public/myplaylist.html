@@ -64,7 +64,32 @@ const tg=window.Telegram?.WebApp;if(tg){tg.ready();tg.expand()}
 let initData=tg?.initData||'';
 function resolveInitData(){initData=tg?.initData||initData;return !!initData}
 function esc(s){return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
-function videoId(url){try{return typeof getYouTubeVideoId==='function'?getYouTubeVideoId(url):null}catch(e){return null}}
+function videoId(url){
+  const raw = String(url || '').trim();
+
+  if (
+    !window.YouTubeUtils ||
+    typeof window.YouTubeUtils.getYouTubeVideoId !== 'function'
+  ) {
+    console.error('[My Playlist] youtube.js chưa được load.', {
+      page: location.href,
+      youtubeUtils: window.YouTubeUtils
+    });
+
+    alert('❌ Không tải được bộ nhận diện YouTube. Vui lòng tải lại trang.');
+    return null;
+  }
+
+  const id = window.YouTubeUtils.getYouTubeVideoId(raw);
+
+  console.log('[My Playlist] YouTube parser:', {
+    url: raw,
+    videoId: id
+  });
+
+  return id;
+}
+
 const $=id=>document.getElementById(id);const state={playlists:[],active:null};
 async function api(url,options={}){resolveInitData();const headers={'Content-Type':'application/json',...(options.headers||{})};const method=(options.method||'GET').toUpperCase();let body=options.body;if(method==='GET'){const separator=url.includes('?')?'&':'?';url=`${url}${separator}initData=${encodeURIComponent(initData)}`;}else if(body&&typeof body!=='string')body={...body,initData};else if(!body)body={initData};if(body)options.body=JSON.stringify(body);options.headers=headers;options.method=method;const r=await fetch(url,options);let d={};try{d=await r.json()}catch{}if(!r.ok){const e=new Error(d.message||`HTTP ${r.status}`);e.status=r.status;e.data=d;throw e}return d}
 function setStatus(text,type=''){const el=$('status');el.textContent=text;el.className='status '+type}
