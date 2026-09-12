@@ -2507,11 +2507,20 @@ app.post('/api/submit', async (req, res) => {
       return { success: true, song: insertResult.rows[0] };
     });
 
+    // Nếu mutation trả về lỗi nghiệp vụ (ví dụ bài đã tồn tại),
+    // trả nguyên kết quả về client thay vì cố truy cập result.song.id.
+    if (!result.success) {
+      return res.json(result);
+    }
+
     console.log(
       `🎵 Đã lưu bài hát #${result.song.id} vào PostgreSQL: ${cleanUrl}`
     );
 
-    res.json({ success: true });
+    return res.json({
+      success: true,
+      song: result.song
+    });
   } catch (error) {
     console.error('❌ Lỗi lưu bài hát vào PostgreSQL:', error);
     res.status(500).json({
