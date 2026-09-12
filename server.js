@@ -1998,11 +1998,11 @@ app.post('/api/submit', async (req, res) => {
       songs.sort((a, b) => Number(a.id) - Number(b.id));
       broadcastState();
 
-      return { success: true };
+      return { success: true, song: insertResult.rows[0] };
     });
 
     console.log(
-      `🎵 Đã lưu bài hát #${result.rows[0].id} vào PostgreSQL: ${cleanUrl}`
+      `🎵 Đã lưu bài hát #${result.song.id} vào PostgreSQL: ${cleanUrl}`
     );
 
     res.json({ success: true });
@@ -2761,11 +2761,7 @@ app.post('/api/unblock-song', async (req, res) => {
     });
 
     if (result.status) return res.status(result.status).json(result);
-    return res.json({
-      success: true,
-      message: 'Đã gỡ chặn bài hát! Hãy gửi lại link nếu muốn thêm bài này.',
-      song: unblockedSong
-    });
+    return res.json(result);
   } catch (error) {
     console.error('❌ Lỗi gỡ chặn bài hát:', error);
     return res.status(500).json({
