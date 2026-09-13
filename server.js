@@ -1682,8 +1682,8 @@ app.get('/api/my-playlist-users', async (req, res) => {
 
     const summaryResult = await pool.query(`
       SELECT
-        COUNT(*)::INTEGER AS user_count,
-        COUNT(*) FILTER (WHERE is_locked = TRUE)::INTEGER AS locked_user_count,
+        COUNT(DISTINCT m.telegram_id)::INTEGER AS user_count,
+        COUNT(DISTINCT m.telegram_id) FILTER (WHERE m.is_locked = TRUE)::INTEGER AS locked_user_count,
         COUNT(DISTINCT p.id)::INTEGER AS playlist_count,
         COUNT(ps.id)::INTEGER AS song_count
       FROM my_playlist_users m
