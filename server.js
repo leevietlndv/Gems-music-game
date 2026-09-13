@@ -927,6 +927,14 @@ async function refreshRealtimeAdminPermission(telegramId, knownRole = undefined)
       });
     }
 
+    if (!isAdminNow) {
+      // Revoke quyền phải đồng thời loại socket khỏi các watcher room để
+      // tài khoản đã mất quyền không tiếp tục nhận tín hiệu My Playlist.
+      for (const room of Array.from(socket.rooms)) {
+        if (room.startsWith('myplaylist-watch:')) socket.leave(room);
+      }
+    }
+
     if (!isAdminNow && socket.id === autoPlayControllerSocketId) {
       revokedController = true;
     }
@@ -3829,6 +3837,8 @@ io.on('connection', (socket) => {
 
     // Admin/Owner có thể theo dõi realtime một tài khoản My Playlist cụ thể
     // khi đang mở trang quản trị. Quyền được kiểm tra lại ở server.
+    // Xóa listener cũ để tránh đăng ký trùng nếu socket re-authenticate.
+    socket.removeAllListeners('watchMyPlaylistUser');
     socket.on('watchMyPlaylistUser', async (payload = {}) => {
       if (socket.authenticated !== true || (socket.adminRole !== 'owner' && socket.adminRole !== 'admin')) {
         return;
