@@ -44,6 +44,7 @@ button{border:0;cursor:pointer}.primary{width:100%;height:42px;border-radius:8px
   </div>
 
   <div id="app" class="hidden">
+    <div id="lockNotice" class="card hidden"><div class="register-title">🔒 My Playlist đang bị khóa</div><div class="register-help">Tài khoản của bạn hiện không thể chỉnh sửa playlist. Dữ liệu playlist và bài hát vẫn được giữ nguyên.</div></div>
     <div class="card">
       <div class="section-head"><h2>Playlist của tôi</h2><span id="playlistCount" class="count">0 playlist</span></div>
       <button id="createPlaylistBtn" class="primary">＋ Tạo playlist mới</button>
@@ -91,20 +92,21 @@ function videoId(url){
   return id;
 }
 const $=id=>document.getElementById(id);
-const state={playlists:[],active:null,gemsSongIds:new Set()};
+const state={playlists:[],active:null,gemsSongIds:new Set(),locked:false};
 let gemsSocket=null;
 async function api(url,options={}){resolveInitData();const headers={'Content-Type':'application/json',...(options.headers||{})};const method=(options.method||'GET').toUpperCase();let body=options.body;if(method==='GET'){const separator=url.includes('?')?'&':'?';url=`${url}${separator}initData=${encodeURIComponent(initData)}`;}else if(body&&typeof body!=='string')body={...body,initData};else if(!body)body={initData};if(body)options.body=JSON.stringify(body);options.headers=headers;options.method=method;const r=await fetch(url,options);let d={};try{d=await r.json()}catch{}if(!r.ok){const e=new Error(d.message||`HTTP ${r.status}`);e.status=r.status;e.data=d;throw e}return d}
 function setStatus(text,type=''){const el=$('status');el.textContent=text;el.className='status '+type}
 function showRegister(){ $('statusCard').classList.add('hidden');$('registerCard').classList.remove('hidden');$('app').classList.add('hidden') }
 function showApp(){ $('statusCard').classList.add('hidden');$('registerCard').classList.add('hidden');$('app').classList.remove('hidden') }
-function playlistHtml(p,songs){return `<div class="playlist" data-playlist-id="${p.id}"><div class="playlist-head"><div class="playlist-name" title="${esc(p.name)}">${esc(p.name)}</div><div class="playlist-actions"><button title="Đổi tên" data-action="rename">✏️</button><button title="Xóa playlist" data-action="delete">🗑️</button></div></div><div class="playlist-body"><div class="song-list" data-song-list="${p.id}">${songs.length?songs.map(songHtml).join(''):'<div class="empty">Playlist này chưa có bài hát.</div>'}</div><div class="add-row"><input data-add-input="${p.id}" placeholder="Dán link YouTube..." maxlength="500"><button data-action="add" title="Thêm bài hát">＋</button></div><div class="playlist-footer"><span>${songs.length} bài hát</span><span>Kéo thả để đổi thứ tự</span></div></div></div>`}
+function playlistHtml(p,songs){const disabled=state.locked?'disabled':'';return `<div class="playlist" data-playlist-id="${p.id}"><div class="playlist-head"><div class="playlist-name" title="${esc(p.name)}">${esc(p.name)}</div><div class="playlist-actions"><button title="Đổi tên" data-action="rename" ${disabled}>✏️</button><button title="Xóa playlist" data-action="delete" ${disabled}>🗑️</button></div></div><div class="playlist-body"><div class="song-list" data-song-list="${p.id}">${songs.length?songs.map(songHtml).join(''):'<div class="empty">Playlist này chưa có bài hát.</div>'}</div><div class="add-row"><input data-add-input="${p.id}" placeholder="Dán link YouTube..." maxlength="500" ${disabled}><button data-action="add" title="Thêm bài hát" ${disabled}>＋</button></div><div class="playlist-footer"><span>${songs.length} bài hát</span><span>${state.locked?'Chỉ xem':'Kéo thả để đổi thứ tự'}</span></div></div></div>`}
 function songHtml(s){
   const thumb=s.thumbnailUrl||`https://i.ytimg.com/vi/${encodeURIComponent(s.youtubeVideoId)}/hqdefault.jpg`;
   const inGems=s.inGems===true||state.gemsSongIds.has(String(s.youtubeVideoId));
   const sendTitle=inGems?'Bài hát đang có trong GEMS Studio':'Gửi bài hát vào GEMS Studio';
-  return `<div class="song" draggable="true" data-song-id="${s.id}"><span class="drag">☷</span><img class="thumb" src="${esc(thumb)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><div class="song-main"><div class="song-title" title="${esc(s.title||s.youtubeUrl)}">${esc(s.title||s.youtubeUrl)}</div><div class="song-id">YouTube · ${esc(s.youtubeVideoId)}</div></div><div class="song-actions"><button class="${inGems?'send-gems-sent':''}" title="${sendTitle}" data-action="send-gems" ${inGems?'disabled':''}>🎵</button><button title="Xóa bài hát" data-action="delete-song">🗑️</button></div></div>`
+  const disabled=state.locked?'disabled':'';
+  return `<div class="song" draggable="${state.locked?'false':'true'}" data-song-id="${s.id}"><span class="drag">${state.locked?'🔒':'☷'}</span><img class="thumb" src="${esc(thumb)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><div class="song-main"><div class="song-title" title="${esc(s.title||s.youtubeUrl)}">${esc(s.title||s.youtubeUrl)}</div><div class="song-id">YouTube · ${esc(s.youtubeVideoId)}</div></div><div class="song-actions"><button class="${inGems?'send-gems-sent':''}" title="${sendTitle}" data-action="send-gems" ${inGems||state.locked?'disabled':''}>🎵</button><button title="Xóa bài hát" data-action="delete-song" ${disabled}>🗑️</button></div></div>`
 }
-async function loadPlaylists(){const d=await api('/api/my-playlists');const playlists=d.playlists||[];state.playlists=await Promise.all(playlists.map(async p=>{try{const sd=await api(`/api/my-playlists/${p.id}/songs`);return {...p,songs:sd.songs||[]}}catch(e){console.error('❌ Không thể tải bài hát playlist:',p.id,e);return {...p,songs:[]}}}));renderPlaylists();showApp()}
+async function loadPlaylists(){const d=await api('/api/my-playlists');state.locked=d.locked===true;$('lockNotice').classList.toggle('hidden',!state.locked);$('createPlaylistBtn').disabled=state.locked;$('createPlaylistBtn').title=state.locked?'My Playlist đang bị khóa':'';const playlists=d.playlists||[];state.playlists=await Promise.all(playlists.map(async p=>{try{const sd=await api(`/api/my-playlists/${p.id}/songs`);return {...p,songs:sd.songs||[]}}catch(e){console.error('❌ Không thể tải bài hát playlist:',p.id,e);return {...p,songs:[]}}}));renderPlaylists();showApp()}
 function applyGemsStatusToButtons(){
   document.querySelectorAll('.song').forEach(el=>{
     const pid=el.closest('.playlist')?.dataset.playlistId;
@@ -132,10 +134,10 @@ function updateGemsStatusFromSharedSongs(sharedSongs){
   applyGemsStatusToButtons();
 }
 function renderPlaylists(){const wrap=$('playlists');$('playlistCount').textContent=`${state.playlists.length} playlist`;if(!state.playlists.length){wrap.innerHTML='<div class="card"><div class="empty">Chưa có playlist. Hãy tạo playlist đầu tiên.</div></div>';return}wrap.innerHTML=state.playlists.map(p=>playlistHtml(p,p.songs||[])).join('');attachDnD()}
-async function createPlaylist(){const name=prompt('Tên playlist mới:','Playlist của tôi');if(name===null)return;const clean=name.trim();if(!clean){alert('Tên playlist không được để trống.');return}try{await api('/api/my-playlists',{method:'POST',body:{name:clean}});await loadPlaylists()}catch(e){alert(e.message)}}
-async function renamePlaylist(id,current){const name=prompt('Tên playlist mới:',current);if(name===null)return;const clean=name.trim();if(!clean){alert('Tên playlist không được để trống.');return}try{await api(`/api/my-playlists/${id}`,{method:'PATCH',body:{name:clean}});await loadPlaylists()}catch(e){alert(e.message)}}
-async function deletePlaylist(id,name){if(!confirm(`Xóa playlist “${name}” và toàn bộ bài hát bên trong?`))return;try{await api(`/api/my-playlists/${id}`,{method:'DELETE'});await loadPlaylists()}catch(e){alert(e.message)}}
-async function addSong(id,input){const url=input.value.trim();if(!url){alert('Vui lòng nhập link YouTube.');return}const vid=videoId(url);if(!vid){alert('Link YouTube không hợp lệ.');return}input.disabled=true;try{await api(`/api/my-playlists/${id}/songs`,{method:'POST',body:{youtubeUrl:url,thumbnailUrl:`https://i.ytimg.com/vi/${encodeURIComponent(vid)}/hqdefault.jpg`}});input.value='';await loadPlaylists()}catch(e){alert(e.message)}finally{input.disabled=false}}
+async function createPlaylist(){if(state.locked){alert('My Playlist của bạn đang bị khóa.');return}const name=prompt('Tên playlist mới:','Playlist của tôi');if(name===null)return;const clean=name.trim();if(!clean){alert('Tên playlist không được để trống.');return}try{await api('/api/my-playlists',{method:'POST',body:{name:clean}});await loadPlaylists()}catch(e){alert(e.message)}}
+async function renamePlaylist(id,current){if(state.locked){alert('My Playlist của bạn đang bị khóa.');return}const name=prompt('Tên playlist mới:',current);if(name===null)return;const clean=name.trim();if(!clean){alert('Tên playlist không được để trống.');return}try{await api(`/api/my-playlists/${id}`,{method:'PATCH',body:{name:clean}});await loadPlaylists()}catch(e){alert(e.message)}}
+async function deletePlaylist(id,name){if(state.locked){alert('My Playlist của bạn đang bị khóa.');return}if(!confirm(`Xóa playlist “${name}” và toàn bộ bài hát bên trong?`))return;try{await api(`/api/my-playlists/${id}`,{method:'DELETE'});await loadPlaylists()}catch(e){alert(e.message)}}
+async function addSong(id,input){if(state.locked){alert('My Playlist của bạn đang bị khóa.');return}const url=input.value.trim();if(!url){alert('Vui lòng nhập link YouTube.');return}const vid=videoId(url);if(!vid){alert('Link YouTube không hợp lệ.');return}input.disabled=true;try{await api(`/api/my-playlists/${id}/songs`,{method:'POST',body:{youtubeUrl:url,thumbnailUrl:`https://i.ytimg.com/vi/${encodeURIComponent(vid)}/hqdefault.jpg`}});input.value='';await loadPlaylists()}catch(e){alert(e.message)}finally{input.disabled=false}}
 async function sendSongToGems(pid,sid,btn){
   const p=state.playlists.find(x=>Number(x.id)===Number(pid));
   const song=(p?.songs||[]).find(x=>Number(x.id)===Number(sid));
@@ -168,7 +170,7 @@ async function sendSongToGems(pid,sid,btn){
     btn.textContent=oldText;
   }
 }
-async function deleteSong(pid,sid){if(!confirm('Xóa bài hát này khỏi playlist?'))return;try{await api(`/api/my-playlists/${pid}/songs/${sid}`,{method:'DELETE'});await loadPlaylists()}catch(e){alert(e.message)}}
+async function deleteSong(pid,sid){if(state.locked){alert('My Playlist của bạn đang bị khóa.');return}if(!confirm('Xóa bài hát này khỏi playlist?'))return;try{await api(`/api/my-playlists/${pid}/songs/${sid}`,{method:'DELETE'});await loadPlaylists()}catch(e){alert(e.message)}}
 const reorderInFlight=new Set();
 async function saveReorder(list,previousHtml){
   const pid=String(list.dataset.songList);
@@ -364,6 +366,7 @@ function attachTouchDnD(list){
   });
 }
 function attachDnD(){
+  if(state.locked)return;
   document.querySelectorAll('.song-list').forEach(list=>{
     let dragged=null;
     list.querySelectorAll('.song').forEach(el=>{
@@ -386,6 +389,7 @@ function attachDnD(){
         delete list.dataset.previousHtml;
         const ids=[...list.querySelectorAll('.song')].map(x=>Number(x.dataset.songId));
         if(ids.length>1){
+          if(state.locked){dragged=null;return;}
           reorderInFlight.add(String(list.dataset.songList));
           try{
             await api(`/api/my-playlists/${list.dataset.songList}/songs/reorder`,{method:'PATCH',body:{songIds:ids}});

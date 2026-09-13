@@ -206,8 +206,15 @@ async function initDatabase() {
     CREATE TABLE IF NOT EXISTS my_playlist_users (
       telegram_id TEXT PRIMARY KEY,
       registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      last_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      last_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      is_locked BOOLEAN NOT NULL DEFAULT FALSE
     )
+  `);
+
+  // Phase 4D: thêm trạng thái khóa cho bảng đã tồn tại từ các phase trước.
+  await pool.query(`
+    ALTER TABLE my_playlist_users
+    ADD COLUMN IF NOT EXISTS is_locked BOOLEAN NOT NULL DEFAULT FALSE
   `);
 
   await pool.query(`
@@ -1600,7 +1607,7 @@ async function requireTelegramAdmin(req, res) {
 }
 
 // ==================== MY PLAYLIST USER MANAGEMENT (PHASE 4B) ====================
-// Read-only: Admin/Owner được xem danh sách tài khoản đã đăng ký My Playlist.
+// Admin/Owner được xem danh sách tài khoản đã đăng ký My Playlist.
 // Quyền được xác thực từ Telegram initData ở server; không nhận telegramId từ client.
 app.get('/api/my-playlist-users', async (req, res) => {
   const initData = req.query?.initData || '';
@@ -1632,6 +1639,7 @@ app.get('/api/my-playlist-users', async (req, res) => {
         m.telegram_id,
         m.registered_at,
         m.last_seen_at,
+        m.is_locked,
         u.username,
         u.first_name,
         u.last_name,
@@ -1656,6 +1664,7 @@ app.get('/api/my-playlist-users', async (req, res) => {
         m.telegram_id,
         m.registered_at,
         m.last_seen_at,
+        m.is_locked,
         u.username,
         u.first_name,
         u.last_name
@@ -1715,6 +1724,7 @@ app.get('/api/my-playlist-users/:telegramId', async (req, res) => {
         m.telegram_id,
         m.registered_at,
         m.last_seen_at,
+        m.is_locked,
         u.username,
         u.first_name,
         u.last_name
@@ -1797,6 +1807,86 @@ app.get('/api/my-playlist-users/:telegramId', async (req, res) => {
       message: 'Không thể tải chi tiết người dùng My Playlist.'
     });
   }
+});
+
+// ==================== MY PLAYLIST USER LOCK (PHASE 4D) ====================
+// Chỉ Owner được khóa/mở khóa quyền sử dụng My Playlist. Dữ liệu playlist không bị xóa.
+async function requireMyPlaylistOwner(req, res) {
+  const initData = req.body?.initData || req.query?.initData || '';
+  const auth = validateTelegramInitData(initData);
+  if (!auth.valid) {
+    res.status(401).json({
+      success: false,
+      message: `Xác thực Telegram thất bại: ${auth.message}`
+    });
+    return { ok: false };
+  }
+
+  const requesterId = String(auth.user.id);
+  const requesterRole = await getAdminRole(requesterId);
+  if (requesterRole !== 'owner') {
+    res.status(403).json({
+      success: false,
+      message: 'Chỉ Owner mới có quyền khóa hoặc mở khóa My Playlist.'
+    });
+    return { ok: false };
+  }
+
+  return { ok: true, telegramId: requesterId, requesterRole };
+}
+
+async function setMyPlaylistUserLock(req, res, locked) {
+  const auth = await requireMyPlaylistOwner(req, res);
+  if (!auth.ok) return;
+
+  const targetTelegramId = String(req.params.telegramId || '').trim();
+  if (!/^\d+$/.test(targetTelegramId)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Telegram ID không hợp lệ.'
+    });
+  }
+
+  try {
+    const result = await pool.query(`
+      UPDATE my_playlist_users
+      SET is_locked = $1
+      WHERE telegram_id = $2
+      RETURNING telegram_id, is_locked
+    `, [locked, targetTelegramId]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy người dùng My Playlist.'
+      });
+    }
+
+    broadcastMyPlaylistChanged(targetTelegramId, {
+      action: locked ? 'lock_user' : 'unlock_user',
+      locked
+    });
+
+    return res.json({
+      success: true,
+      telegramId: targetTelegramId,
+      locked
+    });
+  } catch (error) {
+    console.error(`❌ Không thể ${locked ? 'khóa' : 'mở khóa'} My Playlist user:`, error.message);
+    return res.status(500).json({
+      success: false,
+      message: `Không thể ${locked ? 'khóa' : 'mở khóa'} người dùng My Playlist.`
+    });
+  }
+}
+
+app.patch('/api/my-playlist-users/:telegramId/lock', async (req, res) => {
+  return setMyPlaylistUserLock(req, res, true);
+});
+
+app.patch('/api/my-playlist-users/:telegramId/unlock', async (req, res) => {
+  return setMyPlaylistUserLock(req, res, false);
 });
 
 // ==================== ADMIN MANAGEMENT (STEP 8E) ====================
@@ -2125,7 +2215,7 @@ function broadcastMyPlaylistChanged(telegramId, payload = {}) {
 // ==================== MY PLAYLIST PHASE 1 ====================
 // My Playlist registration is independent from Admin permission.
 // The Telegram ID that determines ownership always comes from validated initData.
-async function requireMyPlaylistUser(req, res, { autoRegisterAdmin = true } = {}) {
+async function requireMyPlaylistUser(req, res, { autoRegisterAdmin = true, requireWriteAccess = false } = {}) {
   const initData = req.body?.initData || req.query?.initData || '';
   const auth = validateTelegramInitData(initData);
 
@@ -2143,17 +2233,27 @@ async function requireMyPlaylistUser(req, res, { autoRegisterAdmin = true } = {}
 
   try {
     if (autoRegisterAdmin && isAdminUser) {
-      await pool.query(`
+      const adminRegistration = await pool.query(`
         INSERT INTO my_playlist_users (telegram_id)
         VALUES ($1)
         ON CONFLICT (telegram_id)
         DO UPDATE SET last_seen_at = CURRENT_TIMESTAMP
+        RETURNING is_locked
       `, [telegramId]);
-      return { ok: true, user: auth.user, telegramId, adminRole, registered: true };
+      const locked = adminRegistration.rows[0]?.is_locked === true;
+      if (requireWriteAccess && locked) {
+        res.status(423).json({
+          success: false,
+          code: 'MY_PLAYLIST_LOCKED',
+          message: 'Tài khoản My Playlist của bạn đang bị khóa.'
+        });
+        return { ok: false, locked: true };
+      }
+      return { ok: true, user: auth.user, telegramId, adminRole, registered: true, locked };
     }
 
     const result = await pool.query(`
-      SELECT telegram_id
+      SELECT telegram_id, is_locked
       FROM my_playlist_users
       WHERE telegram_id = $1
       LIMIT 1
@@ -2168,13 +2268,24 @@ async function requireMyPlaylistUser(req, res, { autoRegisterAdmin = true } = {}
       return { ok: false };
     }
 
+    const locked = result.rows[0]?.is_locked === true;
+
     await pool.query(`
       UPDATE my_playlist_users
       SET last_seen_at = CURRENT_TIMESTAMP
       WHERE telegram_id = $1
     `, [telegramId]);
 
-    return { ok: true, user: auth.user, telegramId, adminRole, registered: true };
+    if (requireWriteAccess && locked) {
+      res.status(423).json({
+        success: false,
+        code: 'MY_PLAYLIST_LOCKED',
+        message: 'Tài khoản My Playlist của bạn đang bị khóa.'
+      });
+      return { ok: false, locked: true };
+    }
+
+    return { ok: true, user: auth.user, telegramId, adminRole, registered: true, locked };
   } catch (error) {
     console.error('❌ Không thể kiểm tra My Playlist user:', error.message);
     res.status(500).json({
@@ -2252,7 +2363,7 @@ app.get('/api/my-playlists', async (req, res) => {
       ORDER BY p.created_at ASC, p.id ASC
     `, [auth.telegramId]);
 
-    return res.json({ success: true, playlists: result.rows });
+    return res.json({ success: true, locked: auth.locked === true, playlists: result.rows });
   } catch (error) {
     console.error('❌ Không thể tải My Playlists:', error);
     return res.status(500).json({ success: false, message: 'Không thể tải playlist.' });
@@ -2260,7 +2371,7 @@ app.get('/api/my-playlists', async (req, res) => {
 });
 
 app.post('/api/my-playlists', async (req, res) => {
-  const auth = await requireMyPlaylistUser(req, res);
+  const auth = await requireMyPlaylistUser(req, res, { requireWriteAccess: true });
   if (!auth.ok) return;
 
   const name = String(req.body?.name ?? '').trim();
@@ -2295,7 +2406,7 @@ app.post('/api/my-playlists', async (req, res) => {
 });
 
 app.patch('/api/my-playlists/:id', async (req, res) => {
-  const auth = await requireMyPlaylistUser(req, res);
+  const auth = await requireMyPlaylistUser(req, res, { requireWriteAccess: true });
   if (!auth.ok) return;
 
   const playlistId = Number.parseInt(req.params.id, 10);
@@ -2336,7 +2447,7 @@ app.patch('/api/my-playlists/:id', async (req, res) => {
 });
 
 app.delete('/api/my-playlists/:id', async (req, res) => {
-  const auth = await requireMyPlaylistUser(req, res);
+  const auth = await requireMyPlaylistUser(req, res, { requireWriteAccess: true });
   if (!auth.ok) return;
 
   const playlistId = Number.parseInt(req.params.id, 10);
@@ -2458,7 +2569,7 @@ app.get('/api/my-playlists/:id/songs', async (req, res) => {
 });
 
 app.post('/api/my-playlists/:id/songs', async (req, res) => {
-  const auth = await requireMyPlaylistUser(req, res);
+  const auth = await requireMyPlaylistUser(req, res, { requireWriteAccess: true });
   if (!auth.ok) return;
 
   const playlistId = Number.parseInt(req.params.id, 10);
@@ -2537,7 +2648,7 @@ app.post('/api/my-playlists/:id/songs', async (req, res) => {
 });
 
 app.delete('/api/my-playlists/:id/songs/:songId', async (req, res) => {
-  const auth = await requireMyPlaylistUser(req, res);
+  const auth = await requireMyPlaylistUser(req, res, { requireWriteAccess: true });
   if (!auth.ok) return;
 
   const playlistId = Number.parseInt(req.params.id, 10);
@@ -2580,7 +2691,7 @@ app.delete('/api/my-playlists/:id/songs/:songId', async (req, res) => {
 });
 
 app.patch('/api/my-playlists/:id/songs/reorder', async (req, res) => {
-  const auth = await requireMyPlaylistUser(req, res);
+  const auth = await requireMyPlaylistUser(req, res, { requireWriteAccess: true });
   if (!auth.ok) return;
 
   const playlistId = Number.parseInt(req.params.id, 10);

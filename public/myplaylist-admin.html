@@ -28,7 +28,7 @@
 <div class="container">
   <div class="nav"><span class="nav-title">👥 Quản lý My Playlist</span><a href="/myplaylist.html">← My Playlist</a></div>
   <h1>Người dùng My Playlist</h1>
-  <div class="subtitle">Chỉ Admin/Owner được xem. Trang này hiện chỉ có chức năng xem và tìm kiếm.</div>
+  <div class="subtitle">Chỉ Admin/Owner được truy cập. Owner có thể khóa hoặc mở khóa quyền sử dụng My Playlist.</div>
 
   <section class="card">
     <div id="status" class="status info">⏳ Đang xác thực quyền Admin...</div>
@@ -74,17 +74,57 @@ function renderUsers(users){
     const id=esc(user.telegram_id);
     const playlists=Number(user.playlist_count)||0;
     const songs=Number(user.song_count)||0;
-    return `<div class="user-row" data-telegram-id="${id}" role="button" tabindex="0"><div class="user-main"><div class="user-name">${name}</div><div class="user-id">${username} · Telegram ID: ${id}</div><div class="user-meta">Đăng ký: ${esc(formatDate(user.registered_at))}<br>Lần cuối hoạt động: ${esc(formatDate(user.last_seen_at))}</div></div><div class="stats"><span class="badge">📁 ${playlists} playlist</span><span class="badge">🎵 ${songs} bài hát</span></div></div>`;
+    const locked=user.is_locked===true;
+    const lockButton=currentRequesterRole==='owner'
+      ? `<button class="lock-btn" type="button" data-lock-action="${locked?'unlock':'lock'}" title="${locked?'Mở khóa My Playlist':'Khóa My Playlist'}">${locked?'🔓':'🔒'}</button>`
+      : '';
+    return `<div class="user-row" data-telegram-id="${id}" role="button" tabindex="0"><div class="user-main"><div class="user-name">${name}</div><div class="user-id">${username} · Telegram ID: ${id}</div><div class="user-meta">Đăng ký: ${esc(formatDate(user.registered_at))}<br>Lần cuối hoạt động: ${esc(formatDate(user.last_seen_at))}</div></div><div class="stats"><span class="badge">📁 ${playlists} playlist</span><span class="badge">🎵 ${songs} bài hát</span>${locked?'<span class="badge">🔒 Đã khóa</span>':''}${lockButton}</div></div>`;
   }).join('');
   $('userList').querySelectorAll('.user-row').forEach(row=>{
     const open=()=>openUserDetail(row.dataset.telegramId);
-    row.addEventListener('click',open);
+    row.addEventListener('click',e=>{
+      if(e.target.closest('.lock-btn'))return;
+      open();
+    });
     row.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open()}});
+    const lockBtn=row.querySelector('.lock-btn');
+    if(lockBtn){
+      lockBtn.addEventListener('click',async e=>{
+        e.stopPropagation();
+        const locked=lockBtn.dataset.lockAction==='lock';
+        await toggleMyPlaylistUserLock(row.dataset.telegramId,locked);
+      });
+    }
   });
+}
+
+async function toggleMyPlaylistUserLock(telegramId, locked){
+  resolveInitData();
+  if(currentRequesterRole!=='owner'||!initData)return;
+  const action=locked?'khóa':'mở khóa';
+  if(!confirm(`Bạn có chắc muốn ${action} My Playlist của Telegram ID ${telegramId}?`))return;
+  try{
+    const response=await fetch(`/api/my-playlist-users/${encodeURIComponent(telegramId)}/${locked?'lock':'unlock'}`,{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({initData})
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok||data.success!==true){
+      alert(`❌ ${data.message||`Không thể ${action} My Playlist.`}`);
+      return;
+    }
+    await loadUsers();
+    setStatus(`✅ Đã ${locked?'khóa':'mở khóa'} My Playlist cho Telegram ID ${telegramId}.`,'success');
+  }catch(error){
+    console.error('My Playlist lock/unlock error:',error);
+    alert('❌ Lỗi kết nối máy chủ.');
+  }
 }
 
 let currentDetail=null;
 let openPlaylistId=null;
+let currentRequesterRole='admin';
 function setDetailStatus(text,type='info'){$('detailStatus').textContent=text;$('detailStatus').className='status '+type}
 function renderUserDetail(data){
   const user=data.user||{};
@@ -136,7 +176,7 @@ async function openUserDetail(telegramId){
     if(!response.ok||data.success!==true){setDetailStatus(`❌ ${data.message||'Không thể tải chi tiết người dùng.'}`,'error');return}
     currentDetail=data;
     renderUserDetail(data);
-    setDetailStatus(data.requesterRole==='owner'?'✅ Owner: có thể mở playlist và xem bài hát.':'👁️ Admin: chỉ được xem thông tin và danh sách playlist, không thể mở nội dung bài hát.','success');
+    setDetailStatus(data.user?.is_locked===true?'🔒 Tài khoản My Playlist đang bị khóa.':'','success');
   }catch(error){console.error('My Playlist user detail error:',error);setDetailStatus('❌ Lỗi kết nối máy chủ.','error')}
 }
 
@@ -151,6 +191,7 @@ async function loadUsers(){
     const data=await response.json().catch(()=>({}));
     if(!response.ok||data.success!==true){$('content').classList.add('hidden');setStatus(`❌ ${data.message||'Không thể tải danh sách người dùng My Playlist.'}`,'error');return}
     $('content').classList.remove('hidden');
+    currentRequesterRole=data.requesterRole==='owner'?'owner':'admin';
     $('role').textContent=data.requesterRole==='owner'?'Quyền: Owner':'Quyền: Admin';
     renderUsers(data.users||[]);
     setStatus('✅ Đã xác thực quyền quản trị.','success');
