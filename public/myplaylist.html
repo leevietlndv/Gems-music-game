@@ -118,7 +118,21 @@ function songHtml(s){
   const active=Number(playerState.songId)===Number(s.id);
   return `<div class="song${active?' active-song':''}" draggable="true" data-song-id="${s.id}"><span class="drag">☷</span><div class="thumb-wrap"><img class="thumb" src="${esc(thumb)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><button class="thumb-play" type="button" data-action="play-song" title="Phát bài hát">▶</button></div><div class="song-main"><div class="song-title" title="${esc(s.title||s.youtubeUrl)}">${esc(s.title||s.youtubeUrl)}</div><div class="song-id">YouTube · ${esc(s.youtubeVideoId)}</div></div><div class="song-actions"><button title="Gửi bài hát vào GEMS Studio" data-action="send-gems">🎵</button><button title="Xóa bài hát" data-action="delete-song">🗑️</button></div></div>`
 }
-async function loadPlaylists(){const d=await api('/api/my-playlists');state.playlists=d.playlists||[];renderPlaylists();showApp()}
+async function loadPlaylists(){
+  const d=await api('/api/my-playlists');
+  const playlists=d.playlists||[];
+  state.playlists=await Promise.all(playlists.map(async p=>{
+    try{
+      const sd=await api(`/api/my-playlists/${p.id}/songs`);
+      return {...p,songs:sd.songs||[]};
+    }catch(e){
+      console.error('❌ Không thể tải bài hát playlist:',p.id,e);
+      return {...p,songs:[]};
+    }
+  }));
+  renderPlaylists();
+  showApp();
+}
 function renderPlaylists(){const wrap=$('playlists');$('playlistCount').textContent=`${state.playlists.length} playlist`;if(!state.playlists.length){wrap.innerHTML='<div class="card"><div class="empty">Chưa có playlist. Hãy tạo playlist đầu tiên.</div></div>';return}wrap.innerHTML=state.playlists.map(p=>playlistHtml(p,p.songs||[])).join('');attachDnD()}
 async function createPlaylist(){const name=prompt('Tên playlist mới:','Playlist của tôi');if(name===null)return;const clean=name.trim();if(!clean){alert('Tên playlist không được để trống.');return}try{await api('/api/my-playlists',{method:'POST',body:{name:clean}});await loadPlaylists()}catch(e){alert(e.message)}}
 async function renamePlaylist(id,current){const name=prompt('Tên playlist mới:',current);if(name===null)return;const clean=name.trim();if(!clean){alert('Tên playlist không được để trống.');return}try{await api(`/api/my-playlists/${id}`,{method:'PATCH',body:{name:clean}});await loadPlaylists()}catch(e){alert(e.message)}}
