@@ -1623,7 +1623,8 @@ app.get('/api/my-playlist-users', async (req, res) => {
     });
   }
 
-  const search = String(req.query?.search || '').trim().slice(0, 100);
+  // Chuẩn hóa khoảng trắng để tìm tên đầy đủ ổn định, ví dụ: "Duc Viet Sin".
+  const search = String(req.query?.search || '').trim().replace(/\s+/g, ' ').slice(0, 100);
 
   try {
     const result = await pool.query(`
@@ -1649,6 +1650,7 @@ app.get('/api/my-playlist-users', async (req, res) => {
         OR COALESCE(u.username, '') ILIKE '%' || $1 || '%'
         OR COALESCE(u.first_name, '') ILIKE '%' || $1 || '%'
         OR COALESCE(u.last_name, '') ILIKE '%' || $1 || '%'
+        OR CONCAT_WS(' ', NULLIF(TRIM(u.first_name), ''), NULLIF(TRIM(u.last_name), '')) ILIKE '%' || $1 || '%' 
       )
       GROUP BY
         m.telegram_id,
