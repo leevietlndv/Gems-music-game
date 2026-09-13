@@ -94,7 +94,7 @@ function formatTime(seconds){const s=Math.max(0,Math.floor(Number(seconds)||0)),
 function currentPlaylist(){return state.playlists.find(p=>Number(p.id)===Number(playerState.playlistId))||null}
 function currentSong(){return currentPlaylist()?.songs?.find(s=>Number(s.id)===Number(playerState.songId))||null}
 function setPlayerStatus(text,type=''){const e=$('playerStatus');e.textContent=text;e.className='player-status'+(type?' '+type:'')}
-function updatePlayerUI(){const s=currentSong(),r=$('playerTimeline');$('playerTitle').textContent=s?.title||s?.youtubeUrl||'Chưa chọn bài hát';$('playerCurrentTime').textContent=formatTime(playerState.currentTime);$('playerDuration').textContent=formatTime(playerState.duration);r.max=String(playerState.duration||0);r.value=String(Math.min(playerState.currentTime,playerState.duration||0));const ok=!!(playerState.ready&&playerState.songId&&s);$('playerPlayBtn').disabled=!ok;$('playerPrevBtn').disabled=!ok;$('playerNextBtn').disabled=!ok;r.disabled=!ok||!playerState.duration;$('playerPlayBtn').textContent=playerState.status==='playing'?'Ⅱ':'▶'}
+function updatePlayerUI(){const s=currentSong(),r=$('playerTimeline');$('playerTitle').textContent=s?.title||s?.youtubeUrl||'Chưa chọn bài hát';$('playerCurrentTime').textContent=formatTime(playerState.currentTime);$('playerDuration').textContent=formatTime(playerState.duration);r.max=String(playerState.duration||0);r.value=String(Math.min(playerState.currentTime,playerState.duration||0));const ok=!!(playerState.ready&&playerState.songId&&s);const p=currentPlaylist(),idx=p?.songs?.findIndex(x=>Number(x.id)===Number(playerState.songId))??-1;const hasPrev=idx>0,hasNext=idx>=0&&idx<p.songs.length-1;$('playerPlayBtn').disabled=!ok;$('playerPrevBtn').disabled=!ok||!hasPrev;$('playerNextBtn').disabled=!ok||!hasNext;r.disabled=!ok||!playerState.duration;$('playerPlayBtn').textContent=playerState.status==='playing'?'Ⅱ':'▶'}
 function showPlayer(){$('playerCard').classList.remove('hidden')}
 function nextGeneration(){playerState.generation++;playerState.pendingPlay=false}
 function loadSongIntoPlayer(pid,sid){const p=state.playlists.find(x=>Number(x.id)===Number(pid)),s=p?.songs?.find(x=>Number(x.id)===Number(sid));if(!p||!s||!playerState.ready||!playerState.player)return false;nextGeneration();playerState.playlistId=Number(pid);playerState.songId=Number(sid);playerState.status='loading';playerState.duration=0;playerState.currentTime=0;playerState.autoplayBlocked=false;playerState.pendingPlay=true;playerState.userActivated=true;showPlayer();updatePlayerUI();setPlayerStatus('⏳ Đang tải video...');const vid=String(s.youtubeVideoId||videoId(s.youtubeUrl)||'');if(!vid){playerState.status='error';playerState.pendingPlay=false;setPlayerStatus('❌ Không tìm thấy YouTube Video ID','error');updatePlayerUI();return false}try{playerState.player.loadVideoById({videoId:vid,startSeconds:0})}catch(e){playerState.status='error';playerState.pendingPlay=false;setPlayerStatus('❌ Không thể tải video','error');updatePlayerUI()}return true}
@@ -145,8 +145,24 @@ function attachDnD(){document.querySelectorAll('.song-list').forEach(list=>{let 
 $('createPlaylistBtn').addEventListener('click',createPlaylist);
 $('playerPlayBtn').addEventListener('click',togglePlayPause);
 $('playerTimeline').addEventListener('input',e=>seekPlayer(e.target.value));
-$('playerPrevBtn').addEventListener('click',()=>{});
-$('playerNextBtn').addEventListener('click',()=>{});
+function getAdjacentSong(direction){
+  const p=currentPlaylist();
+  if(!p?.songs?.length||!playerState.songId)return null;
+  const index=p.songs.findIndex(s=>Number(s.id)===Number(playerState.songId));
+  if(index<0)return null;
+  const nextIndex=index+direction;
+  if(nextIndex<0||nextIndex>=p.songs.length)return null;
+  return p.songs[nextIndex];
+}
+function playAdjacentSong(direction){
+  const song=getAdjacentSong(direction);
+  if(!song)return;
+  playerState.userActivated=true;
+  loadSongIntoPlayer(playerState.playlistId,Number(song.id));
+  renderPlaylists();
+}
+$('playerPrevBtn').addEventListener('click',()=>playAdjacentSong(-1));
+$('playerNextBtn').addEventListener('click',()=>playAdjacentSong(1));
 $('registerBtn').addEventListener('click',async()=>{const id=$('registerTelegramId').value.trim();if(!/^\d+$/.test(id)){alert('Telegram ID chỉ được chứa chữ số.');return}const b=$('registerBtn');b.disabled=true;b.textContent='⏳ Đang đăng ký...';try{await api('/api/my-playlist/register',{method:'POST',body:{telegramId:id}});await loadPlaylists()}catch(e){alert(e.message)}finally{b.disabled=false;b.textContent='🔐 Đăng ký và mở My Playlist'}});
 $('playlists').addEventListener('click',async e=>{const btn=e.target.closest('button');if(!btn)return;const box=e.target.closest('.playlist');if(!box)return;const id=Number(box.dataset.playlistId);const p=state.playlists.find(x=>Number(x.id)===id);const action=btn.dataset.action;if(action==='rename')return renamePlaylist(id,p?.name||'');if(action==='delete')return deletePlaylist(id,p?.name||'playlist');if(action==='play-song'){const song=e.target.closest('.song');if(song)playSong(id,Number(song.dataset.songId));return}if(action==='send-gems'){const song=e.target.closest('.song');return sendSongToGems(id,Number(song.dataset.songId),btn)}if(action==='delete-song'){const song=e.target.closest('.song');return deleteSong(id,Number(song.dataset.songId))}if(action==='add'){const input=box.querySelector(`[data-add-input="${id}"]`);return addSong(id,input)}});
 $('playlists').addEventListener('click',e=>{
