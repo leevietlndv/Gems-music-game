@@ -84,6 +84,7 @@ function renderUsers(users){
 }
 
 let currentDetail=null;
+let openPlaylistId=null;
 function setDetailStatus(text,type='info'){$('detailStatus').textContent=text;$('detailStatus').className='status '+type}
 function renderUserDetail(data){
   const user=data.user||{};
@@ -107,7 +108,18 @@ function showPlaylistSongs(playlistId){
   if(!currentDetail||currentDetail.requesterRole!=='owner')return;
   const playlist=(currentDetail.playlists||[]).find(p=>String(p.id)===String(playlistId));
   if(!playlist)return;
+
+  // Click lần 2 vào chính playlist đang mở -> đóng danh sách bài hát.
+  if(openPlaylistId===String(playlistId)){
+    openPlaylistId=null;
+    $('songDetail').classList.add('hidden');
+    $('playlistList').querySelectorAll('.playlist-row').forEach(row=>row.classList.remove('expanded'));
+    return;
+  }
+
+  openPlaylistId=String(playlistId);
   const songs=Array.isArray(playlist.songs)?playlist.songs:[];
+  $('playlistList').querySelectorAll('.playlist-row').forEach(row=>row.classList.toggle('expanded',row.dataset.playlistId===openPlaylistId));
   $('songDetail').classList.remove('hidden');
   $('songDetail').innerHTML=`<div class="detail-title">🎵 ${esc(playlist.name)}</div><div class="detail-meta">${songs.length} bài hát · Thứ tự playlist</div>${songs.length?`<div class="song-list">${songs.map(song=>`<div class="song-row"><img class="song-thumb" src="${esc(song.thumbnail_url||'')}" alt=""><div><div class="song-title">${esc(song.title||'Chưa có tiêu đề')}</div><div class="song-id">#${Number(song.position)+1} · Video ID: ${esc(song.youtube_video_id)}</div></div></div>`).join('')}</div>`:'<div class="detail-empty">Playlist này chưa có bài hát.</div>'}`;
   $('songDetail').scrollIntoView({behavior:'smooth',block:'start'});
@@ -116,6 +128,7 @@ async function openUserDetail(telegramId){
   resolveInitData();
   if(!initData){setStatus('⚠️ Không nhận được Telegram initData. Hãy mở trang từ Telegram Mini App.','error');return}
   $('listSection').classList.add('hidden');$('detailSection').classList.remove('hidden');
+  openPlaylistId=null;
   $('detailTitle').textContent='Chi tiết người dùng';$('detailMeta').textContent='';$('playlistList').innerHTML='';$('songDetail').innerHTML='';$('songDetail').classList.add('hidden');setDetailStatus('⏳ Đang tải...');
   try{
     const response=await fetch(`/api/my-playlist-users/${encodeURIComponent(telegramId)}?initData=${encodeURIComponent(initData)}`,{method:'GET',cache:'no-store'});
@@ -146,7 +159,7 @@ async function loadUsers(){
 }
 $('refresh').addEventListener('click',loadUsers);
 $('search').addEventListener('input',()=>{clearTimeout(searchTimer);searchTimer=setTimeout(loadUsers,300)});
-$('backToList').addEventListener('click',()=>{$('detailSection').classList.add('hidden');$('listSection').classList.remove('hidden');currentDetail=null});
+$('backToList').addEventListener('click',()=>{$('detailSection').classList.add('hidden');$('listSection').classList.remove('hidden');currentDetail=null;openPlaylistId=null});
 function waitForTelegramInitData(){
   if(resolveInitData()){loadUsers();return}
   const startedAt=Date.now();
