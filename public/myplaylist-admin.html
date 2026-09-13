@@ -16,12 +16,12 @@
     .status{font-size:13px;line-height:1.45}.status.success{color:#7ddc8a}.status.error{color:#ff8f8f}.status.info{color:#aebbd0}
     .toolbar{display:flex;gap:8px;align-items:center}.search{flex:1;min-width:0;height:40px;border:1px solid #42516a;border-radius:8px;background:#182235;color:#eef3f9;padding:0 11px;font-size:14px;outline:none}.search:focus{border-color:#6ea8df}
     .refresh{height:40px;padding:0 12px;border:0;border-radius:8px;background:#34445d;color:#fff;font-weight:600;cursor:pointer}.refresh:disabled{opacity:.55;cursor:not-allowed}
-    .summary{display:flex;justify-content:space-between;gap:8px;color:#9aa8bc;font-size:12px;margin-top:9px}
+    .summary{display:flex;justify-content:space-between;gap:8px;color:#9aa8bc;font-size:12px;margin-top:9px}.summary-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px}.summary-card{background:#29364b;border:1px solid #3b4960;border-radius:8px;padding:9px}.summary-label{font-size:10px;color:#8f9eb4}.summary-value{font-size:16px;font-weight:700;margin-top:3px}.detail-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:11px}.detail-summary .summary-card{padding:8px}
     .user-list{display:grid;gap:9px}.user-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:start;background:#29364b;border:1px solid #3b4960;border-radius:9px;padding:11px}
     .user-main{min-width:0}.user-name{font-size:14px;font-weight:700;overflow-wrap:anywhere}.user-id{font-size:11px;color:#a8b6ca;margin-top:4px;overflow-wrap:anywhere}.user-meta{font-size:11px;color:#8f9eb4;margin-top:6px;line-height:1.55}
     .stats{display:flex;flex-direction:column;align-items:flex-end;gap:5px;white-space:nowrap}.badge{display:inline-block;padding:4px 7px;border-radius:999px;background:#34445d;color:#c9d7e8;font-size:11px}
     .detail-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.detail-title{font-size:17px;font-weight:700}.back{height:34px;padding:0 10px;border:0;border-radius:7px;background:#34445d;color:#fff;font-weight:600;cursor:pointer}.detail-meta{color:#9aa8bc;font-size:12px;line-height:1.55;margin-top:7px}.playlist-list{display:grid;gap:8px;margin-top:10px}.playlist-row{background:#29364b;border:1px solid #3b4960;border-radius:9px;padding:10px}.playlist-row.clickable{cursor:pointer}.playlist-row.clickable:hover{border-color:#6ea8df}.playlist-name{font-size:14px;font-weight:700;overflow-wrap:anywhere}.playlist-meta{font-size:11px;color:#9aa8bc;margin-top:5px}.song-list{display:grid;gap:8px;margin-top:10px}.song-row{display:grid;grid-template-columns:72px minmax(0,1fr);gap:9px;align-items:center;background:#202a3b;border:1px solid #34425a;border-radius:8px;padding:7px}.song-thumb{width:72px;height:41px;object-fit:cover;border-radius:5px;background:#172033}.song-title{font-size:12px;font-weight:600;line-height:1.35;overflow-wrap:anywhere}.song-id{font-size:10px;color:#8f9eb4;margin-top:3px;overflow-wrap:anywhere}.detail-empty{color:#8492a8;text-align:center;padding:14px 8px;font-size:12px}.empty{color:#8492a8;text-align:center;padding:18px 8px;font-size:13px}.hidden{display:none!important}
-    @media(max-width:620px){body{padding-left:9px;padding-right:9px}.toolbar{flex-direction:column;align-items:stretch}.refresh{width:100%}.user-row{grid-template-columns:1fr}.stats{flex-direction:row;align-items:center;justify-content:flex-start;flex-wrap:wrap}.summary{flex-direction:column;gap:3px}}
+    @media(max-width:620px){body{padding-left:9px;padding-right:9px}.toolbar{flex-direction:column;align-items:stretch}.refresh{width:100%}.user-row{grid-template-columns:1fr}.stats{flex-direction:row;align-items:center;justify-content:flex-start;flex-wrap:wrap}.summary{flex-direction:column;gap:3px}.summary-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
   </style>
 </head>
 <body>
@@ -40,7 +40,7 @@
         <input id="search" class="search" type="search" autocomplete="off" placeholder="Tìm Telegram ID, username hoặc tên..." maxlength="100">
         <button id="refresh" class="refresh" type="button">↻ Làm mới</button>
       </div>
-      <div class="summary"><span id="role"></span><span id="count">0 người dùng</span></div>
+      <div class="summary"><span id="role"></span><span id="count">0 người dùng</span></div><div id="summaryStats" class="summary-stats"><div class="summary-card"><div class="summary-label">Người dùng</div><div id="summaryUsers" class="summary-value">0</div></div><div class="summary-card"><div class="summary-label">Đã khóa</div><div id="summaryLocked" class="summary-value">0</div></div><div class="summary-card"><div class="summary-label">Playlist</div><div id="summaryPlaylists" class="summary-value">0</div></div><div class="summary-card"><div class="summary-label">Bài hát</div><div id="summarySongs" class="summary-value">0</div></div></div>
     </section>
 
     <section id="listSection" class="card">
@@ -48,7 +48,7 @@
     </section>
 
     <section id="detailSection" class="card hidden">
-      <div class="detail-head"><div><div id="detailTitle" class="detail-title">Chi tiết người dùng</div><div id="detailMeta" class="detail-meta"></div></div><button id="backToList" class="back" type="button">← Danh sách</button></div>
+      <div class="detail-head"><div><div id="detailTitle" class="detail-title">Chi tiết người dùng</div><div id="detailMeta" class="detail-meta"></div><div id="detailSummary" class="detail-summary"></div></div><button id="backToList" class="back" type="button">← Danh sách</button></div>
       <div id="detailStatus" class="status info" style="margin-top:10px">⏳ Đang tải...</div>
       <div id="playlistList" class="playlist-list"></div>
       <div id="songDetail" class="hidden" style="margin-top:12px"></div>
@@ -65,8 +65,15 @@ function esc(s){return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&l
 function formatDate(value){if(!value)return '—';const d=new Date(value);if(Number.isNaN(d.getTime()))return String(value);return d.toLocaleString('vi-VN')}
 function displayName(user){const full=[user.first_name,user.last_name].filter(Boolean).join(' ').trim();return full||(user.username?'@'+user.username:'Chưa có tên Telegram')}
 function setStatus(text,type='info'){$('status').textContent=text;$('status').className='status '+type}
+function updateSummary(summary){
+  const s=summary||{};
+  $('summaryUsers').textContent=Number(s.user_count)||0;
+  $('summaryLocked').textContent=Number(s.locked_user_count)||0;
+  $('summaryPlaylists').textContent=Number(s.playlist_count)||0;
+  $('summarySongs').textContent=Number(s.song_count)||0;
+}
 function renderUsers(users){
-  if(!Array.isArray(users)||users.length===0){$('userList').innerHTML='<div class="empty">Không tìm thấy người dùng My Playlist.</div>';$('count').textContent='0 người dùng';return}
+  if(!Array.isArray(users)||users.length===0){$('userList').innerHTML='<div class="empty">Không tìm thấy người dùng My Playlist.</div>';$('count').textContent='0 người dùng';updateSummary({user_count:0,locked_user_count:0,playlist_count:0,song_count:0});return}
   $('count').textContent=`${users.length} người dùng`;
   $('userList').innerHTML=users.map(user=>{
     const username=user.username?`@${esc(user.username)}`:'Chưa có username';
@@ -133,6 +140,8 @@ function renderUserDetail(data){
   const username=user.username?`@${esc(user.username)}`:'Chưa có username';
   $('detailTitle').textContent=name;
   $('detailMeta').innerHTML=`${username} · Telegram ID: ${esc(user.telegram_id)}<br>Đăng ký: ${esc(formatDate(user.registered_at))} · Lần cuối hoạt động: ${esc(formatDate(user.last_seen_at))}<br>Quyền đang xem: ${role}`;
+  const detailSummary=data.summary||{};
+  $('detailSummary').innerHTML=`<div class="summary-card"><div class="summary-label">Playlist</div><div class="summary-value">${Number(detailSummary.playlistCount)||0}</div></div><div class="summary-card"><div class="summary-label">Bài hát</div><div class="summary-value">${Number(detailSummary.songCount)||0}</div></div>`;
   const playlists=Array.isArray(data.playlists)?data.playlists:[];
   $('playlistList').innerHTML=playlists.length?playlists.map(p=>{
     const canOpen=data.requesterRole==='owner';
@@ -191,6 +200,7 @@ async function loadUsers(){
     const data=await response.json().catch(()=>({}));
     if(!response.ok||data.success!==true){$('content').classList.add('hidden');setStatus(`❌ ${data.message||'Không thể tải danh sách người dùng My Playlist.'}`,'error');return}
     $('content').classList.remove('hidden');
+    updateSummary(data.summary);
     currentRequesterRole=data.requesterRole==='owner'?'owner':'admin';
     $('role').textContent=data.requesterRole==='owner'?'Quyền: Owner':'Quyền: Admin';
     renderUsers(data.users||[]);

@@ -1672,11 +1672,32 @@ app.get('/api/my-playlist-users', async (req, res) => {
       LIMIT 200
     `, [search]);
 
+    const summaryResult = await pool.query(`
+      SELECT
+        COUNT(*)::INTEGER AS user_count,
+        COUNT(*) FILTER (WHERE is_locked = TRUE)::INTEGER AS locked_user_count,
+        COUNT(DISTINCT p.id)::INTEGER AS playlist_count,
+        COUNT(ps.id)::INTEGER AS song_count
+      FROM my_playlist_users m
+      LEFT JOIN playlists p
+        ON p.telegram_id = m.telegram_id
+      LEFT JOIN playlist_songs ps
+        ON ps.playlist_id = p.id
+    `);
+
+    const summary = summaryResult.rows[0] || {
+      user_count: 0,
+      locked_user_count: 0,
+      playlist_count: 0,
+      song_count: 0
+    };
+
     return res.json({
       success: true,
       requesterRole,
       total: result.rows.length,
-      users: result.rows
+      users: result.rows,
+      summary
     });
   } catch (error) {
     console.error('❌ Không thể lấy danh sách người dùng My Playlist:', error.message);
@@ -1793,12 +1814,17 @@ app.get('/api/my-playlist-users/:telegramId', async (req, res) => {
         ? (songsByPlaylist.get(String(playlist.id)) || [])
         : undefined
     }));
+    const totalSongCount = playlists.reduce((sum, playlist) => sum + (Number(playlist.song_count) || 0), 0);
 
     return res.json({
       success: true,
       requesterRole,
       user,
-      playlists
+      playlists,
+      summary: {
+        playlistCount: playlists.length,
+        songCount: totalSongCount
+      }
     });
   } catch (error) {
     console.error('❌ Không thể lấy chi tiết người dùng My Playlist:', error.message);
