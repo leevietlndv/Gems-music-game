@@ -1678,6 +1678,127 @@ app.get('/api/my-playlist-users', async (req, res) => {
   }
 });
 
+// ==================== MY PLAYLIST USER DETAIL (PHASE 4C) ====================
+// Read-only detail for Admin/Owner. Playlist song contents are Owner-only.
+app.get('/api/my-playlist-users/:telegramId', async (req, res) => {
+  const initData = req.query?.initData || '';
+  const auth = validateTelegramInitData(initData);
+
+  if (!auth.valid) {
+    return res.status(401).json({
+      success: false,
+      message: `Xác thực Telegram thất bại: ${auth.message}`
+    });
+  }
+
+  const requesterId = String(auth.user.id);
+  const requesterRole = await getAdminRole(requesterId);
+
+  if (requesterRole !== 'owner' && requesterRole !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      message: 'Bạn không có quyền xem chi tiết người dùng My Playlist.'
+    });
+  }
+
+  const targetTelegramId = String(req.params.telegramId || '').trim();
+  if (!/^\d+$/.test(targetTelegramId)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Telegram ID không hợp lệ.'
+    });
+  }
+
+  try {
+    const userResult = await pool.query(`
+      SELECT
+        m.telegram_id,
+        m.registered_at,
+        m.last_seen_at,
+        u.username,
+        u.first_name,
+        u.last_name
+      FROM my_playlist_users m
+      LEFT JOIN users u
+        ON u.telegram_id = m.telegram_id
+      WHERE m.telegram_id = $1
+      LIMIT 1
+    `, [targetTelegramId]);
+
+    if (userResult.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy người dùng My Playlist.'
+      });
+    }
+
+    const playlistsResult = await pool.query(`
+      SELECT
+        p.id,
+        p.name,
+        p.created_at,
+        p.updated_at,
+        COUNT(ps.id)::INTEGER AS song_count
+      FROM playlists p
+      LEFT JOIN playlist_songs ps
+        ON ps.playlist_id = p.id
+      WHERE p.telegram_id = $1
+      GROUP BY p.id, p.name, p.created_at, p.updated_at
+      ORDER BY p.created_at DESC, p.id DESC
+    `, [targetTelegramId]);
+
+    let songsByPlaylist = new Map();
+
+    // Chỉ Owner mới được nhận nội dung bài hát của playlist.
+    if (requesterRole === 'owner') {
+      const songsResult = await pool.query(`
+        SELECT
+          ps.id,
+          ps.playlist_id,
+          ps.youtube_video_id,
+          ps.youtube_url,
+          ps.title,
+          ps.thumbnail_url,
+          ps.position,
+          ps.created_at
+        FROM playlist_songs ps
+        INNER JOIN playlists p
+          ON p.id = ps.playlist_id
+        WHERE p.telegram_id = $1
+        ORDER BY ps.playlist_id ASC, ps.position ASC, ps.id ASC
+      `, [targetTelegramId]);
+
+      songsByPlaylist = songsResult.rows.reduce((map, song) => {
+        const key = String(song.playlist_id);
+        if (!map.has(key)) map.set(key, []);
+        map.get(key).push(song);
+        return map;
+      }, new Map());
+    }
+
+    const user = userResult.rows[0];
+    const playlists = playlistsResult.rows.map(playlist => ({
+      ...playlist,
+      songs: requesterRole === 'owner'
+        ? (songsByPlaylist.get(String(playlist.id)) || [])
+        : undefined
+    }));
+
+    return res.json({
+      success: true,
+      requesterRole,
+      user,
+      playlists
+    });
+  } catch (error) {
+    console.error('❌ Không thể lấy chi tiết người dùng My Playlist:', error.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Không thể tải chi tiết người dùng My Playlist.'
+    });
+  }
+});
+
 // ==================== ADMIN MANAGEMENT (STEP 8E) ====================
 // Owner-only core APIs. UI và realtime revoke được để sang các bước tiếp theo.
 
