@@ -24,7 +24,7 @@ h1{font-size:24px;text-align:center;margin:8px 0 6px}.subtitle{text-align:center
 input{width:100%;height:42px;border:1px solid #46536b;border-radius:8px;background:#182031;color:#fff;padding:0 12px;font-size:14px;outline:none}input:focus{border-color:#64b5f6}
 button{border:0;cursor:pointer}.primary{width:100%;height:42px;border-radius:8px;background:#2e7d32;color:#fff;font-weight:700;font-size:14px;margin-top:10px}.secondary{height:36px;border-radius:7px;background:#34415a;color:#fff;padding:0 11px;font-weight:600}.danger{background:#8e3030}.ghost{background:transparent;color:#9ecbff;padding:5px 6px;font-size:13px}
 .section-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}.section-head h2{font-size:17px}.count{color:#91a0b7;font-size:12px}
-.playlist{border:1px solid #3a4860;border-radius:10px;background:#202a3b;margin-bottom:10px;overflow:hidden}.playlist-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 12px}.playlist-name{font-size:15px;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.playlist-actions{display:flex;gap:4px;flex-shrink:0}.playlist-actions button{background:transparent;color:#c9d4e5;font-size:16px;padding:5px}.playlist-body{padding:0 10px 10px;border-top:1px solid #334057}.song-list{padding-top:8px;min-height:8px}.song{display:flex;align-items:center;gap:8px;background:#29364b;border:1px solid #3b4960;border-radius:9px;padding:7px;margin-bottom:7px;cursor:grab}.song.dragging{opacity:.45}.drag{color:#8290a6;font-size:18px;width:18px;text-align:center;flex-shrink:0}.thumb{width:72px;height:42px;object-fit:cover;border-radius:6px;background:#111827;flex-shrink:0}.song-main{min-width:0;flex:1}.song-title{font-size:13px;font-weight:600;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.song-id{font-size:10px;color:#8190a6;margin-top:3px}.song-actions{display:flex;flex-direction:column;gap:3px}.song-actions button{background:transparent;color:#c9d4e5;padding:4px;font-size:16px}.song-actions button:disabled{opacity:.5;cursor:wait}.empty{color:#7f8ca1;text-align:center;padding:16px 8px;font-size:13px}
+.playlist{border:1px solid #3a4860;border-radius:10px;background:#202a3b;margin-bottom:10px;overflow:hidden}.playlist-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 12px}.playlist-name{font-size:15px;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.playlist-actions{display:flex;gap:4px;flex-shrink:0}.playlist-actions button{background:transparent;color:#c9d4e5;font-size:16px;padding:5px}.playlist-body{padding:0 10px 10px;border-top:1px solid #334057}.song-list{padding-top:8px;min-height:8px}.song{display:flex;align-items:center;gap:8px;background:#29364b;border:1px solid #3b4960;border-radius:9px;padding:7px;margin-bottom:7px;cursor:grab}.song.dragging{opacity:.45}.drag{color:#8290a6;font-size:18px;width:18px;text-align:center;flex-shrink:0;cursor:ns-resize}.thumb{width:72px;height:42px;object-fit:cover;border-radius:6px;background:#111827;flex-shrink:0}.song-main{min-width:0;flex:1;cursor:pointer}.song-title{font-size:13px;font-weight:600;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.song-id{font-size:10px;color:#8190a6;margin-top:3px}.song-actions{display:flex;flex-direction:column;gap:3px}.song-actions button{background:transparent;color:#c9d4e5;padding:4px;font-size:16px}.song-actions button:disabled{opacity:.5;cursor:wait}.empty{color:#7f8ca1;text-align:center;padding:16px 8px;font-size:13px}
 .add-row{display:flex;gap:7px;margin-top:10px}.add-row input{flex:1}.add-row button{height:42px;width:45px;border-radius:8px;background:#2e7d32;color:#fff;font-size:18px;font-weight:700}.playlist-footer{display:flex;align-items:center;justify-content:space-between;margin-top:8px;color:#7f8ca1;font-size:11px}.busy{opacity:.6;pointer-events:none}
 .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:18px;z-index:100}.modal{width:100%;max-width:420px;background:#252f42;border:1px solid #46536b;border-radius:12px;padding:16px;box-shadow:0 15px 45px rgba(0,0,0,.5)}.modal h3{font-size:17px;margin-bottom:8px}.modal p{color:#aeb9ca;font-size:13px;line-height:1.5;margin-bottom:12px}.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}.modal-actions button{height:38px;padding:0 13px;border-radius:7px;font-weight:700}.cancel{background:#34415a;color:#fff}.confirm{background:#2e7d32;color:#fff}
 
@@ -36,7 +36,7 @@ button{border:0;cursor:pointer}.primary{width:100%;height:42px;border-radius:8px
 .player-timeline{display:flex;align-items:center;gap:8px;margin-top:9px}.player-time{font-size:11px;color:#aeb9ca;min-width:36px;text-align:center;font-variant-numeric:tabular-nums}
 .player-range-wrap{position:relative;flex:1;min-width:0;height:20px;display:flex;align-items:center;overflow:visible}.player-range-wrap::before{content:"";position:absolute;left:0;right:0;top:50%;height:4px;transform:translateY(-50%);border-radius:999px;background:linear-gradient(to right,#2e7d32 0%,#2e7d32 var(--player-progress,0%),#46536b var(--player-progress,0%),#46536b 100%);pointer-events:none}.player-range{position:relative;z-index:1;width:calc(100% + 14px);height:20px;margin:0 -7px;min-width:0;appearance:none;-webkit-appearance:none;background:transparent;cursor:pointer}.player-range::-webkit-slider-runnable-track{height:4px;background:transparent;border:0}.player-range::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:14px;height:14px;margin-top:-5px;border-radius:50%;background:#fff;border:2px solid #2e7d32;box-shadow:0 1px 3px rgba(0,0,0,.35)}.player-range::-moz-range-track{height:4px;background:transparent;border:0}.player-range::-moz-range-progress{height:4px;background:transparent}.player-range::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#fff;border:2px solid #2e7d32;box-shadow:0 1px 3px rgba(0,0,0,.35)}.player-range:focus{outline:none}.player-range:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 3px rgba(46,125,50,.25),0 1px 3px rgba(0,0,0,.35)}.player-range:focus-visible::-moz-range-thumb{box-shadow:0 0 0 3px rgba(46,125,50,.25),0 1px 3px rgba(0,0,0,.35)}
 .player-controls{display:flex;flex-direction:column;align-items:center;gap:7px;margin-top:9px}.player-main-controls{display:flex;align-items:center;justify-content:center;gap:20px}.player-secondary-controls{display:flex;align-items:center;justify-content:center;gap:9px;width:100%}.player-control{width:40px;height:36px;border-radius:8px;background:#34415a;color:#fff;font-size:18px;font-weight:700}.player-control.main{width:48px;background:#2e7d32;font-size:20px}.player-control.mode{font-size:17px;width:40px}.player-control.mute{font-size:17px;width:40px}.player-volume-wrap{position:relative;width:150px;min-width:90px;height:20px;display:flex;align-items:center;overflow:visible}.player-volume-wrap::before{content:"";position:absolute;left:0;right:0;top:50%;height:4px;transform:translateY(-50%);border-radius:999px;background:linear-gradient(to right,#2e7d32 0%,#2e7d32 var(--player-volume,100%),#46536b var(--player-volume,100%),#46536b 100%);pointer-events:none}.player-volume-range{position:relative;z-index:1;width:calc(100% + 14px);height:20px;margin:0 -7px;appearance:none;-webkit-appearance:none;background:transparent;cursor:pointer}.player-volume-range::-webkit-slider-runnable-track{height:4px;background:transparent;border:0}.player-volume-range::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:12px;height:12px;margin-top:-4px;border-radius:50%;background:#fff;border:2px solid #2e7d32;box-shadow:0 1px 3px rgba(0,0,0,.35)}.player-volume-range::-moz-range-track{height:4px;background:transparent;border:0}.player-volume-range::-moz-range-progress{height:4px;background:transparent}.player-volume-range::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:#fff;border:2px solid #2e7d32;box-shadow:0 1px 3px rgba(0,0,0,.35)}.player-volume-range:focus{outline:none}.player-control:disabled,.player-range:disabled,.player-volume-range:disabled{opacity:.45;cursor:not-allowed}
-.thumb-wrap{position:relative;width:72px;height:42px;flex-shrink:0}.thumb-play{position:absolute;inset:0;margin:auto;width:28px;height:28px;border-radius:50%;background:rgba(46,125,50,.94);color:#fff;font-size:13px;padding:0;opacity:0;transform:scale(.9);transition:opacity .15s ease,transform .15s ease}.song:hover .thumb-play,.thumb-play:focus{opacity:1;transform:scale(1)}.song.active-song{border-color:#2e7d32}
+.thumb-wrap{position:relative;width:72px;height:42px;flex-shrink:0;cursor:pointer}.thumb-play{position:absolute;inset:0;margin:auto;width:28px;height:28px;border-radius:50%;background:rgba(46,125,50,.94);color:#fff;font-size:13px;padding:0;opacity:0;transform:scale(.9);transition:opacity .15s ease,transform .15s ease}.song:hover .thumb-play,.thumb-play:focus{opacity:1;transform:scale(1)}.song.active-song{border-color:#2e7d32}
 </style>
 </head>
 <body>
@@ -85,23 +85,97 @@ let initData=tg?.initData||'';
 function resolveInitData(){initData=tg?.initData||initData;return !!initData}
 function esc(s){return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
 function videoId(url){try{return window.YouTubeUtils&&typeof YouTubeUtils.getYouTubeVideoId==='function'?YouTubeUtils.getYouTubeVideoId(url):null}catch(e){return null}}
-const $=id=>document.getElementById(id);const state={playlists:[],active:null};
 
+const $=id=>document.getElementById(id);
+const state={playlists:[],active:null};
 const playerState={player:null,ready:false,playlistId:null,songId:null,generation:0,playingGeneration:null,status:'idle',duration:0,currentTime:0,userActivated:false,autoplayBlocked:false,pendingPlay:false,timelineTimer:null,mode:'sequential',volume:100,muted:false};
+let isTimelineDragging = false; 
+
 const PLAYER_MODES=[{id:'sequential',icon:'➡️',title:'Tuần tự'},{id:'random',icon:'🔀',title:'Ngẫu nhiên'},{id:'repeat-one',icon:'🔂',title:'Lặp một bài'},{id:'once-stop',icon:'⏹',title:'Một lần rồi dừng'}];
+
+function showCustomModal(opts) {
+  return new Promise(resolve => {
+    const bd = $('modalBackdrop'), t = $('modalTitle'), m = $('modalMessage'), 
+          i = $('modalInput'), cnl = $('modalCancel'), cfm = $('modalConfirm');
+    
+    t.textContent = opts.title || 'Thông báo';
+    m.textContent = opts.message || '';
+    if (opts.message) m.style.display = 'block'; else m.style.display = 'none';
+    
+    if (opts.type === 'prompt') {
+      i.classList.remove('hidden'); 
+      i.value = opts.default || ''; 
+      setTimeout(()=>i.focus(), 50);
+    } else {
+      i.classList.add('hidden');
+    }
+    
+    cnl.style.display = opts.type === 'alert' ? 'none' : 'block';
+    bd.classList.remove('hidden');
+    
+    const cleanup = () => { bd.classList.add('hidden'); cnl.onclick = null; cfm.onclick = null; };
+    cnl.onclick = () => { cleanup(); resolve(null); };
+    cfm.onclick = () => {
+      const val = opts.type === 'prompt' ? i.value : true;
+      cleanup(); 
+      resolve(val);
+    };
+  });
+}
+
 function formatTime(seconds){const s=Math.max(0,Math.floor(Number(seconds)||0)),h=Math.floor(s/3600),m=Math.floor((s%3600)/60),x=s%60;return h?`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(x).padStart(2,'0')}`:`${String(m).padStart(2,'0')}:${String(x).padStart(2,'0')}`}
 function currentPlaylist(){return state.playlists.find(p=>Number(p.id)===Number(playerState.playlistId))||null}
 function currentSong(){return currentPlaylist()?.songs?.find(s=>Number(s.id)===Number(playerState.songId))||null}
 function setPlayerStatus(text,type=''){const e=$('playerStatus');e.textContent=text;e.className='player-status'+(type?' '+type:'')}
-function updatePlayerUI(){const s=currentSong(),r=$('playerTimeline');$('playerTitle').textContent=s?.title||s?.youtubeUrl||'Chưa chọn bài hát';$('playerCurrentTime').textContent=formatTime(playerState.currentTime);$('playerDuration').textContent=formatTime(playerState.duration);r.max=String(playerState.duration||0);r.value=String(Math.min(playerState.currentTime,playerState.duration||0));const pct=playerState.duration>0?Math.max(0,Math.min(100,(playerState.currentTime/playerState.duration)*100)):0;const rw=$('playerTimelineWrap');if(rw)rw.style.setProperty('--player-progress',pct+'%');const ok=!!(playerState.ready&&playerState.songId&&s);const p=currentPlaylist(),idx=p?.songs?.findIndex(x=>Number(x.id)===Number(playerState.songId))??-1;const hasPrev=idx>0,hasNext=idx>=0&&idx<p.songs.length-1;$('playerPlayBtn').disabled=!ok;$('playerPrevBtn').disabled=!ok||!hasPrev;$('playerNextBtn').disabled=!ok||!hasNext;r.disabled=!ok||!playerState.duration;$('playerPlayBtn').textContent=playerState.status==='playing'?'Ⅱ':'▶';
-  const mode=PLAYER_MODES.find(x=>x.id===playerState.mode)||PLAYER_MODES[0];$('playerModeBtn').textContent=mode.icon;$('playerModeBtn').title='Chế độ: '+mode.title;$('playerModeBtn').disabled=!ok;const muteBtn=$('playerMuteBtn'),vol=$('playerVolume'),vw=$('playerVolumeWrap');if(muteBtn){muteBtn.textContent=playerState.muted?'🔇':'🔊';muteBtn.title=playerState.muted?'Bật tiếng':'Tắt tiếng';muteBtn.disabled=!ok}if(vol){vol.value=String(playerState.volume);vol.disabled=!ok||!playerState.duration;if(vw)vw.style.setProperty('--player-volume',playerState.volume+'%');}
+
+function updatePlayerUI(){
+  const s=currentSong(),r=$('playerTimeline');
+  $('playerTitle').textContent=s?.title||s?.youtubeUrl||'Chưa chọn bài hát';
+  $('playerCurrentTime').textContent=formatTime(playerState.currentTime);
+  $('playerDuration').textContent=formatTime(playerState.duration);
+  r.max=String(playerState.duration||0);
+  r.value=String(Math.min(playerState.currentTime,playerState.duration||0));
+  
+  const pct=playerState.duration>0?Math.max(0,Math.min(100,(playerState.currentTime/playerState.duration)*100)):0;
+  const rw=$('playerTimelineWrap');if(rw)rw.style.setProperty('--player-progress',pct+'%');
+  
+  const ok=!!(playerState.ready&&playerState.songId&&s);
+  const p=currentPlaylist(),idx=p?.songs?.findIndex(x=>Number(x.id)===Number(playerState.songId))??-1;
+  const hasPrev=idx>0,hasNext=idx>=0&&idx<p.songs.length-1;
+  
+  $('playerPlayBtn').disabled=!ok;
+  // Trong chế độ random, có thể nhảy bài tiếp theo bất kể thứ tự
+  $('playerPrevBtn').disabled=!ok||(playerState.mode!=='random'&&!hasPrev);
+  $('playerNextBtn').disabled=!ok||(playerState.mode!=='random'&&!hasNext);
+  
+  r.disabled=!ok||!playerState.duration;
+  $('playerPlayBtn').textContent=playerState.status==='playing'?'Ⅱ':'▶';
+  const mode=PLAYER_MODES.find(x=>x.id===playerState.mode)||PLAYER_MODES[0];
+  $('playerModeBtn').textContent=mode.icon;$('playerModeBtn').title='Chế độ: '+mode.title;$('playerModeBtn').disabled=!ok;
+  const muteBtn=$('playerMuteBtn'),vol=$('playerVolume'),vw=$('playerVolumeWrap');
+  if(muteBtn){muteBtn.textContent=playerState.muted?'🔇':'🔊';muteBtn.title=playerState.muted?'Bật tiếng':'Tắt tiếng';muteBtn.disabled=!ok}
+  if(vol){vol.value=String(playerState.volume);vol.disabled=!ok||!playerState.duration;if(vw)vw.style.setProperty('--player-volume',playerState.volume+'%');}
 }
+
 function showPlayer(){$('playerCard').classList.remove('hidden')}
 function nextGeneration(){playerState.generation++;playerState.playingGeneration=null;playerState.pendingPlay=false}
 function loadSongIntoPlayer(pid,sid){const p=state.playlists.find(x=>Number(x.id)===Number(pid)),s=p?.songs?.find(x=>Number(x.id)===Number(sid));if(!p||!s||!playerState.ready||!playerState.player)return false;nextGeneration();playerState.playlistId=Number(pid);playerState.songId=Number(sid);playerState.status='loading';playerState.duration=0;playerState.currentTime=0;playerState.autoplayBlocked=false;playerState.pendingPlay=true;playerState.userActivated=true;showPlayer();updatePlayerUI();setPlayerStatus('⏳ Đang tải video...');const vid=String(s.youtubeVideoId||videoId(s.youtubeUrl)||'');if(!vid){playerState.status='error';playerState.pendingPlay=false;setPlayerStatus('❌ Không tìm thấy YouTube Video ID','error');updatePlayerUI();return false}try{playerState.player.loadVideoById({videoId:vid,startSeconds:0})}catch(e){playerState.status='error';playerState.pendingPlay=false;setPlayerStatus('❌ Không thể tải video','error');updatePlayerUI()}return true}
 function togglePlayPause(){if(!playerState.ready||!playerState.player||!currentSong())return;playerState.userActivated=true;playerState.autoplayBlocked=false;try{playerState.status==='playing'?playerState.player.pauseVideo():playerState.player.playVideo()}catch(e){playerState.status='error';setPlayerStatus('❌ Không thể phát video','error');updatePlayerUI()}}
 function seekPlayer(v){if(!playerState.ready||!playerState.player||!playerState.duration)return;const t=Math.max(0,Math.min(Number(v)||0,playerState.duration));playerState.currentTime=t;updatePlayerUI();try{playerState.player.seekTo(t,true)}catch(e){}}
-function updateTimeline(){if(!playerState.ready||!playerState.player||!currentSong()||(playerState.status!=='playing'&&playerState.status!=='paused'))return;try{playerState.currentTime=Math.max(0,Number(playerState.player.getCurrentTime())||0);const d=Number(playerState.player.getDuration())||0;if(d>0)playerState.duration=d;updatePlayerUI()}catch(e){}}
+function updateTimeline(){
+  if(!playerState.ready||!playerState.player||!currentSong()||(playerState.status!=='playing'&&playerState.status!=='paused'))return;
+  try{
+    playerState.currentTime=Math.max(0,Number(playerState.player.getCurrentTime())||0);
+    const d=Number(playerState.player.getDuration())||0;
+    if(d>0)playerState.duration=d;
+    
+    if (!isTimelineDragging) {
+      updatePlayerUI();
+    } else {
+      $('playerCurrentTime').textContent = formatTime(playerState.currentTime);
+    }
+  }catch(e){}
+}
 function startTimelineTimer(){if(!playerState.timelineTimer)playerState.timelineTimer=setInterval(updateTimeline,300)}
 function onYouTubeStateChange(e){if(!playerState.player)return;if(e.data===YT.PlayerState.PLAYING){playerState.status='playing';playerState.playingGeneration=playerState.generation;playerState.pendingPlay=false;playerState.autoplayBlocked=false;const d=Number(playerState.player.getDuration())||0;if(d>0)playerState.duration=d;setPlayerStatus('');updatePlayerUI()}else if(e.data===YT.PlayerState.PAUSED){playerState.status='paused';playerState.pendingPlay=false;setPlayerStatus('');updatePlayerUI()}else if(e.data===YT.PlayerState.BUFFERING){playerState.status='loading';setPlayerStatus('⏳ Đang tải...');updatePlayerUI()}else if(e.data===YT.PlayerState.CUED&&playerState.pendingPlay){try{playerState.player.playVideo()}catch(x){onYouTubeAutoplayBlocked()}}else if(e.data===YT.PlayerState.ENDED){if(playerState.playingGeneration!==playerState.generation)return;playerState.status='ended';playerState.currentTime=playerState.duration;playerState.pendingPlay=false;playerState.playingGeneration=null;updatePlayerUI();const p=currentPlaylist(),songs=p?.songs||[],currentIndex=songs.findIndex(s=>Number(s.id)===Number(playerState.songId));if(!p||currentIndex<0){endPlayback();return}if(playerState.mode==='repeat-one'){playSong(Number(p.id),Number(playerState.songId));return}if(playerState.mode==='once-stop'){setPlayerStatus('Đã kết thúc');return}if(playerState.mode==='sequential'){const next=songs[currentIndex+1];if(next){playSong(Number(p.id),Number(next.id));return}setPlayerStatus('Đã kết thúc playlist');return}if(playerState.mode==='random'){if(songs.length===1){playSong(Number(p.id),Number(songs[0].id));return}const choices=songs.filter((_,i)=>i!==currentIndex);const next=choices[Math.floor(Math.random()*choices.length)];if(next){playSong(Number(p.id),Number(next.id));return}}setPlayerStatus('Đã kết thúc');}}
 function onYouTubeReady(e){playerState.player=e.target;playerState.ready=true;try{playerState.player.setVolume(playerState.volume);if(playerState.muted)playerState.player.mute();else playerState.player.unMute()}catch(x){}startTimelineTimer();updatePlayerUI()}
@@ -139,25 +213,122 @@ async function loadPlaylists(){
   showApp();
 }
 function renderPlaylists(){const wrap=$('playlists');$('playlistCount').textContent=`${state.playlists.length} playlist`;if(!state.playlists.length){wrap.innerHTML='<div class="card"><div class="empty">Chưa có playlist. Hãy tạo playlist đầu tiên.</div></div>';return}wrap.innerHTML=state.playlists.map(p=>playlistHtml(p,p.songs||[])).join('');attachDnD()}
-async function createPlaylist(){const name=prompt('Tên playlist mới:','Playlist của tôi');if(name===null)return;const clean=name.trim();if(!clean){alert('Tên playlist không được để trống.');return}try{await api('/api/my-playlists',{method:'POST',body:{name:clean}});await loadPlaylists()}catch(e){alert(e.message)}}
-async function renamePlaylist(id,current){const name=prompt('Tên playlist mới:',current);if(name===null)return;const clean=name.trim();if(!clean){alert('Tên playlist không được để trống.');return}try{await api(`/api/my-playlists/${id}`,{method:'PATCH',body:{name:clean}});await loadPlaylists()}catch(e){alert(e.message)}}
-async function deletePlaylist(id,name){if(!confirm(`Xóa playlist “${name}” và toàn bộ bài hát bên trong?`))return;const active=Number(playerState.playlistId)===Number(id);try{await api(`/api/my-playlists/${id}`,{method:'DELETE'});if(active)endPlayback();await loadPlaylists()}catch(e){alert(e.message)}}
-async function addSong(id,input){const url=input.value.trim();if(!url){alert('Vui lòng nhập link YouTube.');return}const vid=videoId(url);if(!vid){alert('Link YouTube không hợp lệ.');return}input.disabled=true;try{await api(`/api/my-playlists/${id}/songs`,{method:'POST',body:{youtubeUrl:url,title:'',thumbnailUrl:`https://i.ytimg.com/vi/${encodeURIComponent(vid)}/hqdefault.jpg`}});input.value='';await loadPlaylists()}catch(e){alert(e.message)}finally{input.disabled=false}}
-async function sendSongToGems(pid,sid,btn){const p=state.playlists.find(x=>Number(x.id)===Number(pid));const song=(p?.songs||[]).find(x=>Number(x.id)===Number(sid));if(!song)return;if(!confirm('Gửi bài hát này vào GEMS Studio?'))return;btn.disabled=true;const oldText=btn.textContent;btn.textContent='⏳';try{const result=await api('/api/submit',{method:'POST',body:{url:song.youtubeUrl}});if(!result.success){alert(result.message||'Không thể gửi bài hát vào GEMS Studio.');return}alert('✅ Đã gửi bài hát vào GEMS Studio.');}catch(e){alert(e.message||'Không thể gửi bài hát vào GEMS Studio.')}finally{btn.disabled=false;btn.textContent=oldText}}
-async function deleteSong(pid,sid){if(!confirm('Xóa bài hát này khỏi playlist?'))return;const active=Number(playerState.playlistId)===Number(pid)&&Number(playerState.songId)===Number(sid);try{await api(`/api/my-playlists/${pid}/songs/${sid}`,{method:'DELETE'});if(active)endPlayback();await loadPlaylists()}catch(e){alert(e.message)}}
-function attachDnD(){document.querySelectorAll('.song-list').forEach(list=>{let dragged=null;list.querySelectorAll('.song').forEach(el=>{el.addEventListener('dragstart',()=>{dragged=el;el.classList.add('dragging')});el.addEventListener('dragend',async()=>{el.classList.remove('dragging');if(!dragged)return;const ids=[...list.querySelectorAll('.song')].map(x=>Number(x.dataset.songId));try{await api(`/api/my-playlists/${list.dataset.songList}/songs/reorder`,{method:'PATCH',body:{songIds:ids}})}catch(e){alert(e.message);await loadPlaylists()}dragged=null});el.addEventListener('dragover',e=>{e.preventDefault();if(!dragged||dragged===el)return;const rect=el.getBoundingClientRect();const after=e.clientY>rect.top+rect.height/2;list.insertBefore(dragged,after?el.nextSibling:el)})})})}
+
+async function createPlaylist(){
+  const name = await showCustomModal({type:'prompt', title:'Tạo playlist', message:'Tên playlist mới:', default:'Playlist của tôi'});
+  if(name===null)return;
+  const clean=name.trim();
+  if(!clean){await showCustomModal({type:'alert', title:'Lỗi', message:'Tên playlist không được để trống.'});return}
+  try{await api('/api/my-playlists',{method:'POST',body:{name:clean}});await loadPlaylists()}
+  catch(e){await showCustomModal({type:'alert', title:'Lỗi', message:e.message})}
+}
+async function renamePlaylist(id,current){
+  const name = await showCustomModal({type:'prompt', title:'Đổi tên playlist', message:'Tên playlist mới:', default:current});
+  if(name===null)return;
+  const clean=name.trim();
+  if(!clean){await showCustomModal({type:'alert', title:'Lỗi', message:'Tên playlist không được để trống.'});return}
+  try{await api(`/api/my-playlists/${id}`,{method:'PATCH',body:{name:clean}});await loadPlaylists()}
+  catch(e){await showCustomModal({type:'alert', title:'Lỗi', message:e.message})}
+}
+async function deletePlaylist(id,name){
+  const ok = await showCustomModal({type:'confirm', title:'Xác nhận', message:`Xóa playlist “${name}” và toàn bộ bài hát bên trong?`});
+  if(!ok)return;
+  const active=Number(playerState.playlistId)===Number(id);
+  try{await api(`/api/my-playlists/${id}`,{method:'DELETE'});if(active)endPlayback();await loadPlaylists()}
+  catch(e){await showCustomModal({type:'alert', title:'Lỗi', message:e.message})}
+}
+async function addSong(id,input){
+  const url=input.value.trim();
+  if(!url){await showCustomModal({type:'alert', title:'Lỗi', message:'Vui lòng nhập link YouTube.'});return}
+  const vid=videoId(url);
+  if(!vid){await showCustomModal({type:'alert', title:'Lỗi', message:'Link YouTube không hợp lệ.'});return}
+  input.disabled=true;
+  try{await api(`/api/my-playlists/${id}/songs`,{method:'POST',body:{youtubeUrl:url,title:'',thumbnailUrl:`https://i.ytimg.com/vi/${encodeURIComponent(vid)}/hqdefault.jpg`}});input.value='';await loadPlaylists()}
+  catch(e){await showCustomModal({type:'alert', title:'Lỗi', message:e.message})}
+  finally{input.disabled=false}
+}
+async function sendSongToGems(pid,sid,btn){
+  const p=state.playlists.find(x=>Number(x.id)===Number(pid));
+  const song=(p?.songs||[]).find(x=>Number(x.id)===Number(sid));
+  if(!song)return;
+  const ok = await showCustomModal({type:'confirm', title:'Xác nhận', message:'Gửi bài hát này vào GEMS Studio?'});
+  if(!ok)return;
+  
+  btn.disabled=true;const oldText=btn.textContent;btn.textContent='⏳';
+  try{
+    const result=await api('/api/submit',{method:'POST',body:{url:song.youtubeUrl}});
+    if(!result.success){await showCustomModal({type:'alert', title:'Lỗi', message:result.message||'Không thể gửi bài hát vào GEMS Studio.'});return}
+    await showCustomModal({type:'alert', title:'Thành công', message:'✅ Đã gửi bài hát vào GEMS Studio.'});
+  }catch(e){
+    await showCustomModal({type:'alert', title:'Lỗi', message:e.message||'Không thể gửi bài hát vào GEMS Studio.'})
+  }finally{btn.disabled=false;btn.textContent=oldText}
+}
+async function deleteSong(pid,sid){
+  const ok = await showCustomModal({type:'confirm', title:'Xác nhận', message:'Xóa bài hát này khỏi playlist?'});
+  if(!ok)return;
+  const active=Number(playerState.playlistId)===Number(pid)&&Number(playerState.songId)===Number(sid);
+  try{await api(`/api/my-playlists/${pid}/songs/${sid}`,{method:'DELETE'});if(active)endPlayback();await loadPlaylists()}
+  catch(e){await showCustomModal({type:'alert', title:'Lỗi', message:e.message})}
+}
+
+function attachDnD(){
+  document.querySelectorAll('.song-list').forEach(list=>{
+    let dragged=null;
+    list.querySelectorAll('.song').forEach(el=>{
+      el.addEventListener('dragstart',()=>{dragged=el;el.classList.add('dragging')});
+      el.addEventListener('dragend',async()=>{
+        el.classList.remove('dragging');
+        if(!dragged)return;
+        const ids=[...list.querySelectorAll('.song')].map(x=>Number(x.dataset.songId));
+        try{await api(`/api/my-playlists/${list.dataset.songList}/songs/reorder`,{method:'PATCH',body:{songIds:ids}})}
+        catch(e){await showCustomModal({type:'alert', title:'Lỗi', message:e.message});await loadPlaylists()}
+        dragged=null
+      });
+      el.addEventListener('dragover',e=>{
+        e.preventDefault();
+        if(!dragged||dragged===el)return;
+        const rect=el.getBoundingClientRect();
+        const after=e.clientY>rect.top+rect.height/2;
+        list.insertBefore(dragged,after?el.nextSibling:el)
+      });
+    });
+  });
+}
+
 $('createPlaylistBtn').addEventListener('click',createPlaylist);
 $('playerPlayBtn').addEventListener('click',togglePlayPause);
-$('playerTimeline').addEventListener('input',e=>seekPlayer(e.target.value));
+
+// Gắn sự kiện Timeline theo cờ isTimelineDragging
+const timelineEl = $('playerTimeline');
+timelineEl.addEventListener('mousedown', () => isTimelineDragging = true);
+timelineEl.addEventListener('touchstart', () => isTimelineDragging = true, { passive: true });
+timelineEl.addEventListener('mouseup', () => isTimelineDragging = false);
+timelineEl.addEventListener('touchend', () => isTimelineDragging = false);
+timelineEl.addEventListener('change', () => isTimelineDragging = false);
+timelineEl.addEventListener('input', e => {
+  isTimelineDragging = true;
+  seekPlayer(e.target.value);
+});
+
 function getAdjacentSong(direction){
   const p=currentPlaylist();
   if(!p?.songs?.length||!playerState.songId)return null;
-  const index=p.songs.findIndex(s=>Number(s.id)===Number(playerState.songId));
-  if(index<0)return null;
-  const nextIndex=index+direction;
-  if(nextIndex<0||nextIndex>=p.songs.length)return null;
-  return p.songs[nextIndex];
+  
+  const songs = p.songs;
+  const currentIndex = songs.findIndex(s=>Number(s.id)===Number(playerState.songId));
+  if(currentIndex<0)return null;
+
+  if (playerState.mode === 'random') {
+    if (songs.length === 1) return songs[0];
+    const choices = songs.filter((_, i) => i !== currentIndex);
+    return choices[Math.floor(Math.random() * choices.length)];
+  }
+
+  const nextIndex=currentIndex+direction;
+  if(nextIndex<0||nextIndex>=songs.length)return null;
+  return songs[nextIndex];
 }
+
 function playAdjacentSong(direction){
   const song=getAdjacentSong(direction);
   if(!song)return;
@@ -165,19 +336,49 @@ function playAdjacentSong(direction){
   loadSongIntoPlayer(playerState.playlistId,Number(song.id));
   renderPlaylists();
 }
+
 $('playerPrevBtn').addEventListener('click',()=>playAdjacentSong(-1));
 $('playerNextBtn').addEventListener('click',()=>playAdjacentSong(1));
 $('playerModeBtn').addEventListener('click',()=>{if(!playerState.songId)return;const i=PLAYER_MODES.findIndex(x=>x.id===playerState.mode);playerState.mode=PLAYER_MODES[(i+1)%PLAYER_MODES.length].id;updatePlayerUI();});
 $('playerMuteBtn').addEventListener('click',toggleMute);
 $('playerVolume').addEventListener('input',e=>setPlayerVolume(e.target.value));
-$('registerBtn').addEventListener('click',async()=>{const id=$('registerTelegramId').value.trim();if(!/^\d+$/.test(id)){alert('Telegram ID chỉ được chứa chữ số.');return}const b=$('registerBtn');b.disabled=true;b.textContent='⏳ Đang đăng ký...';try{await api('/api/my-playlist/register',{method:'POST',body:{telegramId:id}});await loadPlaylists()}catch(e){alert(e.message)}finally{b.disabled=false;b.textContent='🔐 Đăng ký và mở My Playlist'}});
-$('playlists').addEventListener('click',async e=>{const btn=e.target.closest('button');if(!btn)return;const box=e.target.closest('.playlist');if(!box)return;const id=Number(box.dataset.playlistId);const p=state.playlists.find(x=>Number(x.id)===id);const action=btn.dataset.action;if(action==='rename')return renamePlaylist(id,p?.name||'');if(action==='delete')return deletePlaylist(id,p?.name||'playlist');if(action==='play-song'){const song=e.target.closest('.song');if(song)playSong(id,Number(song.dataset.songId));return}if(action==='send-gems'){const song=e.target.closest('.song');return sendSongToGems(id,Number(song.dataset.songId),btn)}if(action==='delete-song'){const song=e.target.closest('.song');return deleteSong(id,Number(song.dataset.songId))}if(action==='add'){const input=box.querySelector(`[data-add-input="${id}"]`);return addSong(id,input)}});
-$('playlists').addEventListener('click',e=>{
-  if(e.target.closest('button'))return;
-  const song=e.target.closest('.song'),box=e.target.closest('.playlist');if(!song||!box)return;
-  playSong(Number(box.dataset.playlistId),Number(song.dataset.songId));
+
+$('registerBtn').addEventListener('click',async()=>{
+  const id=$('registerTelegramId').value.trim();
+  if(!/^\d+$/.test(id)){await showCustomModal({type:'alert', title:'Lỗi', message:'Telegram ID chỉ được chứa chữ số.'});return}
+  const b=$('registerBtn');b.disabled=true;b.textContent='⏳ Đang đăng ký...';
+  try{await api('/api/my-playlist/register',{method:'POST',body:{telegramId:id}});await loadPlaylists()}
+  catch(e){await showCustomModal({type:'alert', title:'Lỗi', message:e.message})}
+  finally{b.disabled=false;b.textContent='🔐 Đăng ký và mở My Playlist'}
 });
+
+$('playlists').addEventListener('click',async e=>{
+  const btn=e.target.closest('button');
+  const box=e.target.closest('.playlist');
+  if(!box)return;
+  const id=Number(box.dataset.playlistId);
+  const p=state.playlists.find(x=>Number(x.id)===id);
+
+  if(btn) {
+    const action=btn.dataset.action;
+    if(action==='rename')return renamePlaylist(id,p?.name||'');
+    if(action==='delete')return deletePlaylist(id,p?.name||'playlist');
+    if(action==='play-song'){const song=e.target.closest('.song');if(song)playSong(id,Number(song.dataset.songId));return}
+    if(action==='send-gems'){const song=e.target.closest('.song');return sendSongToGems(id,Number(song.dataset.songId),btn)}
+    if(action==='delete-song'){const song=e.target.closest('.song');return deleteSong(id,Number(song.dataset.songId))}
+    if(action==='add'){const input=box.querySelector(`[data-add-input="${id}"]`);return addSong(id,input)}
+    return;
+  }
+
+  // Nếu click vào nội dung thẻ bài hát (không phải nút, không phải vùng kéo thả)
+  const song = e.target.closest('.song');
+  if (song && !e.target.closest('.drag') && !e.target.closest('.song-actions')) {
+    playSong(id, Number(song.dataset.songId));
+  }
+});
+
 $('playlists').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.matches('[data-add-input]')){const id=Number(e.target.dataset.addInput);addSong(id,e.target)}});
+
 let gemsSocket=null;
 function connectGemsSocket(){
   if(!window.io||gemsSocket)return;
@@ -200,7 +401,16 @@ function connectGemsSocket(){
     }
   });
 }
-async function boot(){resolveInitData();if(!tg||!initData){setStatus('⚠️ Hãy mở My Playlist từ Telegram Mini App.','error');return}connectGemsSocket();try{await loadPlaylists()}catch(e){if(e.status===403&&e.data?.code==='MY_PLAYLIST_NOT_REGISTERED'){showRegister();return}setStatus('❌ '+e.message,'error')}}
+async function boot(){
+  resolveInitData();
+  if(!tg||!initData){setStatus('⚠️ Hãy mở My Playlist từ Telegram Mini App.','error');return}
+  connectGemsSocket();
+  try{await loadPlaylists()}
+  catch(e){
+    if(e.status===403&&e.data?.code==='MY_PLAYLIST_NOT_REGISTERED'){showRegister();return}
+    setStatus('❌ '+e.message,'error')
+  }
+}
 boot();
 </script>
 </body></html>
