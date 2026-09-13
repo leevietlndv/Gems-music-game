@@ -3259,58 +3259,55 @@
       }
     }
     async function deleteSong(songId) {
-      if (!window.isAdmin) {
-        alert('Bạn không có quyền Admin!');
-        return;
+  if (!window.isAdmin) {
+    if (tg && tg.showAlert) tg.showAlert('Bạn không có quyền Admin!');
+    else alert('Bạn không có quyền Admin!');
+    return;
+  }
+
+  if (!songId) return;
+
+  const song = songs.find(s => String(s.id) === String(songId));
+  if (!song) return;
+
+  const message = `Bạn có chắc muốn xóa bài hát này?\n\n${song.user}\n${song.title || song.url}`;
+
+  // Tách logic gọi API xóa ra một hàm riêng để dùng chung
+  const processDelete = async () => {
+    try {
+      const res = await fetch('/api/delete-song', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: songId,
+          initData: telegramInitData
+        })
+      });
+
+      const data = await res.json();
+
+      if (!data.success) {
+        if (tg && tg.showAlert) tg.showAlert(data.message || 'Không thể xóa bài hát!');
+        else alert(data.message || 'Không thể xóa bài hát!');
       }
-
-      if (!songId) {
-        alert('Không xác định được bài hát cần xóa!');
-        return;
-      }
-
-      const song = songs.find(
-        s => String(s.id) === String(songId)
-      );
-
-      if (!song) {
-        alert('Không tìm thấy bài hát!');
-        return;
-      }
-
-      const confirmed = confirm(
-        `Bạn có chắc muốn xóa bài hát này?\n\n${song.user}\n${song.title || song.url}`
-      );
-
-      if (!confirmed) return;
-
-      try {
-        const res = await fetch('/api/delete-song', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            id: songId,
-            initData: telegramInitData
-          })
-        });
-
-        const data = await res.json();
-
-        if (!data.success) {
-          alert(data.message || 'Không thể xóa bài hát!');
-          return;
-        }
-
-        // Server sẽ broadcast stateUpdate mới
-        // Không cần tự sửa mảng songs ở đây.
-
-      } catch (error) {
-        console.error('❌ Lỗi xóa bài hát:', error);
-        alert('Lỗi kết nối đến server!');
-      }
+    } catch (error) {
+      console.error('❌ Lỗi xóa bài hát:', error);
+      if (tg && tg.showAlert) tg.showAlert('Lỗi kết nối đến server!');
+      else alert('Lỗi kết nối đến server!');
     }
+  };
+
+  // Sử dụng Telegram API nếu có, fallback về trình duyệt thường nếu mở ngoài Telegram
+  if (tg && typeof tg.showConfirm === 'function') {
+    tg.showConfirm(message, (confirmed) => {
+      if (confirmed) processDelete();
+    });
+  } else {
+    if (confirm(message)) {
+      processDelete();
+    }
+  }
+}
 
     // Event delegation: an toàn hơn inline onclick (không nhét dữ liệu
     // vào attribute HTML, không tạo closure mỗi lần render).
