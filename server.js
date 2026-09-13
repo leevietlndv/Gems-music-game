@@ -2232,10 +2232,13 @@ function broadcastState() {
 // ==================== MY PLAYLIST REALTIME SYNC ====================
 function broadcastMyPlaylistChanged(telegramId, payload = {}) {
   if (!telegramId) return;
-  io.to(`myplaylist:${String(telegramId)}`).emit('myPlaylistChanged', {
+  const targetTelegramId = String(telegramId);
+  const event = {
     ...payload,
-    telegramId: String(telegramId)
-  });
+    telegramId: targetTelegramId
+  };
+  io.to(`myplaylist:${targetTelegramId}`).emit('myPlaylistChanged', event);
+  io.to(`myplaylist-watch:${targetTelegramId}`).emit('myPlaylistChanged', event);
 }
 
 // ==================== MY PLAYLIST PHASE 1 ====================
@@ -3823,6 +3826,19 @@ io.on('connection', (socket) => {
     // Room riêng cho My Playlist của chính Telegram user này.
     // telegramId lấy từ initData đã được server xác thực.
     socket.join(`myplaylist:${telegramId}`);
+
+    // Admin/Owner có thể theo dõi realtime một tài khoản My Playlist cụ thể
+    // khi đang mở trang quản trị. Quyền được kiểm tra lại ở server.
+    socket.on('watchMyPlaylistUser', async (payload = {}) => {
+      if (socket.authenticated !== true || (socket.adminRole !== 'owner' && socket.adminRole !== 'admin')) {
+        return;
+      }
+      const targetId = String(payload.telegramId || '').trim();
+      for (const room of Array.from(socket.rooms)) {
+        if (room.startsWith('myplaylist-watch:')) socket.leave(room);
+      }
+      if (/^\d+$/.test(targetId)) socket.join(`myplaylist-watch:${targetId}`);
+    });
 
     console.log(`🔐 Telegram ID: ${telegramId} | Admin: ${admin}`);
 

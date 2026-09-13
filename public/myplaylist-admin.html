@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>GEMS Radio — Quản lý My Playlist</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
   <style>
     *{box-sizing:border-box}
     body{margin:0;padding:0 12px 28px;font-family:Arial,sans-serif;background:#172033;color:#eef3f9}
@@ -20,7 +21,7 @@
     .user-list{display:grid;gap:9px}.user-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:start;background:#29364b;border:1px solid #3b4960;border-radius:9px;padding:11px}
     .user-main{min-width:0}.user-name{font-size:14px;font-weight:700;overflow-wrap:anywhere}.user-id{font-size:11px;color:#a8b6ca;margin-top:4px;overflow-wrap:anywhere}.user-meta{font-size:11px;color:#8f9eb4;margin-top:6px;line-height:1.55}
     .stats{display:flex;flex-direction:column;align-items:flex-end;gap:5px;white-space:nowrap}.badge{display:inline-block;padding:4px 7px;border-radius:999px;background:#34445d;color:#c9d7e8;font-size:11px}
-    .detail-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.detail-title{font-size:17px;font-weight:700}.back{height:34px;padding:0 10px;border:0;border-radius:7px;background:#34445d;color:#fff;font-weight:600;cursor:pointer}.detail-meta{color:#9aa8bc;font-size:12px;line-height:1.55;margin-top:7px}.playlist-list{display:grid;gap:8px;margin-top:10px}.playlist-row{background:#29364b;border:1px solid #3b4960;border-radius:9px;padding:10px}.playlist-row.clickable{cursor:pointer}.playlist-row.clickable:hover{border-color:#6ea8df}.playlist-name{font-size:14px;font-weight:700;overflow-wrap:anywhere}.playlist-meta{font-size:11px;color:#9aa8bc;margin-top:5px}.song-list{display:grid;gap:8px;margin-top:10px}.song-row{display:grid;grid-template-columns:72px minmax(0,1fr);gap:9px;align-items:center;background:#202a3b;border:1px solid #34425a;border-radius:8px;padding:7px}.song-thumb{width:72px;height:41px;object-fit:cover;border-radius:5px;background:#172033}.song-title{font-size:12px;font-weight:600;line-height:1.35;overflow-wrap:anywhere}.song-id{font-size:10px;color:#8f9eb4;margin-top:3px;overflow-wrap:anywhere}.detail-empty{color:#8492a8;text-align:center;padding:14px 8px;font-size:12px}.empty{color:#8492a8;text-align:center;padding:18px 8px;font-size:13px}.hidden{display:none!important}
+    .detail-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.detail-title{font-size:17px;font-weight:700}.back{height:34px;padding:0 10px;border:0;border-radius:7px;background:#34445d;color:#fff;font-weight:600;cursor:pointer}.detail-meta{color:#9aa8bc;font-size:12px;line-height:1.55;margin-top:7px}.playlist-toolbar{display:flex;gap:8px;align-items:center;margin-top:12px}.playlist-search{flex:1;min-width:0;height:38px;border:1px solid #42516a;border-radius:8px;background:#182235;color:#eef3f9;padding:0 10px;font-size:13px;outline:none}.playlist-search:focus{border-color:#6ea8df}.playlist-list{display:grid;gap:8px;margin-top:10px}.playlist-row{background:#29364b;border:1px solid #3b4960;border-radius:9px;padding:10px}.playlist-row.clickable{cursor:pointer}.playlist-row.clickable:hover{border-color:#6ea8df}.playlist-name{font-size:14px;font-weight:700;overflow-wrap:anywhere}.playlist-meta{font-size:11px;color:#9aa8bc;margin-top:5px}.song-list{display:grid;gap:8px;margin-top:10px}.song-row{display:grid;grid-template-columns:72px minmax(0,1fr);gap:9px;align-items:center;background:#202a3b;border:1px solid #34425a;border-radius:8px;padding:7px}.song-thumb{width:72px;height:41px;object-fit:cover;border-radius:5px;background:#172033}.song-title{font-size:12px;font-weight:600;line-height:1.35;overflow-wrap:anywhere}.song-id{font-size:10px;color:#8f9eb4;margin-top:3px;overflow-wrap:anywhere}.detail-empty{color:#8492a8;text-align:center;padding:14px 8px;font-size:12px}.empty{color:#8492a8;text-align:center;padding:18px 8px;font-size:13px}.hidden{display:none!important}
     @media(max-width:620px){body{padding-left:9px;padding-right:9px}.toolbar{flex-direction:column;align-items:stretch}.refresh{width:100%}.user-row{grid-template-columns:1fr}.stats{flex-direction:row;align-items:center;justify-content:flex-start;flex-wrap:wrap}.summary{flex-direction:column;gap:3px}.summary-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
   </style>
 </head>
@@ -50,7 +51,7 @@
     <section id="detailSection" class="card hidden">
       <div class="detail-head"><div><div id="detailTitle" class="detail-title">Chi tiết người dùng</div><div id="detailMeta" class="detail-meta"></div><div id="detailSummary" class="detail-summary"></div></div><button id="backToList" class="back" type="button">← Danh sách</button></div>
       <div id="detailStatus" class="status info" style="margin-top:10px">⏳ Đang tải...</div>
-      <div id="playlistList" class="playlist-list"></div>
+      <div class="playlist-toolbar"><input id="playlistSearch" class="playlist-search" type="search" autocomplete="off" placeholder="Tìm tên Playlist..." maxlength="100"></div><div id="playlistList" class="playlist-list"></div>
       <div id="songDetail" class="hidden" style="margin-top:12px"></div>
     </section>
   </section>
@@ -132,6 +133,10 @@ async function toggleMyPlaylistUserLock(telegramId, locked){
 let currentDetail=null;
 let openPlaylistId=null;
 let currentRequesterRole='admin';
+let gemsSocket=null;
+let adminSocketAuthenticated=false;
+let watchedTelegramId='';
+let detailPlaylistSearch='';
 function setDetailStatus(text,type='info'){$('detailStatus').textContent=text;$('detailStatus').className='status '+type}
 function renderUserDetail(data){
   const user=data.user||{};
@@ -139,20 +144,26 @@ function renderUserDetail(data){
   const name=esc(displayName(user));
   const username=user.username?`@${esc(user.username)}`:'Chưa có username';
   $('detailTitle').textContent=name;
-  $('detailMeta').innerHTML=`${username} · Telegram ID: ${esc(user.telegram_id)}<br>Đăng ký: ${esc(formatDate(user.registered_at))} · Lần cuối hoạt động: ${esc(formatDate(user.last_seen_at))}<br>Quyền đang xem: ${role}`;
+  $('detailMeta').innerHTML=`${username} · Telegram ID: ${esc(user.telegram_id)}<br>Đăng ký: ${esc(formatDate(user.registered_at))}<br>Lần cuối hoạt động: ${esc(formatDate(user.last_seen_at))}<br>Quyền đang xem: ${role}`;
   const detailSummary=data.summary||{};
   $('detailSummary').innerHTML=`<div class="summary-card"><div class="summary-label">Playlist</div><div class="summary-value">${Number(detailSummary.playlistCount)||0}</div></div><div class="summary-card"><div class="summary-label">Bài hát</div><div class="summary-value">${Number(detailSummary.songCount)||0}</div></div>`;
   const playlists=Array.isArray(data.playlists)?data.playlists:[];
-  $('playlistList').innerHTML=playlists.length?playlists.map(p=>{
-    const canOpen=data.requesterRole==='owner';
-    return `<div class="playlist-row${canOpen?' clickable':''}" data-playlist-id="${esc(p.id)}"><div class="playlist-name">📁 ${esc(p.name)}</div><div class="playlist-meta">${Number(p.song_count)||0} bài hát · Cập nhật: ${esc(formatDate(p.updated_at))}${canOpen?' · Bấm để xem bài hát':''}</div></div>`;
-  }).join(''):'<div class="detail-empty">Người dùng chưa có playlist nào.</div>';
+  $('playlistSearch').value=detailPlaylistSearch;
+  renderPlaylists(playlists,data.requesterRole==='owner');
   $('songDetail').classList.add('hidden');
   $('songDetail').innerHTML='';
-  if(data.requesterRole==='owner'){
+}
+function renderPlaylists(playlists, canOpen){
+  const query=detailPlaylistSearch.trim().toLocaleLowerCase('vi-VN');
+  const filtered=(Array.isArray(playlists)?playlists:[]).filter(p=>!query||String(p.name||'').toLocaleLowerCase('vi-VN').includes(query));
+  $('playlistList').innerHTML=filtered.length?filtered.map(p=>{
+    return `<div class="playlist-row${canOpen?' clickable':''}" data-playlist-id="${esc(p.id)}"><div class="playlist-name">📁 ${esc(p.name)}</div><div class="playlist-meta">${Number(p.song_count)||0} bài hát · Cập nhật: ${esc(formatDate(p.updated_at))}${canOpen?' · Bấm để xem bài hát':''}</div></div>`;
+  }).join(''):(query?'<div class="detail-empty">Không tìm thấy Playlist phù hợp.</div>':'<div class="detail-empty">Người dùng chưa có playlist nào.</div>');
+  if(canOpen){
     $('playlistList').querySelectorAll('.playlist-row').forEach(row=>row.addEventListener('click',()=>showPlaylistSongs(row.dataset.playlistId)));
   }
 }
+
 function showPlaylistSongs(playlistId){
   if(!currentDetail||currentDetail.requesterRole!=='owner')return;
   const playlist=(currentDetail.playlists||[]).find(p=>String(p.id)===String(playlistId));
@@ -170,13 +181,37 @@ function showPlaylistSongs(playlistId){
   const songs=Array.isArray(playlist.songs)?playlist.songs:[];
   $('playlistList').querySelectorAll('.playlist-row').forEach(row=>row.classList.toggle('expanded',row.dataset.playlistId===openPlaylistId));
   $('songDetail').classList.remove('hidden');
-  $('songDetail').innerHTML=`<div class="detail-title">🎵 ${esc(playlist.name)}</div><div class="detail-meta">${songs.length} bài hát · Thứ tự playlist</div>${songs.length?`<div class="song-list">${songs.map(song=>`<div class="song-row"><img class="song-thumb" src="${esc(song.thumbnail_url||'')}" alt=""><div><div class="song-title">${esc(song.title||'Chưa có tiêu đề')}</div><div class="song-id">#${Number(song.position)+1} · Video ID: ${esc(song.youtube_video_id)}</div></div></div>`).join('')}</div>`:'<div class="detail-empty">Playlist này chưa có bài hát.</div>'}`;
+  $('songDetail').innerHTML=`<div class="detail-title">🎵 ${esc(playlist.name)}</div><div class="detail-meta">${songs.length} bài hát · Thứ tự playlist</div>${songs.length?`<div class="song-list">${songs.map(song=>`<div class="song-row"><img class="song-thumb" src="${esc(song.thumbnail_url||'')}" alt=""><div><div class="song-title">${esc(song.title||'Chưa có tiêu đề')}</div><div class="song-id">#${Number(song.position)+1} · Video ID: ${esc(song.youtube_video_id)}</div><div class="song-id"><a href="${esc(song.youtube_url||'')}" target="_blank" rel="noopener noreferrer" style="color:#9ecbff;text-decoration:none">▶ Mở YouTube</a> · Thêm: ${esc(formatDate(song.created_at))}</div></div></div>`).join('')}</div>`:'<div class="detail-empty">Playlist này chưa có bài hát.</div>'}`;
   $('songDetail').scrollIntoView({behavior:'smooth',block:'start'});
 }
-async function openUserDetail(telegramId){
+function connectAdminSocket(){
+  if(!window.io||gemsSocket)return;
+  gemsSocket=io();
+  gemsSocket.on('connect',()=>{
+    adminSocketAuthenticated=false;
+    resolveInitData();
+    gemsSocket.emit('authenticate',{initData,deviceInfo:{platform:tg?.platform||'',userAgent:navigator.userAgent}});
+  });
+  gemsSocket.on('adminStatus',data=>{
+    adminSocketAuthenticated=data?.authenticated===true && data?.isAdmin===true;
+    if(adminSocketAuthenticated && watchedTelegramId) gemsSocket.emit('watchMyPlaylistUser',{telegramId:watchedTelegramId});
+  });
+  gemsSocket.on('myPlaylistChanged',async event=>{
+    if(!currentDetail?.user?.telegram_id||String(event?.telegramId)!==String(currentDetail.user.telegram_id))return;
+    const activePlaylistId=openPlaylistId;
+    try{
+      await openUserDetail(currentDetail.user.telegram_id,{preserveSearch:true,preservePlaylistId:activePlaylistId});
+    }catch(error){console.error('My Playlist admin realtime error:',error)}
+  });
+}
+
+async function openUserDetail(telegramId, options={}){
   resolveInitData();
   if(!initData){setStatus('⚠️ Không nhận được Telegram initData. Hãy mở trang từ Telegram Mini App.','error');return}
   $('listSection').classList.add('hidden');$('detailSection').classList.remove('hidden');
+  const preserveSearch=options.preserveSearch===true;
+  const preservePlaylistId=options.preservePlaylistId?String(options.preservePlaylistId):null;
+  if(!preserveSearch) detailPlaylistSearch='';
   openPlaylistId=null;
   $('detailTitle').textContent='Chi tiết người dùng';$('detailMeta').textContent='';$('playlistList').innerHTML='';$('songDetail').innerHTML='';$('songDetail').classList.add('hidden');setDetailStatus('⏳ Đang tải...');
   try{
@@ -185,6 +220,9 @@ async function openUserDetail(telegramId){
     if(!response.ok||data.success!==true){setDetailStatus(`❌ ${data.message||'Không thể tải chi tiết người dùng.'}`,'error');return}
     currentDetail=data;
     renderUserDetail(data);
+    if(preservePlaylistId) showPlaylistSongs(preservePlaylistId);
+    watchedTelegramId=String(telegramId);
+    if(adminSocketAuthenticated && gemsSocket?.connected) gemsSocket.emit('watchMyPlaylistUser',{telegramId:watchedTelegramId});
     setDetailStatus(data.user?.is_locked===true?'🔒 Tài khoản My Playlist đang bị khóa.':'','success');
   }catch(error){console.error('My Playlist user detail error:',error);setDetailStatus('❌ Lỗi kết nối máy chủ.','error')}
 }
@@ -208,13 +246,20 @@ async function loadUsers(){
   }catch(error){console.error('My Playlist user management error:',error);setStatus('❌ Lỗi kết nối máy chủ.','error')}
   finally{$('refresh').disabled=false}
 }
+$('playlistSearch').addEventListener('input',()=>{
+  detailPlaylistSearch=String($('playlistSearch').value||'');
+  renderPlaylists(currentDetail?.playlists||[],currentDetail?.requesterRole==='owner');
+  if(openPlaylistId&&!$('playlistList').querySelector(`[data-playlist-id="${CSS.escape(openPlaylistId)}"]`)){
+    openPlaylistId=null;$('songDetail').classList.add('hidden');$('songDetail').innerHTML='';
+  }
+});
 $('refresh').addEventListener('click',loadUsers);
 $('search').addEventListener('input',()=>{clearTimeout(searchTimer);searchTimer=setTimeout(loadUsers,300)});
-$('backToList').addEventListener('click',()=>{$('detailSection').classList.add('hidden');$('listSection').classList.remove('hidden');currentDetail=null;openPlaylistId=null});
+$('backToList').addEventListener('click',()=>{$('detailSection').classList.add('hidden');$('listSection').classList.remove('hidden');currentDetail=null;openPlaylistId=null;detailPlaylistSearch='';watchedTelegramId='';if(adminSocketAuthenticated&&gemsSocket?.connected)gemsSocket.emit('watchMyPlaylistUser',{telegramId:''})});
 function waitForTelegramInitData(){
-  if(resolveInitData()){loadUsers();return}
+  if(resolveInitData()){connectAdminSocket();loadUsers();return}
   const startedAt=Date.now();
-  const timer=setInterval(()=>{if(resolveInitData()){clearInterval(timer);loadUsers();return}if(Date.now()-startedAt>=15000){clearInterval(timer);loadUsers()}},250);
+  const timer=setInterval(()=>{if(resolveInitData()){clearInterval(timer);connectAdminSocket();loadUsers();return}if(Date.now()-startedAt>=15000){clearInterval(timer);loadUsers()}},250);
 }
 waitForTelegramInitData();
 </script>
