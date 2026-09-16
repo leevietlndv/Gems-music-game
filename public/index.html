@@ -1001,6 +1001,12 @@
       border-radius: 9px;
       overflow: hidden;
       flex-shrink: 0;
+      transition: border-color .18s ease, box-shadow .18s ease;
+    }
+
+    .song-item.is-playing {
+      border-color: #ffcc00;
+      box-shadow: 0 0 0 1px rgba(255,204,0,.35), 0 0 9px rgba(255,204,0,.18);
     }
 
     .song-thumb-wrap {
@@ -1028,13 +1034,24 @@
       height: 28px;
       padding: 0;
       border-radius: 50%;
-      background: rgba(46,125,50,.94);
+      background: #0088cc;
       color: #fff;
       font-size: 13px;
       line-height: 1;
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transform: scale(.86);
+      transition: opacity .16s ease, transform .16s ease;
+    }
+
+    .song-thumb-wrap:hover .song-thumb-play,
+    .song-item.play-revealed .song-thumb-play {
+      opacity: 1;
+      pointer-events: auto;
+      transform: scale(1);
     }
 
     .song-main {
@@ -1053,11 +1070,17 @@
       overflow: hidden;
     }
 
+    .song-index {
+      color: #ffcc00;
+      font-weight: 800;
+    }
+
     .song-sender {
       min-width: 0;
       margin-top: 3px;
-      color: #ff9800;
+      color: #ffcc00;
       font-size: 10px;
+      font-weight: 600;
       line-height: 1.2;
       white-space: nowrap;
       overflow: hidden;
@@ -1164,6 +1187,46 @@
       color: #aeb9ca;
       font-size: 13px;
       line-height: 1.5;
+    }
+
+    .playlist-picker-create {
+      display: flex;
+      gap: 7px;
+      margin-top: 10px;
+    }
+
+    .playlist-picker-create input {
+      flex: 1 1 auto;
+      min-width: 0;
+      height: 38px;
+      padding: 0 10px;
+      border: 1px solid #46536b;
+      border-radius: 8px;
+      background: #182237;
+      color: #fff;
+      font-size: 13px;
+      outline: none;
+    }
+
+    .playlist-picker-create input:focus {
+      border-color: #0088cc;
+      box-shadow: 0 0 0 2px rgba(0,136,204,.16);
+    }
+
+    .playlist-picker-create button {
+      flex: 0 0 auto;
+      height: 38px;
+      padding: 0 12px;
+      border-radius: 8px;
+      background: #0088cc;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .playlist-picker-create button:disabled {
+      opacity: .6;
+      cursor: wait;
     }
 
     .playlist-picker-cancel {
@@ -1835,6 +1898,10 @@
       <div class="playlist-picker-card">
         <div id="myPlaylistPickerTitle" class="playlist-picker-title">❤️ Thêm vào My Playlist</div>
         <div id="myPlaylistPickerList" class="playlist-picker-list"></div>
+        <div class="playlist-picker-create">
+          <input id="myPlaylistNewName" type="text" maxlength="100" placeholder="Tên playlist mới..." autocomplete="off">
+          <button id="myPlaylistCreateBtn" type="button">＋ Tạo & thêm</button>
+        </div>
         <button id="myPlaylistPickerCancel" class="playlist-picker-cancel" type="button">Hủy</button>
       </div>
     </div>
@@ -2728,8 +2795,6 @@
         updateAutoPlayButton();
       }
 
-      updateUI();
-
       const incomingPlayback = data.playback || null;
       updateServerClockOffset(incomingPlayback);
       const playbackChanged =
@@ -2737,6 +2802,8 @@
         !incomingPlayback ||
         Number(incomingPlayback.version) !== Number(currentPlayback.version);
       currentPlayback = incomingPlayback;
+      updateUI();
+      updateSongPlayingHighlight();
       updatePlaybackControlUI();
       // Auto-seek đã tắt: không tự chạy drift correction theo interval.
       playbackTimelineSeekPending = false;
@@ -2809,6 +2876,7 @@
         String(pendingLocalPlayback.songId) === String(song.id);
 
       currentPlayback = incomingPlayback || currentPlayback;
+      updateSongPlayingHighlight();
       updatePlaybackControlUI();
 
       if (matchesPendingLocal && youtubeApiPlayer && youtubePlayerReady) {
@@ -2850,6 +2918,7 @@
         Number(incomingPlayback.version) !== Number(currentPlayback.version);
 
       currentPlayback = incomingPlayback;
+      updateSongPlayingHighlight();
       updatePlaybackControlUI();
       playbackTimelineSeekPending = false;
       playbackTimelinePendingPosition = null;
@@ -3090,6 +3159,16 @@
       }
     }
 
+    function updateSongPlayingHighlight() {
+      const playingId = currentPlayback?.status === 'playing' && currentPlayback?.songId != null
+        ? String(currentPlayback.songId)
+        : null;
+
+      songListEl?.querySelectorAll('.song-item').forEach(item => {
+        item.classList.toggle('is-playing', playingId != null && item.dataset.songId === playingId);
+      });
+    }
+
     function updateUI() {
       renderBlacklist();
 
@@ -3145,9 +3224,13 @@
               ? `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`
               : '';
 
+            const isPlaying = currentPlayback?.status === 'playing' &&
+              currentPlayback?.songId != null &&
+              String(currentPlayback.songId) === id;
+
             return `
-              <div class="song-item">
-                <div class="song-thumb-wrap">
+              <div class="song-item${isPlaying ? ' is-playing' : ''}" data-song-id="${id}">
+                <div class="song-thumb-wrap" data-action="reveal-play" data-id="${id}" role="button" tabindex="0" aria-label="Hiện nút phát">
                   ${thumb ? `<img class="song-thumb" src="${escapeHtml(thumb)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<div class="song-thumb"></div>'}
                   <button
                     class="song-thumb-play ${window.isAdmin ? '' : 'admin-only'}"
@@ -3160,10 +3243,10 @@
 
                 <div class="song-main">
                   <div class="song-title" title="${title}">
-                    #${idx + 1} - ${title}
+                    <span class="song-index">${idx + 1}</span> - ${title}
                   </div>
                   <div class="song-sender" title="${user}">
-                    YouTube · ${user}
+                    Người gửi: ${user}
                   </div>
                 </div>
 
@@ -3371,10 +3454,31 @@
     const myPlaylistPicker = document.getElementById('myPlaylistPicker');
     const myPlaylistPickerList = document.getElementById('myPlaylistPickerList');
     const myPlaylistPickerCancel = document.getElementById('myPlaylistPickerCancel');
+    const myPlaylistNewName = document.getElementById('myPlaylistNewName');
+    const myPlaylistCreateBtn = document.getElementById('myPlaylistCreateBtn');
+    let myPlaylistPickerSong = null;
 
     function closeMyPlaylistPicker() {
       myPlaylistPicker?.classList.add('hidden');
       if (myPlaylistPickerList) myPlaylistPickerList.innerHTML = '';
+      if (myPlaylistNewName) myPlaylistNewName.value = '';
+      myPlaylistPickerSong = null;
+    }
+
+    function showMyPlaylistPicker(song, playlists) {
+      myPlaylistPickerSong = song;
+      const list = Array.isArray(playlists) ? playlists : [];
+
+      myPlaylistPickerList.innerHTML = list.length
+        ? list.map(p => `
+            <button class="playlist-picker-option" type="button" data-playlist-id="${p.id}">
+              ${escapeHtml(p.name)} <span style="color:#91a0b7;font-weight:400">(${Number(p.songCount) || 0} bài)</span>
+            </button>
+          `).join('')
+        : '<div class="playlist-picker-empty">Bạn chưa có playlist nào. Hãy đặt tên và tạo playlist mới bên dưới để thêm bài hát ngay.</div>';
+
+      myPlaylistPicker.classList.remove('hidden');
+      setTimeout(() => myPlaylistNewName?.focus(), 0);
     }
 
     async function addSongToMyPlaylist(songId, button) {
@@ -3405,45 +3509,54 @@
         }
 
         const playlists = Array.isArray(listData.playlists) ? listData.playlists : [];
-        if (!playlists.length) {
-          const go = confirm('Bạn chưa có playlist nào. Mở My Playlist để tạo playlist mới?');
-          if (go) window.location.href = '/myplaylist.html';
-          return;
-        }
-
-        if (playlists.length === 1) {
-          await saveSongToSelectedPlaylist(playlists[0], song);
-          return;
-        }
-
-        myPlaylistPickerList.innerHTML = playlists.map(p => `
-          <button class="playlist-picker-option" type="button" data-playlist-id="${p.id}">
-            ${escapeHtml(p.name)} <span style="color:#91a0b7;font-weight:400">(${Number(p.songCount) || 0} bài)</span>
-          </button>
-        `).join('');
-
-        myPlaylistPickerList.querySelectorAll('.playlist-picker-option').forEach(option => {
-          option.addEventListener('click', async () => {
-            const playlist = playlists.find(p => Number(p.id) === Number(option.dataset.playlistId));
-            if (!playlist) return;
-            option.disabled = true;
-            try {
-              await saveSongToSelectedPlaylist(playlist, song);
-              closeMyPlaylistPicker();
-            } catch (e) {
-              alert(e.message || 'Không thể thêm bài hát vào playlist.');
-              option.disabled = false;
-            }
-          });
-        });
-
-        myPlaylistPicker.classList.remove('hidden');
+        showMyPlaylistPicker(song, playlists);
       } catch (error) {
         console.error('❌ Lỗi thêm vào My Playlist:', error);
         alert('Lỗi kết nối đến My Playlist!');
       } finally {
         button.disabled = false;
         button.textContent = oldText;
+      }
+    }
+
+    async function createPlaylistAndAddSong() {
+      const song = myPlaylistPickerSong;
+      const name = myPlaylistNewName?.value.trim() || '';
+      if (!song) return;
+      if (!name) {
+        alert('Vui lòng nhập tên playlist mới.');
+        myPlaylistNewName?.focus();
+        return;
+      }
+      if (name.length > 100) {
+        alert('Tên playlist không được vượt quá 100 ký tự.');
+        return;
+      }
+
+      myPlaylistCreateBtn.disabled = true;
+      const oldText = myPlaylistCreateBtn.textContent;
+      myPlaylistCreateBtn.textContent = '⏳ Đang tạo...';
+
+      try {
+        const createRes = await fetch('/api/my-playlists', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, initData: telegramInitData })
+        });
+        let createData = {};
+        try { createData = await createRes.json(); } catch (_) {}
+
+        if (!createRes.ok || !createData.success || !createData.playlist?.id) {
+          throw new Error(createData.message || 'Không thể tạo playlist mới.');
+        }
+
+        await saveSongToSelectedPlaylist(createData.playlist, song);
+        closeMyPlaylistPicker();
+      } catch (e) {
+        alert(e.message || 'Không thể tạo playlist mới.');
+      } finally {
+        myPlaylistCreateBtn.disabled = false;
+        myPlaylistCreateBtn.textContent = oldText;
       }
     }
 
@@ -3472,7 +3585,32 @@
       alert(`❤️ Đã thêm vào playlist “${playlist.name}”.`);
     }
 
+    myPlaylistPickerList?.addEventListener('click', async event => {
+      const option = event.target.closest('.playlist-picker-option');
+      if (!option) return;
+      const song = myPlaylistPickerSong;
+      if (!song) return;
+
+      const playlistId = Number(option.dataset.playlistId);
+      const nameText = option.textContent.replace(/\s*\(\d+ bài\)\s*$/, '').trim();
+      option.disabled = true;
+      try {
+        await saveSongToSelectedPlaylist({ id: playlistId, name: nameText }, song);
+        closeMyPlaylistPicker();
+      } catch (e) {
+        alert(e.message || 'Không thể thêm bài hát vào playlist.');
+        option.disabled = false;
+      }
+    });
+
     myPlaylistPickerCancel?.addEventListener('click', closeMyPlaylistPicker);
+    myPlaylistCreateBtn?.addEventListener('click', createPlaylistAndAddSong);
+    myPlaylistNewName?.addEventListener('keydown', event => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        createPlaylistAndAddSong();
+      }
+    });
     myPlaylistPicker?.addEventListener('click', event => {
       if (event.target === myPlaylistPicker) closeMyPlaylistPicker();
     });
@@ -3480,6 +3618,13 @@
     // Event delegation: an toàn hơn inline onclick (không nhét dữ liệu
     // vào attribute HTML, không tạo closure mỗi lần render).
     songListEl.addEventListener('click', (event) => {
+      const reveal = event.target.closest('[data-action="reveal-play"]');
+      if (reveal && !event.target.closest('button[data-action="play"]')) {
+        const item = reveal.closest('.song-item');
+        item?.classList.toggle('play-revealed');
+        return;
+      }
+
       const button = event.target.closest('button[data-action]');
       if (!button) return;
 
@@ -3491,6 +3636,14 @@
       } else if (button.dataset.action === 'delete') {
         deleteSong(songId);
       }
+    });
+
+    songListEl.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      const reveal = event.target.closest('[data-action="reveal-play"]');
+      if (!reveal || event.target.closest('button[data-action="play"]')) return;
+      event.preventDefault();
+      reveal.closest('.song-item')?.classList.toggle('play-revealed');
     });
 
     blacklistListEl?.addEventListener('click', (event) => {
