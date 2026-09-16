@@ -988,145 +988,193 @@
       gap: 10px;
     }
 
+    /* Danh sách bài hát: giao diện đồng bộ với My Playlist, nhưng không kéo thả. */
     .song-item {
       width: 100%;
-      box-sizing: border-box;
-      padding: 12px 14px;
-      background: #182235;
-      border-left: 4px solid #00aaff;
-      border-radius: 12px;
-
-      /* QUAN TRỌNG: không dùng flex ở đây */
-      display: block;
-
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px;
+      background: #29364b;
+      border: 1px solid #3b4960;
+      border-radius: 9px;
       overflow: hidden;
       flex-shrink: 0;
     }
 
-    .song-header {
-      width: 100%;
-      display: flex;
+    .song-thumb-wrap {
+      position: relative;
+      width: 72px;
+      height: 42px;
+      flex: 0 0 72px;
+      cursor: pointer;
+    }
+
+    .song-thumb {
+      width: 72px;
+      height: 42px;
+      object-fit: cover;
+      border-radius: 6px;
+      background: #111827;
+      display: block;
+    }
+
+    .song-thumb-play {
+      position: absolute;
+      inset: 0;
+      margin: auto;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border-radius: 50%;
+      background: rgba(46,125,50,.94);
+      color: #fff;
+      font-size: 13px;
+      line-height: 1;
+      display: inline-flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 5px;
+      justify-content: center;
+    }
+
+    .song-main {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+
+    .song-title {
+      min-width: 0;
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.35;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .song-sender {
+      min-width: 0;
+      margin-top: 3px;
+      color: #ff9800;
+      font-size: 10px;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .song-actions {
       display: flex;
       flex-direction: column;
-      align-items: stretch;
-      gap: 6px;
-
+      gap: 3px;
       flex: 0 0 auto;
     }
 
-    /* Nút PLAY */
-    .btn-play-song {
-      width: 20%;
-      height: 33px;
-      max-width: 50px;
-      flex-shrink: 0;
-
-      border: none;
-      border-radius: 6px;
-
-      background: #00aaff;
-      color: #ffffff;
-
-      font-size: 18px;
-      font-weight: 700;
-
-      cursor: pointer;
-
+    .song-action-btn {
+      width: 32px;
+      height: 30px;
+      padding: 0;
+      background: transparent;
+      color: #c9d4e5;
+      font-size: 20px;
+      line-height: 1;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-
-      white-space: nowrap;
     }
 
-    .btn-play-song:hover {
-      background: #008dcc;
+    .song-action-btn:disabled {
+      opacity: .5;
+      cursor: wait;
     }
 
-    .btn-play-song:active {
-      transform: scale(0.96);
-    }
-
-    .song-user {
-      width: 80%;
-      flex: 1;
-      min-width: 0;
-      font-weight: 700;
-      color: #ffcc00;
-
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .song-url {
-      min-width: 0;
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-    }
-
-    /* Nút DELETE */
-    .btn-delete-song {
-      width: 20%;
-      height: 33px;
-      max-width: 50px;
-
-      padding: 3px 3px;
-
-      border: none;
-      border-radius: 6px;
-
-      background: #d32f2f;
-      color: #ffffff;
-
+    .song-action-btn.song-delete {
       font-size: 18px;
-      font-weight: 700;
-
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-
-      white-space: nowrap;
     }
 
-    .btn-delete-song:hover {
-      background: #b71c1c;
-    }
-
-    .btn-delete-song:active {
-      transform: scale(0.96);
-    }
-
-    .song-title-row {
+    .playlist-picker {
+      position: fixed;
+      inset: 0;
+      z-index: 1500;
       display: flex;
       align-items: center;
-      width: 100%;
-      gap: 10px;
-      margin-top: 8px;
+      justify-content: center;
+      padding: 18px;
+      background: rgba(0,0,0,.62);
     }
 
-    .song-title {
-      width: 80%;
-      min-width: 0;
+    .playlist-picker.hidden {
+      display: none;
+    }
 
-      white-space: nowrap;
+    .playlist-picker-card {
+      width: 100%;
+      max-width: 420px;
+      max-height: min(70vh, 520px);
+      padding: 14px;
+      background: #252f42;
+      border: 1px solid #46536b;
+      border-radius: 12px;
+      box-shadow: 0 15px 45px rgba(0,0,0,.5);
+      overflow: hidden;
+    }
+
+    .playlist-picker-title {
+      margin-bottom: 10px;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .playlist-picker-list {
+      max-height: 48vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .playlist-picker-option {
+      width: 100%;
+      min-height: 42px;
+      padding: 8px 10px;
+      border: 1px solid #3b4960;
+      border-radius: 8px;
+      background: #29364b;
+      color: #fff;
+      text-align: left;
+      font-size: 14px;
+      font-weight: 600;
       overflow: hidden;
       text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
-    .song-title-row .btn-delete-song {
-      width: 20%;
-      margin-left: auto;
-      flex-shrink: 0;
+    .playlist-picker-option:hover {
+      background: #34445d;
+    }
+
+    .playlist-picker-option:active {
+      transform: scale(.99);
+    }
+
+    .playlist-picker-empty {
+      padding: 12px 4px;
+      color: #aeb9ca;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .playlist-picker-cancel {
+      width: 100%;
+      height: 38px;
+      margin-top: 10px;
+      border-radius: 8px;
+      background: #34415a;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
     }
 
     .player-wrapper {
@@ -1779,6 +1827,15 @@
       <div id="songList" class="song-list">
         <div style="text-align: center; color: #888; font-size: 13px; padding: 10px;">Chưa có bài hát nào được gửi.
         </div>
+      </div>
+    </div>
+
+    <!-- MY PLAYLIST PICKER: chọn playlist để lưu bài hát hiện tại. -->
+    <div id="myPlaylistPicker" class="playlist-picker hidden" role="dialog" aria-modal="true" aria-labelledby="myPlaylistPickerTitle">
+      <div class="playlist-picker-card">
+        <div id="myPlaylistPickerTitle" class="playlist-picker-title">❤️ Thêm vào My Playlist</div>
+        <div id="myPlaylistPickerList" class="playlist-picker-list"></div>
+        <button id="myPlaylistPickerCancel" class="playlist-picker-cancel" type="button">Hủy</button>
       </div>
     </div>
 
@@ -3083,45 +3140,50 @@
               s.title || 'Đang cập nhật tiêu đề...'
             );
             const id = String(s.id ?? '');
+            const videoId = extractYouTubeId(s.url || '');
+            const thumb = videoId
+              ? `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`
+              : '';
 
             return `
               <div class="song-item">
-
-                <div class="song-header">
-
-                  <div class="song-user">
-                    #${idx + 1} - ${user}
-                  </div>
-
+                <div class="song-thumb-wrap">
+                  ${thumb ? `<img class="song-thumb" src="${escapeHtml(thumb)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<div class="song-thumb"></div>'}
                   <button
-                    class="btn-play-song ${window.isAdmin ? '' : 'admin-only'}"
+                    class="song-thumb-play ${window.isAdmin ? '' : 'admin-only'}"
                     data-action="play"
                     data-id="${id}"
                     title="Phát bài hát"
-                  >
-                    ▶
-                  </button>
-
+                    aria-label="Phát bài hát"
+                  >▶</button>
                 </div>
 
-                <div class="song-title-row">
-
-                  <div class="song-title">
-                    ${title}
+                <div class="song-main">
+                  <div class="song-title" title="${title}">
+                    #${idx + 1} - ${title}
                   </div>
+                  <div class="song-sender" title="${user}">
+                    YouTube · ${user}
+                  </div>
+                </div>
 
-                  <!-- DELETE: CHỈ ADMIN -->
+                <div class="song-actions">
                   <button
-                    class="btn-delete-song ${window.isAdmin ? '' : 'admin-only'}"
+                    class="song-action-btn"
+                    data-action="add-playlist"
+                    data-id="${id}"
+                    title="Thêm vào My Playlist"
+                    aria-label="Thêm vào My Playlist"
+                  >❤️</button>
+
+                  <button
+                    class="song-action-btn song-delete ${window.isAdmin ? '' : 'admin-only'}"
                     data-action="delete"
                     data-id="${id}"
                     title="Xóa bài hát"
-                  >
-                    ✖
-                  </button>
-
+                    aria-label="Xóa bài hát"
+                  >🗑️</button>
                 </div>
-
               </div>
             `;
           }).join('');
@@ -3306,6 +3368,115 @@
   }
 }
 
+    const myPlaylistPicker = document.getElementById('myPlaylistPicker');
+    const myPlaylistPickerList = document.getElementById('myPlaylistPickerList');
+    const myPlaylistPickerCancel = document.getElementById('myPlaylistPickerCancel');
+
+    function closeMyPlaylistPicker() {
+      myPlaylistPicker?.classList.add('hidden');
+      if (myPlaylistPickerList) myPlaylistPickerList.innerHTML = '';
+    }
+
+    async function addSongToMyPlaylist(songId, button) {
+      const song = songs.find(s => String(s.id) === String(songId));
+      if (!song) {
+        alert('Không tìm thấy bài hát!');
+        return;
+      }
+
+      button.disabled = true;
+      const oldText = button.textContent;
+      button.textContent = '⏳';
+
+      try {
+        const listRes = await fetch(`/api/my-playlists?initData=${encodeURIComponent(telegramInitData)}`);
+        let listData = {};
+        try { listData = await listRes.json(); } catch (_) {}
+
+        if (listRes.status === 403 && listData.code === 'MY_PLAYLIST_NOT_REGISTERED') {
+          const go = confirm('Bạn chưa đăng ký My Playlist. Mở My Playlist để đăng ký ngay?');
+          if (go) window.location.href = '/myplaylist.html';
+          return;
+        }
+
+        if (!listRes.ok || !listData.success) {
+          alert(listData.message || 'Không thể tải danh sách My Playlist.');
+          return;
+        }
+
+        const playlists = Array.isArray(listData.playlists) ? listData.playlists : [];
+        if (!playlists.length) {
+          const go = confirm('Bạn chưa có playlist nào. Mở My Playlist để tạo playlist mới?');
+          if (go) window.location.href = '/myplaylist.html';
+          return;
+        }
+
+        if (playlists.length === 1) {
+          await saveSongToSelectedPlaylist(playlists[0], song);
+          return;
+        }
+
+        myPlaylistPickerList.innerHTML = playlists.map(p => `
+          <button class="playlist-picker-option" type="button" data-playlist-id="${p.id}">
+            ${escapeHtml(p.name)} <span style="color:#91a0b7;font-weight:400">(${Number(p.songCount) || 0} bài)</span>
+          </button>
+        `).join('');
+
+        myPlaylistPickerList.querySelectorAll('.playlist-picker-option').forEach(option => {
+          option.addEventListener('click', async () => {
+            const playlist = playlists.find(p => Number(p.id) === Number(option.dataset.playlistId));
+            if (!playlist) return;
+            option.disabled = true;
+            try {
+              await saveSongToSelectedPlaylist(playlist, song);
+              closeMyPlaylistPicker();
+            } catch (e) {
+              alert(e.message || 'Không thể thêm bài hát vào playlist.');
+              option.disabled = false;
+            }
+          });
+        });
+
+        myPlaylistPicker.classList.remove('hidden');
+      } catch (error) {
+        console.error('❌ Lỗi thêm vào My Playlist:', error);
+        alert('Lỗi kết nối đến My Playlist!');
+      } finally {
+        button.disabled = false;
+        button.textContent = oldText;
+      }
+    }
+
+    async function saveSongToSelectedPlaylist(playlist, song) {
+      const videoId = extractYouTubeId(song.url || '');
+      if (!videoId) throw new Error('Không tìm thấy YouTube Video ID.');
+
+      const res = await fetch(`/api/my-playlists/${playlist.id}/songs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          youtubeUrl: song.url,
+          title: song.title || '',
+          thumbnailUrl: `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`,
+          initData: telegramInitData
+        })
+      });
+
+      let data = {};
+      try { data = await res.json(); } catch (_) {}
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Không thể thêm bài hát vào playlist.');
+      }
+
+      alert(`❤️ Đã thêm vào playlist “${playlist.name}”.`);
+    }
+
+    myPlaylistPickerCancel?.addEventListener('click', closeMyPlaylistPicker);
+    myPlaylistPicker?.addEventListener('click', event => {
+      if (event.target === myPlaylistPicker) closeMyPlaylistPicker();
+    });
+
     // Event delegation: an toàn hơn inline onclick (không nhét dữ liệu
     // vào attribute HTML, không tạo closure mỗi lần render).
     songListEl.addEventListener('click', (event) => {
@@ -3315,6 +3486,8 @@
       const songId = button.dataset.id;
       if (button.dataset.action === 'play') {
         playSong(songId);
+      } else if (button.dataset.action === 'add-playlist') {
+        addSongToMyPlaylist(songId, button);
       } else if (button.dataset.action === 'delete') {
         deleteSong(songId);
       }
