@@ -1190,15 +1190,18 @@
     }
 
     .playlist-picker-create {
-      display: flex;
-      gap: 7px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 8px;
+      width: 100%;
       margin-top: 10px;
     }
 
     .playlist-picker-create input {
-      flex: 1 1 auto;
+      width: 100%;
       min-width: 0;
       height: 38px;
+      box-sizing: border-box;
       padding: 0 10px;
       border: 1px solid #46536b;
       border-radius: 8px;
@@ -1214,9 +1217,11 @@
     }
 
     .playlist-picker-create button {
-      flex: 0 0 auto;
+      width: 100%;
+      min-width: 0;
       height: 38px;
-      padding: 0 12px;
+      padding: 0 8px;
+      box-sizing: border-box;
       border-radius: 8px;
       background: #0088cc;
       color: #fff;
