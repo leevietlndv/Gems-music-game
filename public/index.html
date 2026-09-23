@@ -3853,9 +3853,19 @@
       }
     }
 
+    // Khi Admin đang trực tiếp kéo volume, giá trị local là nguồn ưu tiên tạm thời.
+    // Server vẫn là nguồn sự thật sau khi thao tác kết thúc.
+    let volumeUserInteracting = false;
+
     function setGlobalVolumeFromServer(value) {
       const numeric = Number(value);
       if (!Number.isFinite(numeric)) return;
+
+      // Không để volumeState cũ/đến trễ từ server kéo ngược slider trong lúc
+      // người dùng đang kéo. Đây là nguyên nhân chính gây cảm giác slider
+      // đôi lúc không đổi âm lượng hoặc bị nhảy về giá trị cũ.
+      if (volumeUserInteracting) return;
+
       globalVolume = Math.max(0, Math.min(100, Math.round(numeric)));
       updateAudioControls();
       updateVolumeAccess();
@@ -3989,10 +3999,18 @@
       }
     });
 
-    // Phase 6D.1: chỉ Admin được thay đổi global volume. Trong lúc kéo,
-    // UI cập nhật ngay; event gửi server được throttle để tránh spam.
+    // Phase 6D.1: chỉ Admin được thay đổi global volume.
+    // Khi đang kéo, local slider + YouTube player được ưu tiên tuyệt đối;
+    // volumeState từ server không được phép ghi đè. Sau khi thả, giá trị cuối
+    // cùng mới được gửi lên server để server tiếp tục là nguồn sự thật.
     let volumeEmitTimer = null;
     let pendingGlobalVolume = null;
+
+    volumeSlider.addEventListener('pointerdown', () => {
+      if (window.isAdmin === true) {
+        volumeUserInteracting = true;
+      }
+    });
 
     volumeSlider.addEventListener('input', () => {
       if (window.isAdmin !== true) {
@@ -4000,12 +4018,17 @@
         return;
       }
 
+      volumeUserInteracting = true;
       const value = Math.max(0, Math.min(100, Number(volumeSlider.value) || 0));
       globalVolume = value;
       pendingGlobalVolume = value;
+
+      // Cập nhật local ngay lập tức, không chờ server round-trip.
       updateAudioControls();
       applyGlobalVolumeToPlayer();
 
+      // Vẫn throttle broadcast để các thiết bị khác nhận được thay đổi
+      // trong lúc kéo, nhưng không để echo từ server điều khiển ngược slider.
       if (volumeEmitTimer === null) {
         sendGlobalVolume(value);
         volumeEmitTimer = setTimeout(() => {
@@ -4027,11 +4050,33 @@
       const value = Math.max(0, Math.min(100, Number(volumeSlider.value) || 0));
       globalVolume = value;
       pendingGlobalVolume = null;
+
+      // Áp dụng giá trị cuối cùng trước khi mở khóa đồng bộ từ server.
       applyGlobalVolumeToPlayer();
       clearTimeout(volumeEmitTimer);
       volumeEmitTimer = null;
       sendGlobalVolume(value);
       updateAudioControls();
+
+      // Giữ khóa trong một nhịp event để tránh một volumeState cũ đến trễ
+      // ghi đè ngay sau khi người dùng vừa thả slider.
+      setTimeout(() => {
+        volumeUserInteracting = false;
+      }, 0);
+    });
+
+    volumeSlider.addEventListener('pointercancel', () => {
+      if (window.isAdmin !== true) return;
+
+      const value = Math.max(0, Math.min(100, Number(volumeSlider.value) || 0));
+      globalVolume = value;
+      pendingGlobalVolume = null;
+      applyGlobalVolumeToPlayer();
+      clearTimeout(volumeEmitTimer);
+      volumeEmitTimer = null;
+      sendGlobalVolume(value);
+      updateAudioControls();
+      volumeUserInteracting = false;
     });
 
     socket.on('volumeState', (data) => {
