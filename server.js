@@ -2198,7 +2198,7 @@ async function getYouTubeTitle(url) {
 
 // ==================== AUTO PLAY STATE ====================
 // 0 = Tắt | 1 = Tuần tự | 2 = Ngẫu nhiên
-let autoPlayMode = 0;
+let autoPlayMode = 2;
 let autoPlayControllerSocketId = null;
 
 function setAutoPlayState(mode, controllerSocketId = null) {
@@ -3867,6 +3867,13 @@ io.on('connection', (socket) => {
       telegramId,
       adminRole: adminRole || null
     });
+
+    // Auto Play mặc định là Ngẫu nhiên. Thiết bị Admin/Owner đầu tiên
+    // xác thực sẽ trở thành controller để Auto Play có thể tự chuyển bài.
+    if (admin && autoPlayMode === 2 && !autoPlayControllerSocketId) {
+      autoPlayControllerSocketId = socket.id;
+      broadcastAutoPlayState();
+    }
 
     await addOnlineUser(socket, auth.user, deviceInfo, adminRole);
     broadcastOnlineSummary();

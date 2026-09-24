@@ -897,17 +897,28 @@
       box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
     }
 
-    .btn-spin {
-      background: #ff9800;
-      color: #111;
-      font-size: 16px;
-      font-weight: 700;
-      margin-bottom: 12px;
+    .wheel-container.spin-enabled canvas {
+      cursor: pointer;
     }
 
-    .btn-spin:disabled {
-      background: #78541c;
-      color: #666;
+    .btn-auto-play {
+      width: 38px;
+      height: 38px;
+      min-width: 38px;
+      padding: 0;
+      border: 0;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 18px;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+    }
+
+    .btn-auto-play:disabled {
+      opacity: 0.65;
       cursor: not-allowed;
     }
 
@@ -1864,6 +1875,7 @@
       <button id="btnAudioToggle" class="btn-audio-toggle" type="button" aria-label="Bật nhạc" title="Bật nhạc">🔇</button>
       <input id="volumeSlider" type="range" min="0" max="100" value="70" aria-label="Âm lượng">
       <div class="am-luong"><span id="volumeValue">70</span></div>
+      <button id="btnAutoPlay" class="btn-auto-play admin-only" type="button" aria-label="Chế độ phát ngẫu nhiên" title="Chế độ phát ngẫu nhiên">🔀</button>
     </div>
   </div>
 
@@ -1873,16 +1885,9 @@
   </div>
 
   <div style="width: 100%; max-width: 480px;">
-    <!-- Thêm class admin-only để ẩn nút với người dùng thường -->
-    <button id="btnSpin" class="btn-spin admin-only">🎲 QUAY VÒNG QUAY</button>
-
     <div id="adminPanel" class="admin-actions admin-only">
       <button id="btnToggleForm" class="btn-toggle">
         🔒 Đóng Form
-      </button>
-
-      <button id="btnAutoPlay" class="btn-auto-play">
-        ▶️ Tự động
       </button>
 
       <button id="btnReset" class="btn-reset">
@@ -2070,7 +2075,6 @@
     const formCountdown = document.getElementById('formCountdown');
     const songUrlInput = document.getElementById('songUrl');
     const btnSubmit = document.getElementById('btnSubmit');
-    const btnSpin = document.getElementById('btnSpin');
     const appNavbarToggle = document.getElementById('appNavbarToggle');
     const appNavbarDropdown = document.getElementById('appNavbarDropdown');
     const appNavbarAdminItems = appNavbarDropdown?.querySelectorAll('.app-navbar-item.admin-only');
@@ -2408,6 +2412,7 @@
     updateNavbarAdminUI();
     const btnToggleForm = document.getElementById('btnToggleForm');
     const btnAutoPlay = document.getElementById('btnAutoPlay');
+    const wheelContainer = document.querySelector('.wheel-container');
     const btnReset = document.getElementById('btnReset');
     const adminPanel = document.getElementById('adminPanel');
     const songListEl = document.getElementById('songList');
@@ -2548,7 +2553,7 @@
     // 1 = Tuần tự
     // 2 = Ngẫu nhiên
 
-    let autoPlayMode = 0;
+    let autoPlayMode = 2;
     let autoPlayController = false;
     let autoPlayControllerSocketId = null;
 
@@ -2761,11 +2766,10 @@
         autoPlayControllerSocketId === socket.id;
       updateAutoPlayButton();
 
+      wheelContainer?.classList.toggle('spin-enabled', window.isAdmin === true);
       if (window.isAdmin) {
-        btnSpin.classList.remove('admin-only');
         adminPanel.classList.remove('admin-only');
       } else {
-        btnSpin.classList.add('admin-only');
         adminPanel.classList.add('admin-only');
       }
 
@@ -3195,7 +3199,6 @@
         songs = [];
       }
 
-      btnSpin.disabled = isSpinning || songs.length === 0;
 
       listTitleEl.textContent = `📋 Danh sách bài hát (${songs.length})`;
 
@@ -4974,17 +4977,19 @@
       if (!btnAutoPlay) return;
 
       if (autoPlayMode === 1) {
-        btnAutoPlay.textContent = '🔢 Tuần tự';
+        btnAutoPlay.textContent = '🔢';
+        btnAutoPlay.setAttribute('aria-label', 'Chế độ phát tuần tự');
+        btnAutoPlay.title = 'Chế độ phát tuần tự';
         btnAutoPlay.style.background = '#2e7d32';
-      }
-
-      else if (autoPlayMode === 2) {
-        btnAutoPlay.textContent = '🔀 Ngẫu nhiên';
+      } else if (autoPlayMode === 2) {
+        btnAutoPlay.textContent = '🔀';
+        btnAutoPlay.setAttribute('aria-label', 'Chế độ phát ngẫu nhiên');
+        btnAutoPlay.title = 'Chế độ phát ngẫu nhiên';
         btnAutoPlay.style.background = '#00aaff';
-      }
-
-      else {
-        btnAutoPlay.textContent = '▶️ Tự động';
+      } else {
+        btnAutoPlay.textContent = '⏹️';
+        btnAutoPlay.setAttribute('aria-label', 'Tắt tự động phát');
+        btnAutoPlay.title = 'Tắt tự động phát';
         btnAutoPlay.style.background = '#37474f';
       }
     }
@@ -5076,7 +5081,6 @@
     function startSpinAnimation(winnerId, winner, shouldPlaySound, action = currentAction, playback = currentPlayback, spinSongs = null) {
       if (isSpinning) return;
       isSpinning = true;
-      btnSpin.disabled = true;
 
       clearPlayer();
 
@@ -5095,7 +5099,6 @@
       if (targetIndex < 0 || numSlices === 0) {
         console.warn('⚠️ Không tìm thấy winner trong snapshot vòng quay:', winnerId);
         isSpinning = false;
-        btnSpin.disabled = songs.length === 0;
         return;
       }
 
@@ -5121,8 +5124,7 @@
           requestAnimationFrame(animateSpin);
         } else {
           isSpinning = false;
-          btnSpin.disabled = songs.length === 0;
-          currentPlayback = playback || currentPlayback;
+            currentPlayback = playback || currentPlayback;
           renderPlayer(winner, shouldPlaySound, action, currentPlayback);
           playerCard.scrollIntoView({ behavior: 'smooth' });
         }
@@ -5161,8 +5163,8 @@
       }
     });
 
-    btnSpin.addEventListener('click', async () => {
-      if (isSpinning || songs.length === 0) return;
+    canvas.addEventListener('click', async () => {
+      if (!window.isAdmin || isSpinning || songs.length === 0) return;
       try {
         const res = await fetch('/api/spin', {
           method: 'POST',
