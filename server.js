@@ -1476,7 +1476,7 @@ async function performSpin(initiatorSocketId = null, actionUser = null) {
     lastWinner = null;
     stopPlayback();
 
-    setAutoPlayState(0);
+    setAutoPlayState(2, autoPlayControllerSocketId);
     broadcastAutoPlayState();
     broadcastState();
 
@@ -3577,7 +3577,7 @@ app.post('/api/reset', async (req, res) => {
       clearReplacementCountdown();
 
       // Reset cũng tắt Auto Play để không tự phát lại sau khi reset.
-      setAutoPlayState(0);
+      setAutoPlayState(2, autoPlayControllerSocketId);
       broadcastAutoPlayState();
       broadcastState();
 
