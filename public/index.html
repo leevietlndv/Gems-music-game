@@ -934,7 +934,7 @@
 
     .admin-actions {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr)); /* Đã sửa thành 2 cột */
       gap: clamp(7px, 2vw, 10px);
       margin-bottom: 16px;
       width: 100%;
@@ -2744,6 +2744,9 @@
       updatePlaybackTimelineAccess();
       updatePlaybackControlUI();
       updateVolumeAccess();
+      
+      // Thêm dòng này để hiện/ẩn nút Auto Play theo quyền Admin
+      btnAutoPlay?.classList.toggle('admin-only', !window.isAdmin);
 
       if (onlineDetailsToggle) {
         onlineDetailsToggle.classList.toggle('admin-only', !window.isAdmin);
