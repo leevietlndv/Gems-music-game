@@ -1671,6 +1671,109 @@
       white-space: nowrap;
     }
 
+    /* ==================== CHAT BOX UI ==================== */
+    #chatCard {
+      /* Mặc định luôn hiện, hoặc bạn có thể ẩn đi bằng display: none nếu muốn */
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .chat-messages {
+      height: 180px; /* Chiều cao cố định cho khung chat */
+      overflow-y: auto; /* Tạo thanh cuộn dọc */
+      background: #182235; /* Nền tối hơn card một chút để tạo chiều sâu */
+      border: 1px solid #34415a;
+      border-radius: 8px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .chat-empty {
+      color: #888;
+      font-size: 13px;
+      text-align: center;
+      margin: auto 0;
+    }
+
+    .chat-item {
+      font-size: 13.5px;
+      line-height: 1.4;
+      word-wrap: break-word;
+    }
+
+    .chat-user {
+      font-weight: 700;
+      color: #64b5f6; /* Màu xanh nổi bật cho tên */
+      margin-right: 4px;
+    }
+
+    /* Hiệu ứng màu tên riêng cho Admin nếu muốn */
+    .chat-user.admin {
+      color: #ffca28; /* Màu vàng */
+    }
+
+    .chat-text {
+      color: #eeeeee;
+    }
+
+    .chat-input-row {
+      display: flex;
+      gap: 8px;
+      align-items: stretch;
+    }
+
+    .chat-input {
+      flex: 1 1 auto;
+      min-width: 0;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid #3b4861;
+      background: #1a2232;
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .chat-input:focus {
+      border-color: #0088cc;
+    }
+
+    .btn-chat-send {
+      flex: 0 0 auto;
+      padding: 0 16px;
+      background: #0088cc;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .btn-chat-send:active {
+      transform: scale(0.96);
+    }
+
+    .btn-chat-send:disabled {
+      background: #4a5568;
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    
+    /* Tùy chỉnh thanh cuộn cho khu vực chat mượt mà hơn */
+    .chat-messages::-webkit-scrollbar {
+      width: 6px;
+    }
+    .chat-messages::-webkit-scrollbar-thumb {
+      background: #3b4861;
+      border-radius: 10px;
+    }
+
     @media (max-width: 380px) {
       .audio-controls {
         gap: 5px;
@@ -1876,6 +1979,33 @@
       <input id="volumeSlider" type="range" min="0" max="100" value="70" aria-label="Âm lượng">
       <div class="am-luong"><span id="volumeValue">70</span></div>
       <button id="btnAutoPlay" class="btn-auto-play admin-only" type="button" aria-label="Chế độ phát ngẫu nhiên" title="Chế độ phát ngẫu nhiên">🔀</button>
+    </div>
+  </div>
+
+  <!-- Khung Chat -->
+  <div class="card" id="chatCard">
+    <div class="card-title">💬 Trò chuyện chung</div>
+    
+    <!-- Khu vực hiển thị tin nhắn -->
+    <div id="chatMessages" class="chat-messages">
+      <div class="chat-empty">Chưa có tin nhắn nào. Hãy là người đầu tiên lên tiếng!</div>
+      <!-- Dữ liệu mẫu (sau này JS sẽ render vào đây) -->
+      <!--
+      <div class="chat-item">
+        <span class="chat-user admin">Duc Viet Sin:</span>
+        <span class="chat-text">Chào mọi người nhé! Nhạc hôm nay thế nào?</span>
+      </div>
+      <div class="chat-item">
+        <span class="chat-user">Người dùng:</span>
+        <span class="chat-text">Bài này hay quá ad ơi 💯</span>
+      </div>
+      -->
+    </div>
+
+    <!-- Khu vực nhập tin nhắn -->
+    <div class="chat-input-row">
+      <input type="text" id="chatInput" class="chat-input" placeholder="Nhập tin nhắn..." maxlength="200" autocomplete="off" />
+      <button id="btnSendChat" class="btn-chat-send" type="button">Gửi</button>
     </div>
   </div>
 
