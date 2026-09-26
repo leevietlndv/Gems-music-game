@@ -1982,25 +1982,18 @@
     </div>
   </div>
 
-  <!-- Khung Chat -->
-  <div class="card" id="chatCard">
+  <!-- BẮT ĐẦU: Khung Chat CHUẨN -->
+  <div class="card" id="chatCard" style="width: 100%; max-width: 480px;">
     <div class="card-title">💬 Trò chuyện chung</div>
-    
-    <!-- Khu vực hiển thị tin nhắn -->
     <div id="chatMessages" class="chat-messages">
       <div class="chat-empty">Chưa có tin nhắn nào. Hãy là người đầu tiên lên tiếng!</div>
-      <!-- Dữ liệu mẫu (sau này JS sẽ render vào đây) -->
-      <!--
-      <div class="chat-item">
-        <span class="chat-user admin">Duc Viet Sin:</span>
-        <span class="chat-text">Chào mọi người nhé! Nhạc hôm nay thế nào?</span>
-      </div>
-      <div class="chat-item">
-        <span class="chat-user">Người dùng:</span>
-        <span class="chat-text">Bài này hay quá ad ơi 💯</span>
-      </div>
-      -->
     </div>
+    <div class="chat-input-row">
+      <input type="text" id="chatInput" class="chat-input" placeholder="Nhập tin nhắn..." maxlength="200" autocomplete="off" />
+      <button id="btnSendChat" class="btn-chat-send" type="button">Gửi</button>
+    </div>
+  </div>
+  <!-- KẾT THÚC: Khung Chat CHUẨN -->
 
     <!-- Khu vực nhập tin nhắn -->
     <div class="chat-input-row">
