@@ -2744,7 +2744,7 @@
       updatePlaybackTimelineAccess();
       updatePlaybackControlUI();
       updateVolumeAccess();
-      
+
       // Thêm dòng này để hiện/ẩn nút Auto Play theo quyền Admin
       btnAutoPlay?.classList.toggle('admin-only', !window.isAdmin);
 
@@ -5166,7 +5166,7 @@
       }
     });
 
-    canvas.addEventListener('click', async () => {
+    canvas.addEventListener('dblclick', async () => {
       if (!window.isAdmin || isSpinning || songs.length === 0) return;
       try {
         const res = await fetch('/api/spin', {
