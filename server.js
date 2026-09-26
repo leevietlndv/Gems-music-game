@@ -3906,32 +3906,6 @@ io.on('connection', (socket) => {
     // Gửi state hiện tại cho socket vừa xác thực.
     sendInitialState(socket);
 
-    // Lấy 50 tin nhắn gần nhất và chưa quá 12 giờ từ Database
-    try {
-      const chatResult = await pool.query(`
-        SELECT id, telegram_id, user_name, is_admin, text, created_at
-        FROM chat_messages
-        WHERE created_at >= NOW() - INTERVAL '12 hours'
-        ORDER BY created_at ASC
-        LIMIT 50
-      `);
-      
-      const history = chatResult.rows.map(row => ({
-        id: row.id,
-        senderId: row.telegram_id,
-        senderName: row.user_name,
-        isAdmin: row.is_admin,
-        text: row.text,
-        timestamp: new Date(row.created_at).getTime()
-      }));
-
-      if (history.length > 0) {
-        socket.emit('chatHistory', history);
-      }
-    } catch (error) {
-      console.error('❌ Lỗi lấy lịch sử chat:', error);
-    }
-
     (async () => {
       if (!lastWinner) {
         socket.emit('songHealth', { songId: null, health: 5, likes: 0, dislikes: 0, replacementCountdown: null, userVote: 0 });
