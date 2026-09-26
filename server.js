@@ -1087,12 +1087,15 @@ function setPlaybackState({
 // thay đổi; server là nguồn sự thật và không lưu volume vào PostgreSQL ở phase này.
 const DEFAULT_GLOBAL_VOLUME = 70;
 let globalVolume = DEFAULT_GLOBAL_VOLUME;
+let globalVolumeVersion = 0;
 
 function setGlobalVolume(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return null;
 
-  globalVolume = Math.max(0, Math.min(100, Math.round(numeric)));
+  const nextVolume = Math.max(0, Math.min(100, Math.round(numeric)));
+  globalVolume = nextVolume;
+  globalVolumeVersion += 1;
   return globalVolume;
 }
 
@@ -1102,7 +1105,8 @@ function getGlobalVolume() {
 
 function broadcastGlobalVolume() {
   io.emit('volumeState', {
-    volume: getGlobalVolume()
+    volume: getGlobalVolume(),
+    version: globalVolumeVersion
   });
 }
 
@@ -2230,6 +2234,7 @@ function broadcastState() {
     blockedSongs,
     playback: getPlaybackState(),
     volume: getGlobalVolume(),
+    volumeVersion: globalVolumeVersion,
     online: getOnlineSummary(),
     scriptSession: getScriptSessionState(),
     scriptForm: getScriptFormState()
@@ -3758,13 +3763,15 @@ function sendInitialState(socket) {
     blockedSongs,
     playback: getPlaybackState(),
     volume: getGlobalVolume(),
+    volumeVersion: globalVolumeVersion,
     online: getOnlineSummary(),
     scriptSession: getScriptSessionState(),
     scriptForm: getScriptFormState()
   });
 
   socket.emit('volumeState', {
-    volume: getGlobalVolume()
+    volume: getGlobalVolume(),
+    version: globalVolumeVersion
   });
 
   socket.emit('autoPlayMode', {

@@ -3744,8 +3744,8 @@
           onReady: (event) => {
             youtubePlayerReady = true;
             console.log('🎬 YouTube Player đã sẵn sàng');
-            // Phase 6D.2: Player vừa khởi tạo phải nhận global volume hiện tại
-            // ngay cả khi server chưa phát sinh volumeState mới.
+            // Phase Volume Sync Fix: Player mới luôn nhận global volume mới nhất.
+            pendingServerVolumeState = null;
             applyGlobalVolumeToPlayer(true);
             updateAudioControls();
 
@@ -3820,6 +3820,8 @@
     // volumeState cùng được nhận.
     let globalVolume = 70;
     let lastAppliedGlobalVolume = null;
+    let lastGlobalVolumeVersion = -1;
+    let pendingServerVolumeState = null;
 
     try {
       const storedPreference = localStorage.getItem(MUSIC_PREF_KEY);
@@ -3859,46 +3861,41 @@
       }
     }
 
-    // Phase Volume Sync Fix:
-    // Server gửi kèm version tăng đơn điệu cho Global Volume.
-    // Client chỉ nhận state nếu version mới hơn state đã biết.
-    // Trong lúc Admin đang kéo, local vẫn được ưu tiên; các state server
-    // đến trong khoảng đó được ghi nhận version nhưng không ghi đè slider.
+    // Phase Volume Sync Fix: server-authoritative global volume.
+    // Mỗi state có version tăng dần. Client luôn giữ version mới nhất và
+    // áp dụng lại volume sau khi YouTube Player sẵn sàng / đổi bài.
     let volumeUserInteracting = false;
-    let lastGlobalVolumeVersion = -1;
-    let pendingServerVolumeState = null;
+
+    function acceptServerVolume(value, version = null) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return false;
+
+      const normalized = Math.max(0, Math.min(100, Math.round(numeric)));
+      const parsedVersion = Number(version);
+      const hasVersion = Number.isFinite(parsedVersion);
+
+      if (hasVersion && parsedVersion < lastGlobalVolumeVersion) return false;
+      if (hasVersion) lastGlobalVolumeVersion = parsedVersion;
+
+      globalVolume = normalized;
+      return true;
+    }
 
     function setGlobalVolumeFromServer(value, version = null) {
-      const numeric = Number(value);
-      if (!Number.isFinite(numeric)) return;
-
-      const hasVersion = Number.isFinite(Number(version));
-      const serverVersion = hasVersion ? Number(version) : null;
-
-      // Với state có version: bỏ qua mọi state cũ hoặc trùng.
-      if (serverVersion != null && serverVersion <= lastGlobalVolumeVersion) {
-        return;
-      }
+      if (!acceptServerVolume(value, version)) return;
 
       if (volumeUserInteracting) {
-        if (serverVersion != null) {
-          lastGlobalVolumeVersion = serverVersion;
-          pendingServerVolumeState = {
-            volume: Math.max(0, Math.min(100, Math.round(numeric))),
-            version: serverVersion
-          };
-        }
+        pendingServerVolumeState = {
+          volume: globalVolume,
+          version: Number.isFinite(Number(version)) ? Number(version) : null
+        };
         return;
       }
 
-      globalVolume = Math.max(0, Math.min(100, Math.round(numeric)));
-      if (serverVersion != null) {
-        lastGlobalVolumeVersion = serverVersion;
-      }
       pendingServerVolumeState = null;
       updateAudioControls();
       updateVolumeAccess();
-      applyGlobalVolumeToPlayer();
+      applyGlobalVolumeToPlayer(true);
     }
 
     function sendGlobalVolume(value) {
