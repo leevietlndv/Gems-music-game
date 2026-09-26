@@ -2790,7 +2790,7 @@
       replacementCountdown = Number.isFinite(Number(data.replacementCountdown)) ? Number(data.replacementCountdown) : null;
       updateOnlineSummary(data.online || {});
       if (Number.isFinite(Number(data.volume))) {
-        setGlobalVolumeFromServer(data.volume);
+        setGlobalVolumeFromServer(data.volume, data.volumeVersion);
       }
       updateHealth(typeof data.health === 'number' ? data.health : 5);
 
@@ -3859,20 +3859,43 @@
       }
     }
 
-    // Khi Admin đang trực tiếp kéo volume, giá trị local là nguồn ưu tiên tạm thời.
-    // Server vẫn là nguồn sự thật sau khi thao tác kết thúc.
+    // Phase Volume Sync Fix:
+    // Server gửi kèm version tăng đơn điệu cho Global Volume.
+    // Client chỉ nhận state nếu version mới hơn state đã biết.
+    // Trong lúc Admin đang kéo, local vẫn được ưu tiên; các state server
+    // đến trong khoảng đó được ghi nhận version nhưng không ghi đè slider.
     let volumeUserInteracting = false;
+    let lastGlobalVolumeVersion = -1;
+    let pendingServerVolumeState = null;
 
-    function setGlobalVolumeFromServer(value) {
+    function setGlobalVolumeFromServer(value, version = null) {
       const numeric = Number(value);
       if (!Number.isFinite(numeric)) return;
 
-      // Không để volumeState cũ/đến trễ từ server kéo ngược slider trong lúc
-      // người dùng đang kéo. Đây là nguyên nhân chính gây cảm giác slider
-      // đôi lúc không đổi âm lượng hoặc bị nhảy về giá trị cũ.
-      if (volumeUserInteracting) return;
+      const hasVersion = Number.isFinite(Number(version));
+      const serverVersion = hasVersion ? Number(version) : null;
+
+      // Với state có version: bỏ qua mọi state cũ hoặc trùng.
+      if (serverVersion != null && serverVersion <= lastGlobalVolumeVersion) {
+        return;
+      }
+
+      if (volumeUserInteracting) {
+        if (serverVersion != null) {
+          lastGlobalVolumeVersion = serverVersion;
+          pendingServerVolumeState = {
+            volume: Math.max(0, Math.min(100, Math.round(numeric))),
+            version: serverVersion
+          };
+        }
+        return;
+      }
 
       globalVolume = Math.max(0, Math.min(100, Math.round(numeric)));
+      if (serverVersion != null) {
+        lastGlobalVolumeVersion = serverVersion;
+      }
+      pendingServerVolumeState = null;
       updateAudioControls();
       updateVolumeAccess();
       applyGlobalVolumeToPlayer();
@@ -4064,11 +4087,24 @@
       sendGlobalVolume(value);
       updateAudioControls();
 
-      // Giữ khóa trong một nhịp event để tránh một volumeState cũ đến trễ
-      // ghi đè ngay sau khi người dùng vừa thả slider.
-      setTimeout(() => {
-        volumeUserInteracting = false;
-      }, 0);
+      // Kết thúc thao tác. Nếu trong lúc kéo đã nhận state mới nhất từ server
+      // thì áp dụng state đó; nếu không, state local vừa gửi sẽ được server
+      // phản hồi bằng version mới và giữ nguyên local nếu đó là state mới nhất.
+      volumeUserInteracting = false;
+
+      if (pendingServerVolumeState) {
+        const serverState = pendingServerVolumeState;
+        pendingServerVolumeState = null;
+
+        // State này đã được ghi nhận version trong lúc kéo, nên chỉ áp dụng
+        // nếu nó thực sự khác với giá trị local hiện tại.
+        if (serverState.volume !== globalVolume) {
+          globalVolume = serverState.volume;
+          updateAudioControls();
+          updateVolumeAccess();
+          applyGlobalVolumeToPlayer();
+        }
+      }
     });
 
     volumeSlider.addEventListener('pointercancel', () => {
@@ -4083,10 +4119,21 @@
       sendGlobalVolume(value);
       updateAudioControls();
       volumeUserInteracting = false;
+
+      if (pendingServerVolumeState) {
+        const serverState = pendingServerVolumeState;
+        pendingServerVolumeState = null;
+        if (serverState.volume !== globalVolume) {
+          globalVolume = serverState.volume;
+          updateAudioControls();
+          updateVolumeAccess();
+          applyGlobalVolumeToPlayer();
+        }
+      }
     });
 
     socket.on('volumeState', (data) => {
-      setGlobalVolumeFromServer(data?.volume);
+      setGlobalVolumeFromServer(data?.volume, data?.version);
     });
 
     updateAudioControls();
