@@ -277,24 +277,6 @@ async function initDatabase() {
   }
 
   console.log('🗄️ PostgreSQL: Database ready');
-
-  // Tạo bảng lưu tin nhắn Chat Realtime
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS chat_messages (
-      id SERIAL PRIMARY KEY,
-      telegram_id TEXT NOT NULL,
-      user_name TEXT NOT NULL,
-      is_admin BOOLEAN DEFAULT FALSE,
-      text TEXT NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  // Tạo index để tối ưu tốc độ tìm kiếm và xóa tin nhắn cũ
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at
-    ON chat_messages (created_at DESC)
-  `);
 }
 
 async function loadSongsFromDatabase() {

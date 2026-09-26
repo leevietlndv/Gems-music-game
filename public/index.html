@@ -1671,109 +1671,6 @@
       white-space: nowrap;
     }
 
-    /* ==================== CHAT BOX UI ==================== */
-    #chatCard {
-      /* Mặc định luôn hiện, hoặc bạn có thể ẩn đi bằng display: none nếu muốn */
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      margin-bottom: 16px;
-    }
-
-    .chat-messages {
-      height: 180px; /* Chiều cao cố định cho khung chat */
-      overflow-y: auto; /* Tạo thanh cuộn dọc */
-      background: #182235; /* Nền tối hơn card một chút để tạo chiều sâu */
-      border: 1px solid #34415a;
-      border-radius: 8px;
-      padding: 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .chat-empty {
-      color: #888;
-      font-size: 13px;
-      text-align: center;
-      margin: auto 0;
-    }
-
-    .chat-item {
-      font-size: 13.5px;
-      line-height: 1.4;
-      word-wrap: break-word;
-    }
-
-    .chat-user {
-      font-weight: 700;
-      color: #64b5f6; /* Màu xanh nổi bật cho tên */
-      margin-right: 4px;
-    }
-
-    /* Hiệu ứng màu tên riêng cho Admin nếu muốn */
-    .chat-user.admin {
-      color: #ffca28; /* Màu vàng */
-    }
-
-    .chat-text {
-      color: #eeeeee;
-    }
-
-    .chat-input-row {
-      display: flex;
-      gap: 8px;
-      align-items: stretch;
-    }
-
-    .chat-input {
-      flex: 1 1 auto;
-      min-width: 0;
-      padding: 10px 12px;
-      border-radius: 8px;
-      border: 1px solid #3b4861;
-      background: #1a2232;
-      color: #fff;
-      font-size: 14px;
-      outline: none;
-    }
-
-    .chat-input:focus {
-      border-color: #0088cc;
-    }
-
-    .btn-chat-send {
-      flex: 0 0 auto;
-      padding: 0 16px;
-      background: #0088cc;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-
-    .btn-chat-send:active {
-      transform: scale(0.96);
-    }
-
-    .btn-chat-send:disabled {
-      background: #4a5568;
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-    
-    /* Tùy chỉnh thanh cuộn cho khu vực chat mượt mà hơn */
-    .chat-messages::-webkit-scrollbar {
-      width: 6px;
-    }
-    .chat-messages::-webkit-scrollbar-thumb {
-      background: #3b4861;
-      border-radius: 10px;
-    }
-
     @media (max-width: 380px) {
       .audio-controls {
         gap: 5px;
@@ -1981,19 +1878,6 @@
       <button id="btnAutoPlay" class="btn-auto-play admin-only" type="button" aria-label="Chế độ phát ngẫu nhiên" title="Chế độ phát ngẫu nhiên">🔀</button>
     </div>
   </div>
-
-  <!-- BẮT ĐẦU: Khung Chat CHUẨN -->
-  <div class="card" id="chatCard" style="width: 100%; max-width: 480px;">
-    <div class="card-title">💬 Trò chuyện chung</div>
-    <div id="chatMessages" class="chat-messages">
-      <div class="chat-empty">Chưa có tin nhắn nào. Hãy là người đầu tiên lên tiếng!</div>
-    </div>
-    <div class="chat-input-row">
-      <input type="text" id="chatInput" class="chat-input" placeholder="Nhập tin nhắn..." maxlength="200" autocomplete="off" />
-      <button id="btnSendChat" class="btn-chat-send" type="button">Gửi</button>
-    </div>
-  </div>
-  <!-- KẾT THÚC: Khung Chat CHUẨN -->
 
   <div class="wheel-container">
     <div class="pointer"></div>
@@ -2566,10 +2450,6 @@
     const blacklistToggleIcon = document.getElementById('blacklistToggleIcon');
     const blacklistDetails = document.getElementById('blacklistDetails');
     const blacklistListEl = document.getElementById('blacklistList');
-    // Biến DOM cho phần Chat
-    const chatMessagesEl = document.getElementById('chatMessages');
-    const chatInputEl = document.getElementById('chatInput');
-    const btnSendChatEl = document.getElementById('btnSendChat');
 
     const MUSIC_PREF_KEY = 'gemsMusicAudioPreference';
 
@@ -5387,107 +5267,6 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
     updateBackToTopUI();
-
-    // ==================== LOGIC CHAT REALTIME ====================
-    
-    // Hàm bảo mật: escape HTML để chống XSS
-    // (Lưu ý: bạn đã có hàm escapeHtml ở trên dòng 1500, nhưng khai báo lại ở đây nếu cần,
-    //  tốt nhất là dùng chung hàm escapeHtml sẵn có)
-    
-    // Hàm thêm tin nhắn vào giao diện
-    function appendChatMessage(message, isHistoryLoad = false) {
-      if (!chatMessagesEl) return;
-      
-      // Ẩn thông báo "Chưa có tin nhắn nào" nếu nó đang hiển thị
-      const emptyMsg = chatMessagesEl.querySelector('.chat-empty');
-      if (emptyMsg) {
-        emptyMsg.style.display = 'none';
-      }
-
-      // Xử lý bảo mật: escape text
-      const safeName = escapeHtml(message.senderName || 'Người dùng');
-      const safeText = escapeHtml(message.text || '');
-      const adminClass = message.isAdmin ? ' admin' : '';
-
-      // Kiểm tra xem thanh cuộn có đang ở dưới cùng hay không
-      const isAtBottom = chatMessagesEl.scrollHeight - chatMessagesEl.clientHeight <= chatMessagesEl.scrollTop + 10;
-
-      // Tạo thẻ div chứa tin nhắn
-      const msgDiv = document.createElement('div');
-      msgDiv.className = 'chat-item';
-      msgDiv.innerHTML = `
-        <span class="chat-user${adminClass}">${safeName}:</span>
-        <span class="chat-text">${safeText}</span>
-      `;
-
-      // Thêm vào danh sách
-      chatMessagesEl.appendChild(msgDiv);
-
-      // Nếu đang ở dưới cùng, HOẶC nếu đang load lịch sử thì ép cuộn xuống
-      if (isAtBottom || isHistoryLoad) {
-        chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
-      }
-    }
-
-    // Xử lý gửi tin nhắn
-    function sendChat() {
-      if (!socket.connected || !socketAuthenticated) {
-        alert('Vui lòng chờ kết nối tới máy chủ!');
-        return;
-      }
-
-      const text = chatInputEl.value.trim();
-      if (!text) return;
-
-      // Khóa nút Gửi tạm thời để tránh spam
-      btnSendChatEl.disabled = true;
-
-      // Emit lên server
-      socket.emit('sendChatMessage', { text: text });
-
-      // Xóa ô nhập liệu và focus lại
-      chatInputEl.value = '';
-      chatInputEl.focus();
-
-      // Mở khóa nút Gửi sau 0.5 giây (chống spam)
-      setTimeout(() => {
-        btnSendChatEl.disabled = false;
-      }, 500);
-    }
-
-    // Bắt sự kiện Click nút Gửi
-    btnSendChatEl?.addEventListener('click', sendChat);
-
-    // Bắt sự kiện nhấn phím Enter trong ô input
-    chatInputEl?.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') {
-        event.preventDefault(); // Ngăn hành vi mặc định (ví dụ submit form nếu có)
-        sendChat();
-      }
-    });
-
-    // Lắng nghe lịch sử chat khi vừa vào phòng
-    socket.on('chatHistory', (messages) => {
-      if (chatMessagesEl) {
-        // Xóa sạch thông báo "Chưa có tin nhắn nào" hoặc rác cũ
-        chatMessagesEl.innerHTML = ''; 
-        
-        // Vẽ lần lượt 50 tin nhắn ra màn hình
-        messages.forEach(msg => appendChatMessage(msg, true));
-      }
-    });
-
-    // Lắng nghe tin nhắn mới từ Server
-    socket.on('newChatMessage', (message) => {
-      appendChatMessage(message);
-    });
-
-    // Bắt lỗi từ Server (ví dụ: chưa đăng nhập)
-    socket.on('chatError', (error) => {
-      if (error && error.message) {
-        alert('⚠️ ' + error.message);
-      }
-    });
 
     // Chỉ kết nối SAU KHI toàn bộ socket.on(...) đã được đăng ký.
     // Tránh trường hợp socket kết nối quá sớm và event connect bị bỏ lỡ.
