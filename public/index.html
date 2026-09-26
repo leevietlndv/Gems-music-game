@@ -5409,7 +5409,7 @@
     //  tốt nhất là dùng chung hàm escapeHtml sẵn có)
     
     // Hàm thêm tin nhắn vào giao diện
-    function appendChatMessage(message) {
+    function appendChatMessage(message, isHistoryLoad = false) {
       if (!chatMessagesEl) return;
       
       // Ẩn thông báo "Chưa có tin nhắn nào" nếu nó đang hiển thị
@@ -5423,8 +5423,7 @@
       const safeText = escapeHtml(message.text || '');
       const adminClass = message.isAdmin ? ' admin' : '';
 
-      // Kiểm tra xem thanh cuộn có đang ở dưới cùng hay không (trước khi thêm tin nhắn)
-      // Cho phép sai số khoảng 10px để tính là "đang ở dưới cùng"
+      // Kiểm tra xem thanh cuộn có đang ở dưới cùng hay không
       const isAtBottom = chatMessagesEl.scrollHeight - chatMessagesEl.clientHeight <= chatMessagesEl.scrollTop + 10;
 
       // Tạo thẻ div chứa tin nhắn
@@ -5438,8 +5437,8 @@
       // Thêm vào danh sách
       chatMessagesEl.appendChild(msgDiv);
 
-      // Nếu đang ở dưới cùng, tự động cuộn xuống theo tin nhắn mới
-      if (isAtBottom) {
+      // Nếu đang ở dưới cùng, HOẶC nếu đang load lịch sử thì ép cuộn xuống
+      if (isAtBottom || isHistoryLoad) {
         chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
       }
     }
@@ -5478,6 +5477,17 @@
       if (event.key === 'Enter') {
         event.preventDefault(); // Ngăn hành vi mặc định (ví dụ submit form nếu có)
         sendChat();
+      }
+    });
+
+    // Lắng nghe lịch sử chat khi vừa vào phòng
+    socket.on('chatHistory', (messages) => {
+      if (chatMessagesEl) {
+        // Xóa sạch thông báo "Chưa có tin nhắn nào" hoặc rác cũ
+        chatMessagesEl.innerHTML = ''; 
+        
+        // Vẽ lần lượt 50 tin nhắn ra màn hình
+        messages.forEach(msg => appendChatMessage(msg, true));
       }
     });
 

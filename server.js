@@ -3845,33 +3845,6 @@ io.on('connection', (socket) => {
       // Các thao tác ghi vẫn phải qua HTTP API + validateTelegramInitData.
       console.log('👀 View-only socket:', socket.id);
       sendInitialState(socket);
-
-      // Lấy 50 tin nhắn gần nhất và chưa quá 12 giờ từ Database
-      try {
-        const chatResult = await pool.query(`
-          SELECT id, telegram_id, user_name, is_admin, text, created_at
-          FROM chat_messages
-          WHERE created_at >= NOW() - INTERVAL '12 hours'
-          ORDER BY created_at ASC
-          LIMIT 50
-        `);
-        
-        const history = chatResult.rows.map(row => ({
-          id: row.id,
-          senderId: row.telegram_id,
-          senderName: row.user_name,
-          isAdmin: row.is_admin,
-          text: row.text,
-          timestamp: new Date(row.created_at).getTime()
-        }));
-
-        if (history.length > 0) {
-          socket.emit('chatHistory', history);
-        }
-      } catch (error) {
-        console.error('❌ Lỗi lấy lịch sử chat:', error);
-      }
-
       return;
     }
 
@@ -3932,6 +3905,32 @@ io.on('connection', (socket) => {
 
     // Gửi state hiện tại cho socket vừa xác thực.
     sendInitialState(socket);
+
+    // Lấy 50 tin nhắn gần nhất và chưa quá 12 giờ từ Database
+    try {
+      const chatResult = await pool.query(`
+        SELECT id, telegram_id, user_name, is_admin, text, created_at
+        FROM chat_messages
+        WHERE created_at >= NOW() - INTERVAL '12 hours'
+        ORDER BY created_at ASC
+        LIMIT 50
+      `);
+      
+      const history = chatResult.rows.map(row => ({
+        id: row.id,
+        senderId: row.telegram_id,
+        senderName: row.user_name,
+        isAdmin: row.is_admin,
+        text: row.text,
+        timestamp: new Date(row.created_at).getTime()
+      }));
+
+      if (history.length > 0) {
+        socket.emit('chatHistory', history);
+      }
+    } catch (error) {
+      console.error('❌ Lỗi lấy lịch sử chat:', error);
+    }
 
     (async () => {
       if (!lastWinner) {
@@ -4109,66 +4108,6 @@ io.on('connection', (socket) => {
       users: getOnlineDetails(),
       summary: getOnlineSummary()
     });
-  });
-
-  // ==================== CHAT REALTIME (DATABASE) ====================
-  socket.on('sendChatMessage', async (payload = {}) => {
-    if (!socket.authenticated || !socketAuth.has(socket.id)) {
-      socket.emit('chatError', { message: 'Bạn cần xác thực Telegram để chat.' });
-      return;
-    }
-
-    const text = String(payload.text || '').trim();
-    if (!text) return;
-
-    const authState = socketAuth.get(socket.id);
-    const telegramId = authState.telegramId;
-    const isAdmin = authState.isAdmin;
-    
-    let userName = 'Người dùng';
-    const userEntry = onlineUsers.get(telegramId);
-    if (userEntry && userEntry.name) {
-      userName = userEntry.name;
-    }
-
-    const safeText = text.length > 200 ? text.substring(0, 200) + '...' : text;
-
-    try {
-      // 1. Lưu tin nhắn mới vào PostgreSQL
-      const insertResult = await pool.query(`
-        INSERT INTO chat_messages (telegram_id, user_name, is_admin, text)
-        VALUES ($1, $2, $3, $4)
-        RETURNING id, telegram_id, user_name, is_admin, text, created_at
-      `, [telegramId, userName, isAdmin, safeText]);
-
-      const newMsg = insertResult.rows[0];
-      const messageToClient = {
-        id: newMsg.id,
-        senderId: newMsg.telegram_id,
-        senderName: newMsg.user_name,
-        isAdmin: newMsg.is_admin,
-        text: newMsg.text,
-        timestamp: new Date(newMsg.created_at).getTime()
-      };
-
-      // 2. Phát tin nhắn đến tất cả mọi người
-      io.emit('newChatMessage', messageToClient);
-
-      // 3. DỌN DẸP DB: Xóa tin nhắn quá 12 giờ HOẶC nằm ngoài top 50
-      // Chạy bất đồng bộ (không await) để không làm chậm luồng gửi chat
-      pool.query(`
-        DELETE FROM chat_messages
-        WHERE id NOT IN (
-          SELECT id FROM chat_messages
-          ORDER BY created_at DESC
-          LIMIT 50
-        ) OR created_at < NOW() - INTERVAL '12 hours';
-      `).catch(err => console.error('Lỗi dọn dẹp DB Chat:', err));
-
-    } catch (error) {
-      console.error('❌ Lỗi lưu tin nhắn chat:', error);
-      socket.emit('chatError', { message: 'Lỗi máy chủ khi gửi tin nhắn.' });
-    }
   });
 
   socket.on('disconnect', (reason) => {
