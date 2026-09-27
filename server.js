@@ -1552,7 +1552,7 @@ app.use(helmet({
       // Cho phép Telegram Web nhúng Mini App, nhưng không mở iframe cho website khác.
       frameAncestors: ["'self'", "https://web.telegram.org"],
 
-      imgSrc: ["'self'", "data:", "https://i.ytimg.com"],
+      imgSrc: ["'self'", "data:", "https://i.ytimg.com", "https://koboyo.com"],
       styleSrc: ["'self'", "'unsafe-inline'"] // CSS đang viết inline trong <style>
     }
   },
