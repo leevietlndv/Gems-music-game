@@ -1814,7 +1814,7 @@
 
     /* Utility class cho admin */
     .admin-only {
-      display: none;
+      display: none !important;
     }
 
     /* =========================================================
@@ -1891,8 +1891,7 @@
 
       <div class="app-navbar-divider"></div>
       <div class="app-navbar-section-label admin-only">Admin</div>
-      <button class="app-navbar-item admin-only" type="button" role="menuitem" data-nav-target="adminPanel">👑 Quản trị</button>
-      <a class="app-navbar-item admin-only" href="/admin.html" role="menuitem">👥 Quản lý Admin</a>
+      <a class="app-navbar-item admin-only" href="/admin.html" role="menuitem">👑 Quản lý Admin</a>
       <a class="app-navbar-item admin-only" href="/myplaylist-admin.html" role="menuitem">🎧 Quản lý My Playlist</a>
       <button class="app-navbar-item admin-only" type="button" role="menuitem" data-nav-target="scriptSettings">⚙️ Cài đặt kịch bản</button>
     </div>
@@ -2005,7 +2004,7 @@
 
   <div class="wheel-container">
     <div class="pointer"></div>
-    <canvas id="wheelCanvas" width="600" height="600"></canvas>
+    <canvas id="wheelCanvas" width="500" height="500"></canvas>
   </div>
 
   <div style="width: 100%; max-width: 480px;">
@@ -2030,8 +2029,8 @@
           <button id="myPlaylistCreateBtn" type="button">＋ Tạo & thêm</button>
         </div>
         <button id="myPlaylistPickerCancel" class="playlist-picker-cancel" type="button">Hủy</button>
-      </div>
     </div>
+  </div>
 
     <!-- CÀI ĐẶT KỊCH BẢN: UI admin, chưa thay đổi logic server. -->
     <section id="scriptSettings" class="script-settings admin-only" aria-label="Cài đặt kịch bản">
@@ -2869,6 +2868,9 @@
       // Thêm dòng này để hiện/ẩn nút Auto Play theo quyền Admin
       btnAutoPlay?.classList.toggle('admin-only', !window.isAdmin);
 
+      // THÊM DÒNG NÀY ĐỂ HIỆN NÚT RESET MỚI
+      btnReset?.classList.toggle('admin-only', !window.isAdmin);
+
       if (onlineDetailsToggle) {
         onlineDetailsToggle.classList.toggle('admin-only', !window.isAdmin);
       }
@@ -2892,9 +2894,9 @@
 
       wheelContainer?.classList.toggle('spin-enabled', window.isAdmin === true);
       if (window.isAdmin) {
-        adminPanel.classList.remove('admin-only');
+        adminPanel?.classList.remove('admin-only');
       } else {
-        adminPanel.classList.add('admin-only');
+        adminPanel?.classList.add('admin-only');
       }
 
       // Cập nhật lại danh sách để nút Xóa xuất hiện/biến mất
@@ -5444,7 +5446,7 @@
       }
     });
 
-    canvas.addEventListener('dblclick', async () => {
+    canvas.addEventListener('click', async () => {
       if (!window.isAdmin || isSpinning || songs.length === 0) return;
       try {
         const res = await fetch('/api/spin', {
