@@ -963,7 +963,7 @@
     .wheel-container {
       position: relative;
       width: 300px;
-      height: 300px;
+      height: auto; /* Đã nới tự động chiều cao */
       margin: 10px auto 20px auto;
     }
 
@@ -2024,6 +2024,15 @@
   <div class="wheel-container">
     <div class="pointer"></div>
     <canvas id="wheelCanvas" width="500" height="500"></canvas>
+
+    <!-- THÊM MỚI: Hàng mascot bổ sung dưới vòng quay -->
+    <div class="form-mascots" style="margin-top: 15px;">
+      <span class="form-mascot" data-mascot="sloth" role="img" aria-label="Mascot sloth"></span>
+      <span class="form-mascot" data-mascot="raccoon" role="img" aria-label="Mascot raccoon"></span>
+      <span class="form-mascot" data-mascot="penguin" role="img" aria-label="Mascot penguin"></span>
+      <span class="form-mascot" data-mascot="otter" role="img" aria-label="Mascot otter"></span>
+      <span class="form-mascot" data-mascot="redpanda" role="img" aria-label="Mascot redpanda"></span>
+    </div>
   </div>
 
   <div style="width: 100%; max-width: 480px;">
@@ -3332,6 +3341,11 @@
       cat: 'https://koboyo.com/page-mascot/mascots/cat-directions.webp',
       fox: 'https://koboyo.com/page-mascot/mascots/fox-directions.webp',
       panda: 'https://koboyo.com/page-mascot/mascots/panda-directions.webp'
+      sloth: 'https://koboyo.com/page-mascot/mascots/sloth-directions.webp',
+      raccoon: 'https://koboyo.com/page-mascot/mascots/raccoon-directions.webp',
+      penguin: 'https://koboyo.com/page-mascot/mascots/penguin-directions.webp',
+      otter: 'https://koboyo.com/page-mascot/mascots/otter-directions.webp',
+      redpanda: 'https://koboyo.com/page-mascot/mascots/redpanda-directions.webp'
     };
 
     // 2. Link ảnh biểu cảm (Reactions)
@@ -3341,6 +3355,11 @@
       cat: 'https://koboyo.com/page-mascot/mascots/cat-reactions.webp',
       fox: 'https://koboyo.com/page-mascot/mascots/fox-reactions.webp',
       panda: 'https://koboyo.com/page-mascot/mascots/panda-reactions.webp'
+      sloth: 'https://koboyo.com/page-mascot/mascots/sloth-directions.webp',
+      raccoon: 'https://koboyo.com/page-mascot/mascots/raccoon-directions.webp',
+      penguin: 'https://koboyo.com/page-mascot/mascots/penguin-directions.webp',
+      otter: 'https://koboyo.com/page-mascot/mascots/otter-directions.webp',
+      redpanda: 'https://koboyo.com/page-mascot/mascots/redpanda-directions.webp'
     };
 
     function initFormMascots() {
