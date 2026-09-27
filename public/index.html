@@ -457,7 +457,8 @@
     }
 
     .form-status-row {
-      justify-content: space-between;
+      display: flex; 
+      justify-content: center; /* Căn giữa phần tử bên trong */
       align-items: center;
       margin-bottom: 12px;
       width: 100%;
@@ -549,15 +550,13 @@
     }
 
     .form-countdown {
-      justify-self: end;
       color: #00e676;
       font-size: 15px;
       font-weight: 600;
       letter-spacing: 0.05em;
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
-      min-width: 58px;
-      text-align: center;
+      text-align: center; /* Căn giữa văn bản */
     }
 
     @media (max-width: 380px) {
