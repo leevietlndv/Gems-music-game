@@ -458,15 +458,97 @@
 
     .form-status-row {
       display: grid;
-      grid-template-columns: 1fr auto;
+      grid-template-columns: auto minmax(0, 1fr) auto;
       align-items: center;
       gap: 10px;
       margin-bottom: 12px;
       width: 100%;
+      min-height: 34px;
     }
 
-    .form-status-row .status-badge {
-      justify-self: start;
+    .form-switch-wrap {
+      display: inline-flex;
+      align-items: center;
+      flex: 0 0 auto;
+    }
+
+    .form-switch {
+      position: relative;
+      display: inline-block;
+      width: 46px;
+      height: 26px;
+      flex: 0 0 auto;
+    }
+
+    .form-switch input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .form-switch-track {
+      position: absolute;
+      inset: 0;
+      cursor: pointer;
+      border-radius: 999px;
+      background: #455a64;
+      transition: background-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .form-switch-track::before {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      left: 3px;
+      top: 3px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+      transition: transform 0.2s ease;
+    }
+
+    .form-switch input:checked + .form-switch-track {
+      background: #2e7d32;
+    }
+
+    .form-switch input:checked + .form-switch-track::before {
+      transform: translateX(20px);
+    }
+
+    .form-switch input:focus-visible + .form-switch-track {
+      outline: 2px solid rgba(0, 230, 118, 0.75);
+      outline-offset: 2px;
+    }
+
+    .form-switch input:disabled + .form-switch-track {
+      cursor: default;
+      opacity: 0.55;
+    }
+
+    .form-mascots {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 2px;
+      min-width: 0;
+      overflow: hidden;
+      height: 34px;
+    }
+
+    .form-mascot {
+      width: 30px;
+      height: 30px;
+      flex: 0 0 30px;
+      display: block;
+      background-repeat: no-repeat;
+      background-size: 300% 300%;
+      background-position: 50% 50%;
+      border-radius: 8px;
+      cursor: default;
+      user-select: none;
+      -webkit-user-drag: none;
     }
 
     .form-countdown {
@@ -477,6 +559,24 @@
       letter-spacing: 0.05em;
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
+      min-width: 58px;
+      text-align: right;
+    }
+
+    @media (max-width: 380px) {
+      .form-status-row {
+        gap: 6px;
+      }
+
+      .form-mascot {
+        width: 26px;
+        height: 26px;
+        flex-basis: 26px;
+      }
+
+      .form-mascots {
+        gap: 0;
+      }
     }
 
     .status-badge {
@@ -949,6 +1049,26 @@
     .btn-toggle {
       background: #37474f;
       color: white;
+    }
+
+    .song-list-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .btn-reset-icon {
+      width: 34px;
+      min-width: 34px;
+      height: 34px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      line-height: 1;
     }
 
     .btn-reset {
@@ -1788,7 +1908,19 @@
 
   <div class="card">
     <div class="form-status-row">
-      <span id="statusBadge" class="status-badge">⏳ Đang kết nối...</span>
+      <label class="form-switch-wrap" title="Bật/tắt form gửi bài hát">
+        <span class="form-switch">
+          <input id="formOpenSwitch" type="checkbox" aria-label="Mở hoặc đóng form gửi bài hát">
+          <span class="form-switch-track" aria-hidden="true"></span>
+        </span>
+      </label>
+      <div id="formMascots" class="form-mascots" aria-label="Mascot GEMS Radio">
+        <span class="form-mascot" data-mascot="bear" role="img" aria-label="Mascot gấu"></span>
+        <span class="form-mascot" data-mascot="bunny" role="img" aria-label="Mascot thỏ"></span>
+        <span class="form-mascot" data-mascot="cat" role="img" aria-label="Mascot mèo"></span>
+        <span class="form-mascot" data-mascot="fox" role="img" aria-label="Mascot cáo"></span>
+        <span class="form-mascot" data-mascot="panda" role="img" aria-label="Mascot gấu trúc"></span>
+      </div>
       <span id="formCountdown" class="form-countdown" aria-live="polite" aria-label="Thời gian mở form còn lại" hidden>--:--</span>
     </div>
     <div class="input-group">
@@ -1885,18 +2017,11 @@
   </div>
 
   <div style="width: 100%; max-width: 480px;">
-    <div id="adminPanel" class="admin-actions admin-only">
-      <button id="btnToggleForm" class="btn-toggle">
-        🔒 Đóng Form
-      </button>
-
-      <button id="btnReset" class="btn-reset">
-        ♻️ Reset
-      </button>
-    </div>
-
     <div class="card">
-      <div id="listTitle" class="card-title">📋 Danh sách bài hát (0)</div>
+      <div class="song-list-header">
+        <div id="listTitle" class="card-title">📋 Danh sách bài hát (0)</div>
+        <button id="btnReset" class="btn-reset btn-reset-icon admin-only" type="button" aria-label="Reset" title="Reset">↻</button>
+      </div>
       <div id="songList" class="song-list">
         <div style="text-align: center; color: #888; font-size: 13px; padding: 10px;">Chưa có bài hát nào được gửi.
         </div>
@@ -2070,7 +2195,7 @@
       userAgent: navigator.userAgent || ''
     };
 
-    const statusBadge = document.getElementById('statusBadge');
+    const formOpenSwitch = document.getElementById('formOpenSwitch');
     const sessionCountdown = document.getElementById('sessionCountdown');
     const formCountdown = document.getElementById('formCountdown');
     const songUrlInput = document.getElementById('songUrl');
@@ -2410,7 +2535,6 @@
     });
 
     updateNavbarAdminUI();
-    const btnToggleForm = document.getElementById('btnToggleForm');
     const btnAutoPlay = document.getElementById('btnAutoPlay');
     const wheelContainer = document.querySelector('.wheel-container');
     const btnReset = document.getElementById('btnReset');
@@ -2656,9 +2780,14 @@
     const MAX_AUTH_ATTEMPTS = 20;
 
     function setConnectionStatus(text, state = 'connecting') {
-      if (!statusBadge) return;
-      statusBadge.textContent = text;
-      statusBadge.className = 'status-badge' + (state === 'offline' ? ' offline' : state === 'closed' ? ' closed' : '');
+      // Trạng thái kết nối không còn hiển thị bằng chữ; giữ Switch an toàn
+      // trong lúc socket chưa xác thực hoặc đã offline.
+      if (!formOpenSwitch) return;
+      if (state === 'offline' || state === 'connecting') {
+        formOpenSwitch.disabled = true;
+      } else {
+        formOpenSwitch.disabled = window.isAdmin !== true;
+      }
     }
 
     function clearAuthTimer() {
@@ -3181,20 +3310,51 @@
       });
     }
 
+    // Page-mascot style: mỗi mascot dùng sprite sheet 3x3, chỉ thay background-position.
+    // Các asset hiện dùng trực tiếp từ bộ sprite của page-mascot; logic app vẫn vanilla JS.
+    const formMascotSheets = {
+      bear: 'https://koboyo.com/page-mascot/mascots/bear-directions.webp',
+      bunny: 'https://koboyo.com/page-mascot/mascots/bunny-directions.webp',
+      cat: 'https://koboyo.com/page-mascot/mascots/cat-directions.webp',
+      fox: 'https://koboyo.com/page-mascot/mascots/fox-directions.webp',
+      panda: 'https://koboyo.com/page-mascot/mascots/panda-directions.webp'
+    };
+
+    function initFormMascots() {
+      document.querySelectorAll('.form-mascot').forEach((mascot) => {
+        const name = mascot.dataset.mascot;
+        const sheet = formMascotSheets[name];
+        if (!sheet) return;
+        mascot.style.backgroundImage = `url("${sheet}")`;
+
+        mascot.addEventListener('pointermove', (event) => {
+          if (event.pointerType === 'touch') return;
+          const rect = mascot.getBoundingClientRect();
+          const x = (event.clientX - rect.left) / rect.width;
+          const y = (event.clientY - rect.top) / rect.height;
+          const col = Math.max(0, Math.min(2, Math.floor(x * 3)));
+          const row = Math.max(0, Math.min(2, Math.floor(y * 3)));
+          mascot.style.backgroundPosition = `${col * 50}% ${row * 50}%`;
+        });
+
+        mascot.addEventListener('pointerleave', () => {
+          mascot.style.backgroundPosition = '50% 50%';
+        });
+      });
+    }
+
+    initFormMascots();
+
     function updateUI() {
       renderBlacklist();
 
-      if (isFormOpen) {
-        statusBadge.textContent = '🟢 Đang mở form';
-        statusBadge.className = 'status-badge';
-        btnSubmit.disabled = false;
-        btnToggleForm.textContent = '🔒 Đóng Form';
-      } else {
-        statusBadge.textContent = '🔴 Đã đóng form';
-        statusBadge.className = 'status-badge closed';
-        btnSubmit.disabled = true;
-        btnToggleForm.textContent = '🔓 Mở Form';
+      if (formOpenSwitch) {
+        formOpenSwitch.checked = isFormOpen === true;
+        formOpenSwitch.disabled = window.isAdmin !== true;
+        formOpenSwitch.setAttribute('aria-label', isFormOpen ? 'Đóng form gửi bài hát' : 'Mở form gửi bài hát');
       }
+
+      btnSubmit.disabled = !isFormOpen;
 
       // Đảm bảo songs luôn là mảng
       if (!Array.isArray(songs)) {
@@ -5230,13 +5390,22 @@
       }
     });
 
-    btnToggleForm.addEventListener('click', () => {
+    formOpenSwitch?.addEventListener('change', () => {
+      if (window.isAdmin !== true) {
+        updateUI();
+        return;
+      }
+
+      // Giữ nguyên API đóng/mở Form hiện tại; Switch chỉ thay đổi UI điều khiển.
+      formOpenSwitch.disabled = true;
       fetch('/api/toggle-form', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           initData: telegramInitData
         })
+      }).finally(() => {
+        formOpenSwitch.disabled = false;
       });
     });
 
