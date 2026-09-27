@@ -566,6 +566,8 @@
         gap: 6px;
       }
 
+    }
+
     .status-badge {
       display: inline-block;
       padding: 6px 16px;
@@ -1894,15 +1896,17 @@
   </nav>
 
   <div class="card">
-
+    
+    <!-- 1. Hàng trên cùng: Div chứa 5 Mascot (Đã được đưa lên trên) -->
     <div id="formMascots" class="form-mascots" aria-label="Mascot GEMS Radio">
-        <span class="form-mascot" data-mascot="bear" role="img" aria-label="Mascot gấu"></span>
-        <span class="form-mascot" data-mascot="bunny" role="img" aria-label="Mascot thỏ"></span>
-        <span class="form-mascot" data-mascot="cat" role="img" aria-label="Mascot mèo"></span>
-        <span class="form-mascot" data-mascot="fox" role="img" aria-label="Mascot cáo"></span>
-        <span class="form-mascot" data-mascot="panda" role="img" aria-label="Mascot gấu trúc"></span>
-      </div>
-      
+      <span class="form-mascot" data-mascot="bear" role="img" aria-label="Mascot gấu"></span>
+      <span class="form-mascot" data-mascot="bunny" role="img" aria-label="Mascot thỏ"></span>
+      <span class="form-mascot" data-mascot="cat" role="img" aria-label="Mascot mèo"></span>
+      <span class="form-mascot" data-mascot="fox" role="img" aria-label="Mascot cáo"></span>
+      <span class="form-mascot" data-mascot="panda" role="img" aria-label="Mascot gấu trúc"></span>
+    </div>
+
+    <!-- 2. Hàng thứ hai: Công tắc đóng mở form và Đếm ngược -->
     <div class="form-status-row">
       <label class="form-switch-wrap" title="Bật/tắt form gửi bài hát">
         <span class="form-switch">
@@ -1910,9 +1914,10 @@
           <span class="form-switch-track" aria-hidden="true"></span>
         </span>
       </label>
-      
       <span id="formCountdown" class="form-countdown" aria-live="polite" aria-label="Thời gian mở form còn lại" hidden>--:--</span>
     </div>
+
+    <!-- 3. Hàng dưới cùng: Ô nhập link -->
     <div class="input-group">
       <input type="text" id="songUrl" placeholder="https://www.youtube.com/watch?v=..." />
       <button id="btnSubmit" class="btn-submit">🚀 Gửi bài hát</button>
