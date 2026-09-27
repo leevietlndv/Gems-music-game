@@ -457,7 +457,6 @@
     }
 
     .form-status-row {
-      display: flex; /* Đổi sang flex vì giờ chỉ còn 2 phần tử (trái - phải) */
       justify-content: space-between;
       align-items: center;
       margin-bottom: 12px;
@@ -558,7 +557,7 @@
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
       min-width: 58px;
-      text-align: right;
+      text-align: center;
     }
 
     @media (max-width: 380px) {
@@ -1875,7 +1874,12 @@
   <!-- NAVBAR FRAMEWORK: chỉ là lớp điều hướng UI, chưa di chuyển chức năng hiện tại. -->
   <nav id="appNavbar" class="app-navbar" aria-label="Điều hướng ứng dụng">
     <div class="app-navbar-bar">
-      <span class="app-navbar-title">Menu</span>
+      <label class="form-switch-wrap" title="Bật/tắt form gửi bài hát">
+        <span class="form-switch">
+          <input id="formOpenSwitch" type="checkbox" aria-label="Mở hoặc đóng form gửi bài hát">
+          <span class="form-switch-track" aria-hidden="true"></span>
+        </span>
+      </label>
       <span id="sessionCountdown" class="app-navbar-session-timer" aria-live="polite" aria-label="Thời gian phiên còn lại" hidden>--:--</span>
       <button id="appNavbarToggle" class="app-navbar-toggle" type="button" aria-label="Mở menu"
         aria-expanded="false" aria-controls="appNavbarDropdown">☰</button>
@@ -1908,12 +1912,6 @@
 
     <!-- 2. Hàng thứ hai: Công tắc đóng mở form và Đếm ngược -->
     <div class="form-status-row">
-      <label class="form-switch-wrap" title="Bật/tắt form gửi bài hát">
-        <span class="form-switch">
-          <input id="formOpenSwitch" type="checkbox" aria-label="Mở hoặc đóng form gửi bài hát">
-          <span class="form-switch-track" aria-hidden="true"></span>
-        </span>
-      </label>
       <span id="formCountdown" class="form-countdown" aria-live="polite" aria-label="Thời gian mở form còn lại" hidden>--:--</span>
     </div>
 
