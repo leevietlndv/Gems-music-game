@@ -690,30 +690,31 @@
 
     .online-details-toggle {
       display: none;
-      flex: 0 0 auto;
-      width: 30px;
-      min-width: 30px;
-      height: 30px;
+      flex: 0 0 36px; /* Cố định kích thước không bị méo */
+      width: 36px;
+      min-width: 36px;
+      height: 36px;
       padding: 0;
-      border-radius: 7px;
-      background: #2b384e;
-      color: #ddd;
+      border: 1px solid #3b4861;
+      border-radius: 8px;
+      background: #1a2232;
+      color: #fff;
       font-size: 18px;
       line-height: 1;
+      cursor: pointer;
+      transition: background 0.15s ease, transform 0.15s ease;
     }
 
-    .online-toggle-icon {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 100%;
-      height: 100%;
-      line-height: 1;
-      transform: translateY(-1px);
+    .online-details-toggle:hover {
+      background: #2d3a52;
+    }
+
+    .online-details-toggle:active {
+      transform: scale(0.96);
     }
 
     .online-details-toggle:not(.admin-only) {
-      display: flex;
+      display: inline-flex;
       align-items: center;
       justify-content: center;
     }
@@ -809,27 +810,30 @@
     }
 
     .blacklist-details-toggle {
-      flex: 0 0 34px;
-      width: 34px;
-      height: 30px;
+      flex: 0 0 36px; /* Cố định kích thước không bị méo */
+      width: 36px;
+      min-width: 36px;
+      height: 36px;
       padding: 0;
-      border: none;
-      border-radius: 7px;
-      background: #182235;
-      color: #ddd;
-      cursor: pointer;
+      border: 1px solid #3b4861;
+      border-radius: 8px;
+      background: #1a2232;
+      color: #fff;
+      font-size: 18px;
+      line-height: 1;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.15s ease, transform 0.15s ease;
+    }
+
+    .blacklist-details-toggle:hover {
+      background: #2d3a52;
     }
 
     .blacklist-details-toggle:active {
       transform: scale(0.96);
-    }
-
-    .blacklist-toggle-icon {
-      line-height: 1;
     }
 
     .blacklist-details {
@@ -1044,25 +1048,40 @@
       justify-content: space-between;
       gap: 8px;
       width: 100%;
+      margin-bottom: 12px; /* Chuyển margin xuống hộp chứa */
+    }
+
+    /* Triệt tiêu margin thừa của chữ để nút và chữ thẳng hàng nhau */
+    .song-list-header .card-title {
+      margin-bottom: 0;
     }
 
     .btn-reset-icon {
-      width: 34px;
-      min-width: 34px;
-      height: 34px;
+      flex: 0 0 36px; /* Cố định kích thước không bị méo */
+      width: 36px;
+      min-width: 36px;
+      height: 36px;
       padding: 0;
+      border: 1px solid #3b4861;
+      border-radius: 8px;
+      background: #1a2232;
+      color: #fff;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      font-size: 20px;
+      font-size: 18px;
       line-height: 1;
+      cursor: pointer;
+      transition: background 0.15s ease, transform 0.15s ease;
     }
 
-    .btn-reset {
-      background: #d32f2f;
-      color: white;
+    .btn-reset-icon:hover {
+      background: #2d3a52;
     }
 
+    .btn-reset-icon:active {
+      transform: scale(0.96);
+    }
     /* ===== 3 NÚT ADMIN ===== */
     .admin-actions button {
       min-width: 0;
