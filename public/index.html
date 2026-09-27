@@ -3321,23 +3321,92 @@
     };
 
     function initFormMascots() {
-      document.querySelectorAll('.form-mascot').forEach((mascot) => {
+      const mascots = document.querySelectorAll('.form-mascot');
+
+      mascots.forEach((mascot) => {
         const name = mascot.dataset.mascot;
         const sheet = formMascotSheets[name];
         if (!sheet) return;
+        
         mascot.style.backgroundImage = `url("${sheet}")`;
+        mascot.style.position = 'relative'; // Cần thiết để icon cảm xúc bay lên đúng vị trí
+        mascot.style.transition = 'transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1)'; // Hiệu ứng nhún mượt mà
 
-        mascot.addEventListener('pointermove', (event) => {
-          if (event.pointerType === 'touch') return;
-          const rect = mascot.getBoundingClientRect();
-          const x = (event.clientX - rect.left) / rect.width;
-          const y = (event.clientY - rect.top) / rect.height;
-          const col = Math.max(0, Math.min(2, Math.floor(x * 3)));
-          const row = Math.max(0, Math.min(2, Math.floor(y * 3)));
-          mascot.style.backgroundPosition = `${col * 50}% ${row * 50}%`;
+        // --- 1. TƯƠNG TÁC KHI CLICK (Bấm vào hiện biểu cảm) ---
+        mascot.addEventListener('pointerdown', (e) => {
+          // Hiệu ứng "lún" xuống khi nhấn
+          mascot.style.transform = 'scale(0.85) translateY(4px)';
+
+          // Tạo icon cảm xúc bay lên
+          const emojis = ['❤️', '✨', '🎵', '😍', '🔥'];
+          const icon = document.createElement('span');
+          icon.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+          icon.style.position = 'absolute';
+          icon.style.left = '50%';
+          icon.style.top = '-10px';
+          icon.style.transform = 'translateX(-50%)';
+          icon.style.opacity = '1';
+          icon.style.pointerEvents = 'none'; // Không cản trở click
+          icon.style.fontSize = '16px';
+          icon.style.transition = 'all 0.6s cubic-bezier(0.25, 1, 0.5, 1)';
+          icon.style.zIndex = '100';
+
+          mascot.appendChild(icon);
+
+          // Kích hoạt animation bay lên và mờ dần trong frame tiếp theo
+          requestAnimationFrame(() => {
+            icon.style.transform = 'translate(-50%, -35px) scale(1.5)';
+            icon.style.opacity = '0';
+          });
+
+          // Dọn rác DOM sau khi icon bay xong
+          setTimeout(() => icon.remove(), 600);
         });
 
-        mascot.addEventListener('pointerleave', () => {
+        // Nhả chuột ra thì mascot trở lại kích thước bình thường
+        mascot.addEventListener('pointerup', () => {
+          mascot.style.transform = 'scale(1) translateY(0)';
+        });
+        mascot.addEventListener('pointercancel', () => {
+          mascot.style.transform = 'scale(1) translateY(0)';
+        });
+      });
+
+      // --- 2. THEO DÕI CHUỘT TOÀN MÀN HÌNH (Rê chuột ra ngoài vẫn nhìn theo) ---
+      document.addEventListener('pointermove', (event) => {
+        if (event.pointerType === 'touch') return; // Bỏ qua trên màn hình cảm ứng để tránh giật lag
+
+        mascots.forEach(mascot => {
+          // Lấy tọa độ trung tâm của bé mascot
+          const rect = mascot.getBoundingClientRect();
+          const centerX = rect.left + rect.width / 2;
+          const centerY = rect.top + rect.height / 2;
+
+          // Tính toán khoảng cách từ chuột đến trung tâm mascot
+          const dx = event.clientX - centerX;
+          const dy = event.clientY - centerY;
+
+          let col = 1; // Mặc định nhìn thẳng (Cột giữa)
+          let row = 1; // Mặc định nhìn thẳng (Hàng giữa)
+
+          // Vùng đệm 30px: Chuột phải ra khỏi vùng đệm này mascot mới đảo mắt
+          const threshold = 30;
+
+          if (dx < -threshold) col = 0;      // Chuột ở bên trái -> Liếc trái
+          else if (dx > threshold) col = 2;  // Chuột ở bên phải -> Liếc phải
+
+          if (dy < -threshold) row = 0;      // Chuột ở bên trên -> Ngước lên
+          else if (dy > threshold) row = 2;  // Chuột ở bên dưới -> Nhìn xuống
+
+          // Áp dụng khung hình tương ứng trong ảnh Sprite 3x3
+          mascot.style.backgroundPosition = `${col * 50}% ${row * 50}%`;
+        });
+      });
+
+      // Đưa mắt về chính diện khi rê chuột ra khỏi cửa sổ trình duyệt
+      document.addEventListener('pointerleave', (event) => {
+        if (event.pointerType === 'touch') return;
+        mascots.forEach(mascot => {
           mascot.style.backgroundPosition = '50% 50%';
         });
       });
