@@ -457,13 +457,12 @@
     }
 
     .form-status-row {
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto;
+      display: flex; /* Đổi sang flex vì giờ chỉ còn 2 phần tử (trái - phải) */
+      justify-content: space-between;
       align-items: center;
-      gap: 10px;
       margin-bottom: 12px;
       width: 100%;
-      min-height: 34px;
+      min-height: 26px;
     }
 
     .form-switch-wrap {
@@ -530,23 +529,22 @@
     .form-mascots {
       display: flex;
       align-items: center;
-      justify-content: flex-start;
-      gap: 2px;
-      min-width: 0;
-      overflow: hidden;
-      height: 34px;
+      justify-content: space-between;
+      gap: clamp(6px, 2vw, 15px); /* Khoảng cách giữa các con vật tự động co giãn */
+      margin: 0 50px 16px 50px; /* Căn lề trái-phải 50px, cách hàng bên dưới 16px */
     }
 
     .form-mascot {
-      width: 30px;
-      height: 30px;
-      flex: 0 0 30px;
+      flex: 1 1 0; /* Chiếm đều chiều rộng cho cả 5 con */
+      width: 100%;
+      height: auto; 
+      aspect-ratio: 1 / 1; /* Tự động giữ form luôn luôn là hình vuông */
       display: block;
       background-repeat: no-repeat;
       background-size: 300% 300%;
       background-position: 50% 50%;
-      border-radius: 8px;
-      cursor: default;
+      border-radius: 15%; /* Độ cong góc tự động theo kích thước */
+      cursor: pointer;
       user-select: none;
       -webkit-user-drag: none;
     }
@@ -567,17 +565,6 @@
       .form-status-row {
         gap: 6px;
       }
-
-      .form-mascot {
-        width: 26px;
-        height: 26px;
-        flex-basis: 26px;
-      }
-
-      .form-mascots {
-        gap: 0;
-      }
-    }
 
     .status-badge {
       display: inline-block;
@@ -1907,6 +1894,15 @@
   </nav>
 
   <div class="card">
+
+    <div id="formMascots" class="form-mascots" aria-label="Mascot GEMS Radio">
+        <span class="form-mascot" data-mascot="bear" role="img" aria-label="Mascot gấu"></span>
+        <span class="form-mascot" data-mascot="bunny" role="img" aria-label="Mascot thỏ"></span>
+        <span class="form-mascot" data-mascot="cat" role="img" aria-label="Mascot mèo"></span>
+        <span class="form-mascot" data-mascot="fox" role="img" aria-label="Mascot cáo"></span>
+        <span class="form-mascot" data-mascot="panda" role="img" aria-label="Mascot gấu trúc"></span>
+      </div>
+      
     <div class="form-status-row">
       <label class="form-switch-wrap" title="Bật/tắt form gửi bài hát">
         <span class="form-switch">
@@ -1914,13 +1910,7 @@
           <span class="form-switch-track" aria-hidden="true"></span>
         </span>
       </label>
-      <div id="formMascots" class="form-mascots" aria-label="Mascot GEMS Radio">
-        <span class="form-mascot" data-mascot="bear" role="img" aria-label="Mascot gấu"></span>
-        <span class="form-mascot" data-mascot="bunny" role="img" aria-label="Mascot thỏ"></span>
-        <span class="form-mascot" data-mascot="cat" role="img" aria-label="Mascot mèo"></span>
-        <span class="form-mascot" data-mascot="fox" role="img" aria-label="Mascot cáo"></span>
-        <span class="form-mascot" data-mascot="panda" role="img" aria-label="Mascot gấu trúc"></span>
-      </div>
+      
       <span id="formCountdown" class="form-countdown" aria-live="polite" aria-label="Thời gian mở form còn lại" hidden>--:--</span>
     </div>
     <div class="input-group">
@@ -3321,13 +3311,13 @@
       panda: 'https://koboyo.com/page-mascot/mascots/panda-directions.webp'
     };
 
-    // 2. Link ảnh biểu cảm (Expressions)
+    // 2. Link ảnh biểu cảm (Reactions)
     const formMascotExpressions = {
-      bear: 'https://koboyo.com/page-mascot/mascots/bear-expressions.webp',
-      bunny: 'https://koboyo.com/page-mascot/mascots/bunny-expressions.webp',
-      cat: 'https://koboyo.com/page-mascot/mascots/cat-expressions.webp',
-      fox: 'https://koboyo.com/page-mascot/mascots/fox-expressions.webp',
-      panda: 'https://koboyo.com/page-mascot/mascots/panda-expressions.webp'
+      bear: 'https://koboyo.com/page-mascot/mascots/bear-reactions.webp',
+      bunny: 'https://koboyo.com/page-mascot/mascots/bunny-reactions.webp',
+      cat: 'https://koboyo.com/page-mascot/mascots/cat-reactions.webp',
+      fox: 'https://koboyo.com/page-mascot/mascots/fox-reactions.webp',
+      panda: 'https://koboyo.com/page-mascot/mascots/panda-reactions.webp'
     };
 
     function initFormMascots() {
