@@ -1043,7 +1043,6 @@ function getOnlineDetails() {
 // Vote, Play, Spin, Auto Play, Reset, Delete và Health=0 đều đi qua cùng
 // một hàng đợi để tránh race-condition khi nhiều request đến đồng thời.
 let gameMutationQueue = Promise.resolve();
-
 function enqueueGameMutation(task) {
   const run = gameMutationQueue.then(task, task);
   gameMutationQueue = run.catch(() => {});
