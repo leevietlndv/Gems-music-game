@@ -1044,10 +1044,6 @@ function getOnlineDetails() {
 // một hàng đợi để tránh race-condition khi nhiều request đến đồng thời.
 let gameMutationQueue = Promise.resolve();
 
-// Khóa Spin phía server trong 5 giây để chống spam /api/spin
-let spinCooldownUntil = 0;
-const SPIN_SERVER_COOLDOWN_MS = 5000;
-
 function enqueueGameMutation(task) {
   const run = gameMutationQueue.then(task, task);
   gameMutationQueue = run.catch(() => {});
@@ -1356,21 +1352,6 @@ function startReplacementCountdown() {
 }
 
 async function performSpin(initiatorSocketId = null, actionUser = null) {
-   const now = Date.now();
-
-  if (now < spinCooldownUntil) {
-    const remainingSeconds = Math.ceil((spinCooldownUntil - now) / 1000);
-
-    return {
-      success: false,
-      message: `Vui lòng chờ ${remainingSeconds} giây trước khi xoay tiếp.`
-    };
-  }
-
-  // Khóa Spin ngay khi request được server chấp nhận.
-  spinCooldownUntil = now + SPIN_SERVER_COOLDOWN_MS;
-
-
   if (lastWinner) {
   await pool.query(
       'DELETE FROM songs WHERE id = $1',
