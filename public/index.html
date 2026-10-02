@@ -2135,7 +2135,7 @@
     // Import engine của Morphicons cho DOM thuần
     import { createMorph } from 'https://esm.sh/morphicons/dom';
     // Import dữ liệu icon nét (stroke-based) từ Lucide
-    import { Play, Pause, Menu, X, Volume2, Volume1, VolumeX } from 'https://esm.sh/lucide';
+    import { Play, Pause, Menu, X, Volume2, Volume1, VolumeX, ListOrdered, Shuffle, Square } from 'https://esm.sh/lucide';
 
     const tg = window.Telegram?.WebApp;
     if (tg) {
@@ -2605,7 +2605,7 @@
     const blacklistListEl = document.getElementById('blacklistList');
 
     // Toàn cục các biến lưu trữ instance Morph
-    let menuMorph, playMorph, audioMorph;
+    let menuMorph, playMorph, audioMorph, autoPlayMorph;
 
     function initMorphicons() {
       const createSvg = (btn) => {
@@ -2628,6 +2628,7 @@
       if (appNavbarToggle) menuMorph = createMorph(createSvg(appNavbarToggle), Menu);
       if (btnPlaybackControl) playMorph = createMorph(createSvg(btnPlaybackControl), Play);
       if (btnAudioToggle) audioMorph = createMorph(createSvg(btnAudioToggle), Volume2);
+      if (btnAutoPlay) autoPlayMorph = createMorph(createSvg(btnAutoPlay), Shuffle);
     }
 
     // Gọi khởi tạo SVG cho các nút
@@ -5336,21 +5337,22 @@
     function isYouTubeUrl(inputUrl) {
       return YouTubeUtils.isValidYouTubeUrl(inputUrl);
     }
+    
     function updateAutoPlayButton() {
       if (!btnAutoPlay) return;
 
       if (autoPlayMode === 1) {
-        btnAutoPlay.textContent = '🔢';
+        if (autoPlayMorph) autoPlayMorph.morphTo(ListOrdered, 'snappy');
         btnAutoPlay.setAttribute('aria-label', 'Chế độ phát tuần tự');
         btnAutoPlay.title = 'Chế độ phát tuần tự';
         btnAutoPlay.style.background = '#2e7d32';
       } else if (autoPlayMode === 2) {
-        btnAutoPlay.textContent = '🔀';
+        if (autoPlayMorph) autoPlayMorph.morphTo(Shuffle, 'snappy');
         btnAutoPlay.setAttribute('aria-label', 'Chế độ phát ngẫu nhiên');
         btnAutoPlay.title = 'Chế độ phát ngẫu nhiên';
         btnAutoPlay.style.background = '#00aaff';
       } else {
-        btnAutoPlay.textContent = '⏹️';
+        if (autoPlayMorph) autoPlayMorph.morphTo(Square, 'snappy');
         btnAutoPlay.setAttribute('aria-label', 'Tắt tự động phát');
         btnAutoPlay.title = 'Tắt tự động phát';
         btnAutoPlay.style.background = '#37474f';
