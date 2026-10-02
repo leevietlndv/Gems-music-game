@@ -2603,6 +2603,7 @@
     const blacklistToggleIcon = document.getElementById('blacklistToggleIcon');
     const blacklistDetails = document.getElementById('blacklistDetails');
     const blacklistListEl = document.getElementById('blacklistList');
+
     // Toàn cục các biến lưu trữ instance Morph
     let menuMorph, playMorph, audioMorph;
 
@@ -2627,10 +2628,6 @@
       if (appNavbarToggle) menuMorph = createMorph(createSvg(appNavbarToggle), Menu);
       if (btnPlaybackControl) playMorph = createMorph(createSvg(btnPlaybackControl), Play);
       if (btnAudioToggle) audioMorph = createMorph(createSvg(btnAudioToggle), Volume2);
-      
-      // Đồng bộ lại icon với trạng thái hiện tại ngay sau khi khởi tạo
-      updateAudioControls();
-      updatePlaybackControlUI();
     }
 
     // Gọi khởi tạo SVG cho các nút
