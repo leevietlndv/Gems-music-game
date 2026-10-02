@@ -2135,7 +2135,7 @@
     // Import engine của Morphicons cho DOM thuần
     import { createMorph } from 'https://esm.sh/morphicons/dom';
     // Import dữ liệu icon nét (stroke-based) từ Lucide
-    import { Play, Pause, Menu, X, Volume2, Volume1, VolumeX, ListOrdered, Shuffle, Square } from 'https://esm.sh/lucide';
+    import { Play, Pause, Menu, X, Volume2, Volume1, VolumeX, ListOrdered, Shuffle, Square, ChevronDown, ChevronUp } from 'https://esm.sh/lucide';
 
     const tg = window.Telegram?.WebApp;
     if (tg) {
@@ -2605,7 +2605,7 @@
     const blacklistListEl = document.getElementById('blacklistList');
 
     // Toàn cục các biến lưu trữ instance Morph
-    let menuMorph, playMorph, audioMorph, autoPlayMorph;
+    let menuMorph, playMorph, audioMorph, autoPlayMorph; onlineToggleMorph, blacklistToggleMorph;
 
     function initMorphicons() {
       const createSvg = (btn) => {
@@ -2629,6 +2629,8 @@
       if (btnPlaybackControl) playMorph = createMorph(createSvg(btnPlaybackControl), Play);
       if (btnAudioToggle) audioMorph = createMorph(createSvg(btnAudioToggle), Volume2);
       if (btnAutoPlay) autoPlayMorph = createMorph(createSvg(btnAutoPlay), Shuffle);
+      if (onlineToggleIcon) onlineToggleMorph = createMorph(createSvg(onlineToggleIcon), ChevronDown);
+      if (blacklistToggleIcon) blacklistToggleMorph = createMorph(createSvg(blacklistToggleIcon), ChevronDown);
     }
 
     // Gọi khởi tạo SVG cho các nút
@@ -2807,14 +2809,15 @@
       const open = onlineDetails?.classList.toggle('open') === true;
       onlineDetailsToggle.setAttribute('aria-expanded', String(open));
 
-      if (onlineToggleIcon) {
-        onlineToggleIcon.textContent = open ? '▲' : '▼';
-      }
+      // Morphicon: Đổi hướng mũi tên mượt mà
+      if (onlineToggleMorph) {
+          onlineToggleMorph.morphTo(open ? ChevronUp : ChevronDown, 'snappy');
+        }
 
-      if (open) {
-        requestOnlineDetails();
-      }
-    });
+        if (open) {
+          requestOnlineDetails();
+        }
+      });
 
     socket.on('onlineUsers', (summary) => {
       updateOnlineSummary(summary);
@@ -2950,6 +2953,7 @@
           if (onlineToggleIcon) onlineToggleIcon.textContent = '▼';
         }
       }
+ 
       if (window.isAdmin && onlineDetails?.classList.contains('open')) {
         requestOnlineDetails();
       }
@@ -3294,9 +3298,9 @@
       blacklistDetails.classList.toggle('open', open);
       blacklistDetailsToggle?.setAttribute('aria-expanded', String(open));
 
-      if (blacklistToggleIcon) {
-        blacklistToggleIcon.textContent = open ? '▲' : '▼';
-      }
+     // Morphicon: Đổi hướng mũi tên mượt mà
+      if (blacklistToggleMorph) {
+        blacklistToggleMorph.morphTo(open ? ChevronUp : ChevronDown, 'snappy');
     }
 
     blacklistDetailsToggle?.addEventListener('click', () => {
@@ -5337,7 +5341,7 @@
     function isYouTubeUrl(inputUrl) {
       return YouTubeUtils.isValidYouTubeUrl(inputUrl);
     }
-    
+
     function updateAutoPlayButton() {
       if (!btnAutoPlay) return;
 
