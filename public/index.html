@@ -2143,12 +2143,6 @@
       tg.expand();
     }
 
-    const tg = window.Telegram?.WebApp;
-    if (tg) {
-      tg.ready();
-      tg.expand();
-    }
-
     // initData có thể được Telegram tiêm TRỄ hơn thời điểm script chạy,
     // nên dùng let và chờ sự kiện ready/envSafeChanged rồi đọc lại.
     let telegramInitData = tg?.initData || '';
