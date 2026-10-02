@@ -2611,18 +2611,26 @@
         btn.textContent = ''; // Xóa emoji tĩnh hiện tại
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         svg.setAttribute('viewBox', '0 0 24 24');
-        // Định dạng size và nét cho Lucide
         Object.assign(svg.style, {
           width: '22px', height: '22px', stroke: 'currentColor',
           strokeWidth: '2', fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'round'
         });
+        
+        // SỬA LỖI Ở ĐÂY: Phải tạo thẻ <path> và trả về thẻ path này
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        svg.appendChild(path);
         btn.appendChild(svg);
-        return svg;
+        
+        return path; // Morphicons cần thẻ path để vẽ nét
       };
 
       if (appNavbarToggle) menuMorph = createMorph(createSvg(appNavbarToggle), Menu);
       if (btnPlaybackControl) playMorph = createMorph(createSvg(btnPlaybackControl), Play);
       if (btnAudioToggle) audioMorph = createMorph(createSvg(btnAudioToggle), Volume2);
+      
+      // Đồng bộ lại icon với trạng thái hiện tại ngay sau khi khởi tạo
+      updateAudioControls();
+      updatePlaybackControlUI();
     }
 
     // Gọi khởi tạo SVG cho các nút
