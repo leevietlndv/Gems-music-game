@@ -2131,7 +2131,18 @@
 
   </div>
 
-  <script>
+  <script type="module">
+    // Import engine của Morphicons cho DOM thuần
+    import { createMorph } from 'https://esm.sh/morphicons/dom';
+    // Import dữ liệu icon nét (stroke-based) từ Lucide
+    import { Play, Pause, Menu, X, Volume2, Volume1, VolumeX } from 'https://esm.sh/lucide';
+
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+    }
+
     const tg = window.Telegram?.WebApp;
     if (tg) {
       tg.ready();
@@ -2232,7 +2243,9 @@
       appNavbarDropdown.classList.toggle('open', isOpen);
       appNavbarToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
       appNavbarToggle.setAttribute('aria-label', isOpen ? 'Đóng menu' : 'Mở menu');
-      appNavbarToggle.textContent = isOpen ? '✕' : '☰';
+
+      // Chuyển động icon Menu <-> Close
+      if (menuMorph) menuMorph.morphTo(isOpen ? X : Menu, 'snappy');
     }
 
     function updateNavbarAdminUI() {
@@ -2596,6 +2609,30 @@
     const blacklistToggleIcon = document.getElementById('blacklistToggleIcon');
     const blacklistDetails = document.getElementById('blacklistDetails');
     const blacklistListEl = document.getElementById('blacklistList');
+    // Toàn cục các biến lưu trữ instance Morph
+    let menuMorph, playMorph, audioMorph;
+
+    function initMorphicons() {
+      const createSvg = (btn) => {
+        btn.textContent = ''; // Xóa emoji tĩnh hiện tại
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        // Định dạng size và nét cho Lucide
+        Object.assign(svg.style, {
+          width: '22px', height: '22px', stroke: 'currentColor',
+          strokeWidth: '2', fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'round'
+        });
+        btn.appendChild(svg);
+        return svg;
+      };
+
+      if (appNavbarToggle) menuMorph = createMorph(createSvg(appNavbarToggle), Menu);
+      if (btnPlaybackControl) playMorph = createMorph(createSvg(btnPlaybackControl), Play);
+      if (btnAudioToggle) audioMorph = createMorph(createSvg(btnAudioToggle), Volume2);
+    }
+
+    // Gọi khởi tạo SVG cho các nút
+    initMorphicons();
 
     const MUSIC_PREF_KEY = 'gemsMusicAudioPreference';
 
@@ -4206,20 +4243,21 @@
       }
     }
 
-    function updateAudioControls() {
-      const muted = savedAudioPreference === false || globalVolume === 0;
-      const icon = muted
-        ? '🔇'
-        : (globalVolume < 50 ? '🔉' : '🔊');
-      const actionLabel = muted ? 'Bật nhạc' : 'Tắt nhạc';
-      btnAudioToggle.textContent = icon;
-      btnAudioToggle.setAttribute('aria-label', actionLabel);
-      btnAudioToggle.title = actionLabel;
-      btnAudioToggle.classList.toggle('enabled', !muted);
-      volumeSlider.value = String(globalVolume);
-      volumeValue.textContent = globalVolume;
-      updateVolumeSliderTrack();
-    }
+      function updateAudioControls() {
+        const muted = savedAudioPreference === false || globalVolume === 0;
+        
+        // Morphicons: Xác định icon đích dựa trên trạng thái
+        const targetIcon = muted ? VolumeX : (globalVolume < 50 ? Volume1 : Volume2);
+        if (audioMorph) audioMorph.morphTo(targetIcon, 'snappy');
+
+        const actionLabel = muted ? 'Bật nhạc' : 'Tắt nhạc';
+        btnAudioToggle.setAttribute('aria-label', actionLabel);
+        btnAudioToggle.title = actionLabel;
+        btnAudioToggle.classList.toggle('enabled', !muted);
+        volumeSlider.value = String(globalVolume);
+        volumeValue.textContent = globalVolume;
+        updateVolumeSliderTrack();
+      }
 
     function updateVolumeAccess() {
       if (!volumeSlider) return;
@@ -4458,11 +4496,13 @@
       btnPlaybackControl.disabled = !canControl;
 
       if (status === 'paused') {
-        btnPlaybackControl.textContent = '▶';
+        // Morphicons: Chuyển sang nút Play
+        if (playMorph) playMorph.morphTo(Play, 'snappy');
         btnPlaybackControl.setAttribute('aria-label', 'Tiếp tục phát');
         btnPlaybackControl.setAttribute('title', 'Tiếp tục phát');
       } else {
-        btnPlaybackControl.textContent = '⏸';
+        // Morphicons: Chuyển sang nút Pause
+        if (playMorph) playMorph.morphTo(Pause, 'snappy');
         btnPlaybackControl.setAttribute('aria-label', 'Tạm dừng');
         btnPlaybackControl.setAttribute('title', 'Tạm dừng');
       }

@@ -1544,8 +1544,8 @@ app.use(helmet({
       // index.html hiện chứa JavaScript inline. Nếu không cho phép inline script,
       // toàn bộ code Telegram + Socket.IO phía client sẽ không chạy và UI sẽ
       // đứng mãi ở "⏳ Đang kết nối...".
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://telegram.org", "https://www.youtube.com", "https://s.ytimg.com"],
-      connectSrc: ["'self'", "https://telegram.org", "https://www.youtube.com", "wss:", "ws:"],
+    scriptSrc: ["'self'", "'unsafe-inline'", "https://telegram.org", "https://www.youtube.com", "https://s.ytimg.com", "https://esm.sh"],
+    connectSrc: ["'self'", "https://telegram.org", "https://www.youtube.com", "wss:", "ws:"],
       frameSrc: ["https://www.youtube.com", "https://www.youtube-nocookie.com"],
 
       // Cho phép Telegram Web nhúng Mini App, nhưng không mở iframe cho website khác.
