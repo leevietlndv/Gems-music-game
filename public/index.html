@@ -969,42 +969,9 @@
       font-weight: 400;
     }
 
-    /* Khung chứa tiêu đề cố định 1 dòng, giấu phần tràn */
-    #playerTitle {
-      width: 100%;
-      min-width: 0;
-      white-space: nowrap;
-      overflow: hidden;
-      margin-bottom: 12px;
-      position: relative;
-    }
-
     #playerTitleText {
       color: #ffca28;
       font-weight: 700;
-      display: inline-block;
-      white-space: nowrap;
-      will-change: transform;
-    }
-
-    /* Hiệu ứng chạy chữ mượt mà khi tên bài quá dài */
-    #playerTitleText.marquee {
-      padding-left: 100%; /* Bắt đầu trượt từ mép phải */
-      animation: playerMarquee 14s linear infinite;
-    }
-
-    /* Tạm dừng chạy chữ khi người dùng rê chuột/chạm tay vào */
-    #playerTitle:hover #playerTitleText.marquee {
-      animation-play-state: paused;
-    }
-
-    @keyframes playerMarquee {
-      0% {
-        transform: translateX(0);
-      }
-      100% {
-        transform: translateX(-100%);
-      }
     }
 
     .admin-actions {
@@ -2557,7 +2524,6 @@
     const canvas = document.getElementById('wheelCanvas');
     const ctx = canvas.getContext('2d');
     const playerCard = document.getElementById('playerCard');
-    const playerTitleText = document.getElementById('playerTitleText');
     const winnerUser = document.getElementById('winnerUser');
     const winnerAction = document.getElementById('winnerAction');
     const healthBar = document.getElementById('healthBar');
@@ -3507,18 +3473,32 @@
       }
 
 
+      listTitleEl.textContent = `📋 Danh sách bài hát (${songs.length})`;
+
       if (songs.length === 0) {
         songListEl.innerHTML = `
-          <div style="text-align: center; color: #888; font-size: 13px; padding: 10px;">
+          <div style="
+            text-align: center;
+            color: #888;
+            font-size: 13px;
+            padding: 10px;
+          ">
             Chưa có bài hát nào được gửi.
           </div>
         `;
       } else {
         try {
           songListEl.innerHTML = songs.map((s, idx) => {
+            // Bảo vệ trường hợp dữ liệu bài hát bị thiếu
             s = s || {};
-            const user = escapeHtml(s.user || 'Người dùng');
-            const title = escapeHtml(s.title || 'Đang cập nhật tiêu đề...');
+
+            const user = escapeHtml(
+              s.user || 'Người dùng'
+            );
+
+            const title = escapeHtml(
+              s.title || 'Đang cập nhật tiêu đề...'
+            );
             const id = String(s.id ?? '');
             const videoId = extractYouTubeId(s.url || '');
             const thumb = videoId
@@ -3571,10 +3551,18 @@
               </div>
             `;
           }).join('');
+
         } catch (error) {
           console.error('❌ Lỗi render danh sách bài hát:', error);
+          console.error('📦 songs hiện tại:', songs);
+
           songListEl.innerHTML = `
-            <div style="text-align: center; color: #ff6b6b; font-size: 13px; padding: 10px;">
+            <div style="
+              text-align: center;
+              color: #ff6b6b;
+              font-size: 13px;
+              padding: 10px;
+            ">
               ⚠️ Lỗi hiển thị danh sách bài hát.
             </div>
           `;
@@ -4975,7 +4963,6 @@
       }
 
       playerCard.style.display = 'none';
-      if (playerTitleText) playerTitleText.classList.remove('marquee');
       currentAction = null;
       currentHealth = 5;
       currentLikeCount = 0;
@@ -5163,22 +5150,13 @@
       currentPlayback = playback || currentPlayback;
       updatePlaybackControlUI();
       winnerUser.textContent = winner.user || 'Người dùng';
-      if (playerTitleText) playerTitleText.textContent = winner.title || '-';
+      playerTitleText.textContent = winner.title || '-';
       renderWinnerAction(currentAction);
       playerCard.style.display = 'block';
 
-      // --- XỬ LÝ HIỆU ỨNG CHỮ CHẠY (MARQUEE) AN TOÀN ---
-      if (playerTitleText) {
-        playerTitleText.classList.remove('marquee');
-        requestAnimationFrame(() => {
-          const container = document.getElementById('playerTitle');
-          if (container && playerTitleText.scrollWidth > container.clientWidth) {
-            playerTitleText.classList.add('marquee');
-          }
-        }); // <-- DẤU ĐÓNG NGOẶC QUAN TRỌNG ĐỂ TRÁNH LỖI CRASH 
-      }
-      // --------------------------------------------------
-
+      // renderPlayer() cũng được gọi sau khi Spin kết thúc.
+      // clearPlayer() trước đó đã disable Like/Dislike vì chưa có bài,
+      // nên phải cập nhật lại trạng thái nút ngay khi bài mới được gán.
       updateVoteButtons();
 
       const effectiveSound = getEffectiveSound(shouldPlaySound);
@@ -5558,13 +5536,6 @@
         });
       }
     });
-
-    window.addEventListener('scroll', updateBackToTopUI, { passive: true });
-    window.addEventListener('resize', updateBackToTopUI);
-    backToTop?.addEventListener('click', () => {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
-    updateBackToTopUI();
 
     // Chỉ kết nối SAU KHI toàn bộ socket.on(...) đã được đăng ký.
     // Tránh trường hợp socket kết nối quá sớm và event connect bị bỏ lỡ.
