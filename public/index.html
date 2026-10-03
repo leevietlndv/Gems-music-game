@@ -996,9 +996,9 @@
     /* Hiệu ứng Seamless Loop Marquee (nhân đôi nội dung) */
     #playerTitleText.marquee {
       display: inline-flex;
-      gap: 32px; /* Khoảng cách cố định giữa bản gốc và bản sao */
+      gap: 32px; 
       width: max-content;
-      animation: playerMarqueeSeamless 12s linear infinite;
+      animation: playerMarqueeSeamless 14s linear infinite; 
     }
 
     /* Tạm dừng chạy chữ khi người dùng hover chuột/chạm tay */
@@ -1008,7 +1008,7 @@
 
     /* Dịch chuyển đúng 50% tổng chiều rộng + nửa gap để khớp chính xác vòng lặp */
     @keyframes playerMarqueeSeamless {
-      0% { transform: translateX(0); }
+      0%, 20% { transform: translateX(0); }
       100% { transform: translateX(calc(-50% - 16px)); }
     }
 
@@ -2139,7 +2139,7 @@
     // Import engine của Morphicons cho DOM thuần
     import { createMorph } from 'https://esm.sh/morphicons/dom';
     // Import dữ liệu icon nét (stroke-based) từ Lucide
-    import { Play, Pause, Menu, X, Volume2, Volume1, VolumeX, ListOrdered, Shuffle, Square, ChevronDown, ChevronUp } from 'https://esm.sh/lucide';
+    import { Play, Pause, Menu, X, Volume2, Volume1, VolumeX, ListOrdered, Shuffle, Square, ChevronDown, ChevronUp, RefreshCw, Upload, Pencil } from 'https://esm.sh/lucide';
 
     const tg = window.Telegram?.WebApp;
     if (tg) {
@@ -2382,6 +2382,8 @@
         scriptSettingsDetails?.setAttribute('aria-hidden', 'true');
         scriptSettingsEdit?.setAttribute('aria-expanded', 'false');
         if (scriptSettingsEdit) scriptSettingsEdit.title = 'Chỉnh sửa';
+        // Trả icon về trạng thái Edit nếu panel tự động đóng
+        if (editSettingsMorph) editSettingsMorph.morphTo(Pencil, 'snappy');
       }
       updateScriptSettingsCancelUI();
     }
@@ -2395,11 +2397,18 @@
         scriptSettingsDetails.setAttribute('aria-hidden', 'true');
         scriptSettingsEdit.setAttribute('aria-expanded', 'false');
         scriptSettingsEdit.title = 'Chỉnh sửa';
+        
+        // Morphicon: Đóng lại thành cây bút
+        if (editSettingsMorph) editSettingsMorph.morphTo(Pencil, 'snappy');
       } else {
         scriptSettingsDetails.classList.add('open');
         scriptSettingsDetails.setAttribute('aria-hidden', 'false');
         scriptSettingsEdit.setAttribute('aria-expanded', 'true');
         scriptSettingsEdit.title = 'Đóng cài đặt';
+        
+        // Morphicon: Mở ra thành mũi tên hướng lên
+        if (editSettingsMorph) editSettingsMorph.morphTo(ChevronUp, 'snappy');
+        
         sessionDuration?.focus();
       }
     });
@@ -2609,7 +2618,7 @@
     const blacklistListEl = document.getElementById('blacklistList');
 
     // Toàn cục các biến lưu trữ instance Morph
-    let menuMorph, playMorph, audioMorph, autoPlayMorph, onlineToggleMorph, blacklistToggleMorph;
+    let menuMorph, playMorph, audioMorph, autoPlayMorph, onlineToggleMorph, blacklistToggleMorph, resetMorph, editSettingsMorph;
 
     function initMorphicons() {
       const createSvg = (btn) => {
@@ -2635,6 +2644,9 @@
       if (btnAutoPlay) autoPlayMorph = createMorph(createSvg(btnAutoPlay), Shuffle);
       if (onlineToggleIcon) onlineToggleMorph = createMorph(createSvg(onlineToggleIcon), ChevronDown);
       if (blacklistToggleIcon) blacklistToggleMorph = createMorph(createSvg(blacklistToggleIcon), ChevronDown);
+      // KHỞI TẠO NÚT RESET VÀ EDIT KỊCH BẢN
+      if (btnReset) resetMorph = createMorph(createSvg(btnReset), RefreshCw);
+      if (scriptSettingsEdit) editSettingsMorph = createMorph(createSvg(scriptSettingsEdit), Pencil);    
     }
 
     // Gọi khởi tạo SVG cho các nút
@@ -3529,6 +3541,28 @@
       listTitleEl.textContent = `📋 Danh sách bài hát (${songs.length})`;
 
       if (songs.length === 0) {
+        // Morph sang nút Upload khi rỗng
+        if (resetMorph) resetMorph.morphTo(Upload, 'snappy');
+        if (btnReset) {
+          btnReset.setAttribute('aria-label', 'Đến form gửi bài hát');
+          btnReset.setAttribute('title', 'Thêm bài hát mới');
+        }
+
+        songListEl.innerHTML = `
+          <div style="text-align: center; color: #888; font-size: 13px; padding: 10px;">
+            Chưa có bài hát nào được gửi.
+          </div>
+        `;
+      } else {
+        // Morph sang nút Reset (Refresh) khi có bài hát
+        if (resetMorph) resetMorph.morphTo(RefreshCw, 'snappy');
+        if (btnReset) {
+          btnReset.setAttribute('aria-label', 'Reset');
+          btnReset.setAttribute('title', 'Xóa tất cả bài hát');
+        }
+        
+        try {
+
         songListEl.innerHTML = `
           <div style="
             text-align: center;
@@ -5604,6 +5638,18 @@
     });
 
     btnReset.addEventListener('click', () => {
+      // NẾU DANH SÁCH RỖNG -> Kéo màn hình lên form gửi nhạc
+      if (songs.length === 0) {
+        const inputField = document.getElementById('songUrl');
+        if (inputField) {
+          inputField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // Highlight nhẹ để thu hút sự chú ý
+          inputField.focus();
+        }
+        return;
+      }
+
+      // NẾU CÓ BÀI HÁT -> Reset
       if (confirm('Xóa tất cả bài hát?')) {
         clearPlayer();
         fetch('/api/reset', {
