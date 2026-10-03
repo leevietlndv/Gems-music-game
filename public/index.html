@@ -979,6 +979,12 @@
       position: relative;
     }
 
+    /* Mask làm mờ 2 cạnh trái/phải khi có text chạy */
+    #playerTitle.has-marquee {
+      -webkit-mask-image: linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%);
+      mask-image: linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%);
+    }
+
     #playerTitleText {
       color: #ffca28;
       font-weight: 700;
@@ -987,23 +993,37 @@
       will-change: transform;
     }
 
-    /* Hiệu ứng chạy chữ mượt mà khi tên bài quá dài */
+    /* Hiệu ứng Seamless Loop Marquee (nhân đôi nội dung) */
     #playerTitleText.marquee {
-      padding-left: 100%; /* Bắt đầu trượt từ mép phải */
-      animation: playerMarquee 14s linear infinite;
+      display: inline-flex;
+      gap: 32px; /* Khoảng cách cố định giữa bản gốc và bản sao */
+      width: max-content;
+      animation: playerMarqueeSeamless 12s linear infinite;
     }
 
-    /* Tạm dừng chạy chữ khi người dùng rê chuột/chạm tay vào */
+    /* Tạm dừng chạy chữ khi người dùng hover chuột/chạm tay */
     #playerTitle:hover #playerTitleText.marquee {
       animation-play-state: paused;
     }
 
-    @keyframes playerMarquee {
-      0% {
-        transform: translateX(0);
+    /* Dịch chuyển đúng 50% tổng chiều rộng + nửa gap để khớp chính xác vòng lặp */
+    @keyframes playerMarqueeSeamless {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(calc(-50% - 16px)); }
+    }
+
+    /* Tắt animation & chuyển về dạng cắt đuôi (...) nếu thiết bị ưu tiên giảm chuyển động */
+    @media (prefers-reduced-motion: reduce) {
+      #playerTitleText.marquee {
+        animation: none;
+        display: block;
+        width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
-      100% {
-        transform: translateX(-100%);
+      #playerTitle.has-marquee {
+        -webkit-mask-image: none;
+        mask-image: none;
       }
     }
 
@@ -4996,7 +5016,15 @@
       }
 
       playerCard.style.display = 'none';
-      playerTitleText?.classList.remove('marquee');
+      if (playerTitleText) {
+        playerTitleText.classList.remove('marquee');
+        playerTitleText.innerHTML = '';
+      }
+      
+      // Xóa mặt nạ mờ 2 cạnh của container khi dừng nhạc
+      const titleContainer = document.getElementById('playerTitle');
+      if (titleContainer) titleContainer.classList.remove('has-marquee');
+
       currentAction = null;
       currentHealth = 5;
       currentLikeCount = 0;
@@ -5184,22 +5212,31 @@
       currentPlayback = playback || currentPlayback;
       updatePlaybackControlUI();
       winnerUser.textContent = winner.user || 'Người dùng';
-      playerTitleText.textContent = winner.title || '-';
       renderWinnerAction(currentAction);
       playerCard.style.display = 'block';
 
-      // --- THÊM ĐOẠN NÀY ĐỂ KÍCH HOẠT MARQUEE NẾU TÊN DÀI ---
-      playerTitleText.classList.remove('marquee');
-      requestAnimationFrame(() => {
+      // --- XỬ LÝ HIỆU ỨNG SEAMLESS MARQUEE ---
+      if (playerTitleText) {
         const container = document.getElementById('playerTitle');
-        if (container && playerTitleText.scrollWidth > container.clientWidth) {
-          playerTitleText.classList.add('marquee');
-        }
-      });
+        const text = winner.title || '-';
+        
+        // Reset về trạng thái mặc định (chỉ có 1 bản text)
+        playerTitleText.classList.remove('marquee');
+        if (container) container.classList.remove('has-marquee');
+        playerTitleText.innerHTML = escapeHtml(text);
 
-      // renderPlayer() cũng được gọi sau khi Spin kết thúc.
-      // clearPlayer() trước đó đã disable Like/Dislike vì chưa có bài,
-      // nên phải cập nhật lại trạng thái nút ngay khi bài mới được gán.
+        requestAnimationFrame(() => {
+          if (container && playerTitleText.scrollWidth > container.clientWidth) {
+            playerTitleText.classList.add('marquee');
+            container.classList.add('has-marquee');
+            // Nhân đôi nội dung với khoảng cách gap để loop -50% liền mạch
+            // Thêm aria-hidden cho bản sao để máy đọc màn hình không đọc 2 lần
+            playerTitleText.innerHTML = `<span>${escapeHtml(text)}</span><span aria-hidden="true">${escapeHtml(text)}</span>`;
+          }
+        });
+      }
+      // --------------------------------------------------
+
       updateVoteButtons();
 
       const effectiveSound = getEffectiveSound(shouldPlaySound);
