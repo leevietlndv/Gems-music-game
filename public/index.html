@@ -969,9 +969,42 @@
       font-weight: 400;
     }
 
+    /* Khung chứa tiêu đề cố định 1 dòng, giấu phần tràn */
+    #playerTitle {
+      width: 100%;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      margin-bottom: 12px;
+      position: relative;
+    }
+
     #playerTitleText {
       color: #ffca28;
       font-weight: 700;
+      display: inline-block;
+      white-space: nowrap;
+      will-change: transform;
+    }
+
+    /* Hiệu ứng chạy chữ mượt mà khi tên bài quá dài */
+    #playerTitleText.marquee {
+      padding-left: 100%; /* Bắt đầu trượt từ mép phải */
+      animation: playerMarquee 14s linear infinite;
+    }
+
+    /* Tạm dừng chạy chữ khi người dùng rê chuột/chạm tay vào */
+    #playerTitle:hover #playerTitleText.marquee {
+      animation-play-state: paused;
+    }
+
+    @keyframes playerMarquee {
+      0% {
+        transform: translateX(0);
+      }
+      100% {
+        transform: translateX(-100%);
+      }
     }
 
     .admin-actions {
@@ -4963,6 +4996,7 @@
       }
 
       playerCard.style.display = 'none';
+      playerTitleText?.classList.remove('marquee');
       currentAction = null;
       currentHealth = 5;
       currentLikeCount = 0;
@@ -5153,6 +5187,15 @@
       playerTitleText.textContent = winner.title || '-';
       renderWinnerAction(currentAction);
       playerCard.style.display = 'block';
+
+      // --- THÊM ĐOẠN NÀY ĐỂ KÍCH HOẠT MARQUEE NẾU TÊN DÀI ---
+      playerTitleText.classList.remove('marquee');
+      requestAnimationFrame(() => {
+        const container = document.getElementById('playerTitle');
+        if (container && playerTitleText.scrollWidth > container.clientWidth) {
+          playerTitleText.classList.add('marquee');
+        }
+      });
 
       // renderPlayer() cũng được gọi sau khi Spin kết thúc.
       // clearPlayer() trước đó đã disable Like/Dislike vì chưa có bài,
