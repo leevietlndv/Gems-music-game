@@ -2605,7 +2605,7 @@
     const blacklistListEl = document.getElementById('blacklistList');
 
     // Toàn cục các biến lưu trữ instance Morph
-    let menuMorph, playMorph, audioMorph, autoPlayMorph; onlineToggleMorph, blacklistToggleMorph;
+    let menuMorph, playMorph, audioMorph, autoPlayMorph, onlineToggleMorph, blacklistToggleMorph;
 
     function initMorphicons() {
       const createSvg = (btn) => {
@@ -2950,7 +2950,7 @@
         if (!window.isAdmin) {
           onlineDetails.classList.remove('open');
           onlineDetailsToggle?.setAttribute('aria-expanded', 'false');
-          if (onlineToggleIcon) onlineToggleIcon.textContent = '▼';
+          if (onlineToggleMorph) onlineToggleMorph.morphTo(ChevronDown, 'snappy');
         }
       }
  
@@ -3301,8 +3301,9 @@
      // Morphicon: Đổi hướng mũi tên mượt mà
       if (blacklistToggleMorph) {
         blacklistToggleMorph.morphTo(open ? ChevronUp : ChevronDown, 'snappy');
+      }
     }
-
+    
     blacklistDetailsToggle?.addEventListener('click', () => {
       toggleBlacklistDetails();
     });
