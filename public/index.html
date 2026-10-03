@@ -2557,6 +2557,7 @@
     const canvas = document.getElementById('wheelCanvas');
     const ctx = canvas.getContext('2d');
     const playerCard = document.getElementById('playerCard');
+    const playerTitleText = document.getElementById('playerTitleText');
     const winnerUser = document.getElementById('winnerUser');
     const winnerAction = document.getElementById('winnerAction');
     const healthBar = document.getElementById('healthBar');
@@ -4974,7 +4975,7 @@
       }
 
       playerCard.style.display = 'none';
-      playerTitleText?.classList.remove('marquee');
+      if (playerTitleText) playerTitleText.classList.remove('marquee');
       currentAction = null;
       currentHealth = 5;
       currentLikeCount = 0;
@@ -5162,21 +5163,22 @@
       currentPlayback = playback || currentPlayback;
       updatePlaybackControlUI();
       winnerUser.textContent = winner.user || 'Người dùng';
-      playerTitleText.textContent = winner.title || '-';
+      if (playerTitleText) playerTitleText.textContent = winner.title || '-';
       renderWinnerAction(currentAction);
       playerCard.style.display = 'block';
 
-      // --- THÊM ĐOẠN NÀY ĐỂ KÍCH HOẠT MARQUEE NẾU TÊN DÀI ---
-      playerTitleText.classList.remove('marquee');
-      requestAnimationFrame(() => {
-        const container = document.getElementById('playerTitle');
-        if (container && playerTitleText.scrollWidth > container.clientWidth) {
-          playerTitleText.classList.add('marquee');
-        }
-      });
-      // renderPlayer() cũng được gọi sau khi Spin kết thúc.
-      // clearPlayer() trước đó đã disable Like/Dislike vì chưa có bài,
-      // nên phải cập nhật lại trạng thái nút ngay khi bài mới được gán.
+      // --- XỬ LÝ HIỆU ỨNG CHỮ CHẠY (MARQUEE) AN TOÀN ---
+      if (playerTitleText) {
+        playerTitleText.classList.remove('marquee');
+        requestAnimationFrame(() => {
+          const container = document.getElementById('playerTitle');
+          if (container && playerTitleText.scrollWidth > container.clientWidth) {
+            playerTitleText.classList.add('marquee');
+          }
+        });
+      }
+      // --------------------------------------------------
+
       updateVoteButtons();
 
       const effectiveSound = getEffectiveSound(shouldPlaySound);
