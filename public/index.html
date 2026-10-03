@@ -317,55 +317,6 @@
       transform: scale(0.96);
     }
 
-    /* Nút quay lên đầu trang, chỉ hiện khi đã cuộn gần cuối nội dung. */
-    .back-to-top {
-      position: fixed;
-      right: 16px;
-      bottom: 16px;
-      width: 42px;
-      height: 42px;
-      min-width: 42px;
-      padding: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border: 1px solid #3b4861;
-      border-radius: 10px;
-      background: #252f42;
-      color: #fff;
-      font-size: 22px;
-      line-height: 1;
-      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
-      opacity: 0;
-      visibility: hidden;
-      pointer-events: none;
-      transform: translateY(8px);
-      transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
-      z-index: 1200;
-    }
-
-    .back-to-top.visible {
-      opacity: 1;
-      visibility: visible;
-      pointer-events: auto;
-      transform: translateY(0);
-    }
-
-    .back-to-top:hover {
-      background: #2d3a52;
-    }
-
-    .back-to-top:active {
-      transform: scale(0.96);
-    }
-
-    @media (max-width: 480px) {
-      .back-to-top {
-        right: 12px;
-        bottom: 12px;
-      }
-    }
-
     .script-settings-details {
       display: none;
       margin-top: 6px;
@@ -1018,9 +969,42 @@
       font-weight: 400;
     }
 
+    /* Khung chứa tiêu đề cố định 1 dòng, giấu phần tràn */
+    #playerTitle {
+      width: 100%;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      margin-bottom: 12px;
+      position: relative;
+    }
+
     #playerTitleText {
       color: #ffca28;
       font-weight: 700;
+      display: inline-block;
+      white-space: nowrap;
+      will-change: transform;
+    }
+
+    /* Hiệu ứng chạy chữ mượt mà khi tên bài quá dài */
+    #playerTitleText.marquee {
+      padding-left: 100%; /* Bắt đầu trượt từ mép phải */
+      animation: playerMarquee 14s linear infinite;
+    }
+
+    /* Tạm dừng chạy chữ khi người dùng rê chuột/chạm tay vào */
+    #playerTitle:hover #playerTitleText.marquee {
+      animation-play-state: paused;
+    }
+
+    @keyframes playerMarquee {
+      0% {
+        transform: translateX(0);
+      }
+      100% {
+        transform: translateX(-100%);
+      }
     }
 
     .admin-actions {
@@ -3303,7 +3287,7 @@
         blacklistToggleMorph.morphTo(open ? ChevronUp : ChevronDown, 'snappy');
       }
     }
-    
+
     blacklistDetailsToggle?.addEventListener('click', () => {
       toggleBlacklistDetails();
     });
@@ -5012,6 +4996,7 @@
       }
 
       playerCard.style.display = 'none';
+      playerTitleText?.classList.remove('marquee');
       currentAction = null;
       currentHealth = 5;
       currentLikeCount = 0;
@@ -5202,6 +5187,14 @@
       playerTitleText.textContent = winner.title || '-';
       renderWinnerAction(currentAction);
       playerCard.style.display = 'block';
+
+      // --- THÊM ĐOẠN NÀY ĐỂ KÍCH HOẠT MARQUEE NẾU TÊN DÀI ---
+      playerTitleText.classList.remove('marquee');
+      requestAnimationFrame(() => {
+        const container = document.getElementById('playerTitle');
+        if (container && playerTitleText.scrollWidth > container.clientWidth) {
+          playerTitleText.classList.add('marquee');
+        }
 
       // renderPlayer() cũng được gọi sau khi Spin kết thúc.
       // clearPlayer() trước đó đã disable Like/Dislike vì chưa có bài,
@@ -5586,13 +5579,6 @@
       }
     });
 
-    const backToTop = document.getElementById('backToTop');
-    const updateBackToTopUI = () => {
-      if (!backToTop) return;
-      const nearBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 180;
-      backToTop.classList.toggle('visible', nearBottom && window.scrollY > 120);
-    };
-
     window.addEventListener('scroll', updateBackToTopUI, { passive: true });
     window.addEventListener('resize', updateBackToTopUI);
     backToTop?.addEventListener('click', () => {
@@ -5606,8 +5592,6 @@
     setConnectionStatus('⏳ Đang kết nối máy chủ...');
     socket.connect();
   </script>
-  <button id="backToTop" class="back-to-top" type="button" aria-label="Lên đầu trang" title="Lên đầu trang">↑</button>
-
 </body>
 
 </html>
