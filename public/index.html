@@ -3531,9 +3531,8 @@
 
       if (btnSubmit) btnSubmit.disabled = !isFormOpen;
 
-      // Đảm bảo songs luôn là mảng
       if (!Array.isArray(songs)) {
-        console.warn('⚠️ songs không phải mảng:', songs);
+        console.warn('⚠️️ songs không phải mảng:', songs);
         songs = [];
       }
 
@@ -5027,12 +5026,11 @@
       }
 
       playerCard.style.display = 'none';
+
       if (playerTitleText) {
         playerTitleText.classList.remove('marquee');
         playerTitleText.innerHTML = '';
       }
-      
-      // Xóa mặt nạ mờ 2 cạnh của container khi dừng nhạc
       const titleContainer = document.getElementById('playerTitle');
       if (titleContainer) titleContainer.classList.remove('has-marquee');
 
@@ -5212,49 +5210,46 @@
     }
 
     function renderPlayer(winner, shouldPlaySound, action = currentAction, playback = currentPlayback) {
-      if (!winner?.url) return;
+        if (!winner?.url) return;
 
-      const videoId = extractYouTubeId(winner.url);
-      if (!videoId) return;
+        const videoId = extractYouTubeId(winner.url);
+        if (!videoId) return;
 
-      currentPlayingUrl = winner.url;
-      currentSongId = winner.id ?? null;
-      currentAction = action || null;
-      currentPlayback = playback || currentPlayback;
-      updatePlaybackControlUI();
-      winnerUser.textContent = winner.user || 'Người dùng';
-      renderWinnerAction(currentAction);
-      playerCard.style.display = 'block';
+        currentPlayingUrl = winner.url;
+        currentSongId = winner.id ?? null;
+        currentAction = action || null;
+        currentPlayback = playback || currentPlayback;
+        updatePlaybackControlUI();
+        winnerUser.textContent = winner.user || 'Người dùng';
+        renderWinnerAction(currentAction);
+        playerCard.style.display = 'block';
 
-      // --- XỬ LÝ HIỆU ỨNG SEAMLESS MARQUEE ---
-      if (playerTitleText) {
-        const container = document.getElementById('playerTitle');
-        const text = winner.title || '-';
-        
-        // Reset về trạng thái mặc định (chỉ có 1 bản text)
-        playerTitleText.classList.remove('marquee');
-        if (container) container.classList.remove('has-marquee');
-        playerTitleText.innerHTML = escapeHtml(text);
+        // --- XỬ LÝ HIỆU ỨNG SEAMLESS MARQUEE ---
+        if (playerTitleText) {
+          const container = document.getElementById('playerTitle');
+          const text = winner.title || '-';
 
-        requestAnimationFrame(() => {
-          if (container && playerTitleText.scrollWidth > container.clientWidth) {
-            playerTitleText.classList.add('marquee');
-            container.classList.add('has-marquee');
-            // Nhân đôi nội dung với khoảng cách gap để loop -50% liền mạch
-            // Thêm aria-hidden cho bản sao để máy đọc màn hình không đọc 2 lần
-            playerTitleText.innerHTML = `<span>${escapeHtml(text)}</span><span aria-hidden="true">${escapeHtml(text)}</span>`;
-          }
-        });
-      }
-      // --------------------------------------------------
+          playerTitleText.classList.remove('marquee');
+          if (container) container.classList.remove('has-marquee');
+          playerTitleText.innerHTML = escapeHtml(text);
 
-      updateVoteButtons();
+          requestAnimationFrame(() => {
+            if (container && playerTitleText.scrollWidth > container.clientWidth) {
+              playerTitleText.classList.add('marquee');
+              container.classList.add('has-marquee');
+              playerTitleText.innerHTML = `<span>${escapeHtml(text)}</span><span aria-hidden="true">${escapeHtml(text)}</span>`;
+            }
+          });
+        }
+        // --------------------------------------------------
 
-      const effectiveSound = getEffectiveSound(shouldPlaySound);
-      updateAudioNotice(effectiveSound && globalVolume > 0);
-      updateAudioControls();
+        updateVoteButtons();
 
-      loadSongIntoPlayer(winner, shouldPlaySound, currentPlayback);
+        const effectiveSound = getEffectiveSound(shouldPlaySound);
+        updateAudioNotice(effectiveSound && globalVolume > 0);
+        updateAudioControls();
+
+        loadSongIntoPlayer(winner, shouldPlaySound, currentPlayback);
     }
 
     function onYouTubePlayerStateChange(event) {
