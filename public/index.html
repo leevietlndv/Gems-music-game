@@ -3537,8 +3537,7 @@
         songs = [];
       }
 
-
-      listTitleEl.textContent = `📋 Danh sách bài hát (${songs.length})`;
+      if (listTitleEl) listTitleEl.textContent = `📋 Danh sách bài hát (${songs.length})`;
 
       if (songs.length === 0) {
         // Morph sang nút Upload khi rỗng
@@ -3562,30 +3561,10 @@
         }
         
         try {
-
-        songListEl.innerHTML = `
-          <div style="
-            text-align: center;
-            color: #888;
-            font-size: 13px;
-            padding: 10px;
-          ">
-            Chưa có bài hát nào được gửi.
-          </div>
-        `;
-      } else {
-        try {
           songListEl.innerHTML = songs.map((s, idx) => {
-            // Bảo vệ trường hợp dữ liệu bài hát bị thiếu
             s = s || {};
-
-            const user = escapeHtml(
-              s.user || 'Người dùng'
-            );
-
-            const title = escapeHtml(
-              s.title || 'Đang cập nhật tiêu đề...'
-            );
+            const user = escapeHtml(s.user || 'Người dùng');
+            const title = escapeHtml(s.title || 'Đang cập nhật tiêu đề...');
             const id = String(s.id ?? '');
             const videoId = extractYouTubeId(s.url || '');
             const thumb = videoId
@@ -3638,18 +3617,10 @@
               </div>
             `;
           }).join('');
-
         } catch (error) {
           console.error('❌ Lỗi render danh sách bài hát:', error);
-          console.error('📦 songs hiện tại:', songs);
-
           songListEl.innerHTML = `
-            <div style="
-              text-align: center;
-              color: #ff6b6b;
-              font-size: 13px;
-              padding: 10px;
-            ">
+            <div style="text-align: center; color: #ff6b6b; font-size: 13px; padding: 10px;">
               ⚠️ Lỗi hiển thị danh sách bài hát.
             </div>
           `;
