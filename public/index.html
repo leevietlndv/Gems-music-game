@@ -3529,7 +3529,7 @@
         formOpenSwitch.setAttribute('aria-label', isFormOpen ? 'Đóng form gửi bài hát' : 'Mở form gửi bài hát');
       }
 
-      btnSubmit.disabled = !isFormOpen;
+      if (btnSubmit) btnSubmit.disabled = !isFormOpen;
 
       // Đảm bảo songs luôn là mảng
       if (!Array.isArray(songs)) {
@@ -3547,11 +3547,13 @@
           btnReset.setAttribute('title', 'Thêm bài hát mới');
         }
 
-        songListEl.innerHTML = `
-          <div style="text-align: center; color: #888; font-size: 13px; padding: 10px;">
-            Chưa có bài hát nào được gửi.
-          </div>
-        `;
+        if (songListEl) {
+          songListEl.innerHTML = `
+            <div style="text-align: center; color: #888; font-size: 13px; padding: 10px;">
+              Chưa có bài hát nào được gửi.
+            </div>
+          `;
+        }
       } else {
         // Morph sang nút Reset (Refresh) khi có bài hát
         if (resetMorph) resetMorph.morphTo(RefreshCw, 'snappy');
@@ -3559,71 +3561,75 @@
           btnReset.setAttribute('aria-label', 'Reset');
           btnReset.setAttribute('title', 'Xóa tất cả bài hát');
         }
-        
+
         try {
-          songListEl.innerHTML = songs.map((s, idx) => {
-            s = s || {};
-            const user = escapeHtml(s.user || 'Người dùng');
-            const title = escapeHtml(s.title || 'Đang cập nhật tiêu đề...');
-            const id = String(s.id ?? '');
-            const videoId = extractYouTubeId(s.url || '');
-            const thumb = videoId
-              ? `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`
-              : '';
+          if (songListEl) {
+            songListEl.innerHTML = songs.map((s, idx) => {
+              s = s || {};
+              const user = escapeHtml(s.user || 'Người dùng');
+              const title = escapeHtml(s.title || 'Đang cập nhật tiêu đề...');
+              const id = String(s.id ?? '');
+              const videoId = extractYouTubeId(s.url || '');
+              const thumb = videoId
+                ? `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`
+                : '';
 
-            const isPlaying = currentPlayback?.status === 'playing' &&
-              currentPlayback?.songId != null &&
-              String(currentPlayback.songId) === id;
+              const isPlaying = currentPlayback?.status === 'playing' &&
+                currentPlayback?.songId != null &&
+                String(currentPlayback.songId) === id;
 
-            return `
-              <div class="song-item${isPlaying ? ' is-playing' : ''}" data-song-id="${id}">
-                <div class="song-thumb-wrap" data-action="reveal-play" data-id="${id}" role="button" tabindex="0" aria-label="Hiện nút phát">
-                  ${thumb ? `<img class="song-thumb" src="${escapeHtml(thumb)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<div class="song-thumb"></div>'}
-                  <button
-                    class="song-thumb-play ${window.isAdmin ? '' : 'admin-only'}"
-                    data-action="play"
-                    data-id="${id}"
-                    title="Phát bài hát"
-                    aria-label="Phát bài hát"
-                  >▶</button>
-                </div>
-
-                <div class="song-main">
-                  <div class="song-title" title="${title}">
-                    <span class="song-index">${idx + 1}</span> - ${title}
+              return `
+                <div class="song-item${isPlaying ? ' is-playing' : ''}" data-song-id="${id}">
+                  <div class="song-thumb-wrap" data-action="reveal-play" data-id="${id}" role="button" tabindex="0" aria-label="Hiện nút phát">
+                    ${thumb ? `<img class="song-thumb" src="${escapeHtml(thumb)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<div class="song-thumb"></div>'}
+                    <button
+                      class="song-thumb-play ${window.isAdmin ? '' : 'admin-only'}"
+                      data-action="play"
+                      data-id="${id}"
+                      title="Phát bài hát"
+                      aria-label="Phát bài hát"
+                    >▶</button>
                   </div>
-                  <div class="song-sender" title="${user}">
-                    Người gửi: ${user}
+
+                  <div class="song-main">
+                    <div class="song-title" title="${title}">
+                      <span class="song-index">${idx + 1}</span> - ${title}
+                    </div>
+                    <div class="song-sender" title="${user}">
+                      Người gửi: ${user}
+                    </div>
+                  </div>
+
+                  <div class="song-actions">
+                    <button
+                      class="song-action-btn"
+                      data-action="add-playlist"
+                      data-id="${id}"
+                      title="Thêm vào My Playlist"
+                      aria-label="Thêm vào My Playlist"
+                    >❤️</button>
+
+                    <button
+                      class="song-action-btn song-delete ${window.isAdmin ? '' : 'admin-only'}"
+                      data-action="delete"
+                      data-id="${id}"
+                      title="Xóa bài hát"
+                      aria-label="Xóa bài hát"
+                    >🗑️</button>
                   </div>
                 </div>
-
-                <div class="song-actions">
-                  <button
-                    class="song-action-btn"
-                    data-action="add-playlist"
-                    data-id="${id}"
-                    title="Thêm vào My Playlist"
-                    aria-label="Thêm vào My Playlist"
-                  >❤️</button>
-
-                  <button
-                    class="song-action-btn song-delete ${window.isAdmin ? '' : 'admin-only'}"
-                    data-action="delete"
-                    data-id="${id}"
-                    title="Xóa bài hát"
-                    aria-label="Xóa bài hát"
-                  >🗑️</button>
-                </div>
-              </div>
-            `;
-          }).join('');
+              `;
+            }).join('');
+          }
         } catch (error) {
           console.error('❌ Lỗi render danh sách bài hát:', error);
-          songListEl.innerHTML = `
-            <div style="text-align: center; color: #ff6b6b; font-size: 13px; padding: 10px;">
-              ⚠️ Lỗi hiển thị danh sách bài hát.
-            </div>
-          `;
+          if (songListEl) {
+            songListEl.innerHTML = `
+              <div style="text-align: center; color: #ff6b6b; font-size: 13px; padding: 10px;">
+                ⚠️ Lỗi hiển thị danh sách bài hát.
+              </div>
+            `;
+          }
         }
       }
 
