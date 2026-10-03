@@ -5175,7 +5175,7 @@
           if (container && playerTitleText.scrollWidth > container.clientWidth) {
             playerTitleText.classList.add('marquee');
           }
-        });
+        }); // <-- DẤU ĐÓNG NGOẶC QUAN TRỌNG ĐỂ TRÁNH LỖI CRASH 
       }
       // --------------------------------------------------
 
