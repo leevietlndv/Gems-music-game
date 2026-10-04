@@ -3611,7 +3611,6 @@
               String(currentPlayback.songId) === id;
 
             // Kiểm tra Video ID xem đã có trong playlist chưa
-            const videoId = extractYouTubeId(s.url || '');
             const isSaved = videoId && addedToPlaylistSet.has(videoId);
 
             return `
