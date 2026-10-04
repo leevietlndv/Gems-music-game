@@ -2123,7 +2123,7 @@
     // Import engine của Morphicons cho DOM thuần
     import { createMorph } from 'https://esm.sh/morphicons/dom';
     // Import dữ liệu icon nét (stroke-based) từ Lucide
-    import { Play, Pause, Menu, X, Volume2, Volume1, VolumeX, ListOrdered, Shuffle, Square, ChevronDown, ChevronUp, RefreshCw, Upload, Pencil } from 'https://esm.sh/lucide';
+    import { Play, Pause, Menu, X, Volume2, Volume1, VolumeX, ListOrdered, Shuffle, Square, ChevronDown, ChevronUp, RefreshCw, Upload, Pencil, Heart, Check, Trash2 } from 'https://esm.sh/lucide';
 
     const tg = window.Telegram?.WebApp;
     if (tg) {
@@ -2596,26 +2596,30 @@
     const blacklistDetails = document.getElementById('blacklistDetails');
     const blacklistListEl = document.getElementById('blacklistList');
 
+    // Set lưu trữ ID các bài hát đã được thêm vào playlist trong phiên hiện tại
+    const addedToPlaylistSet = new Set();
+
     // Toàn cục các biến lưu trữ instance Morph
     var menuMorph, playMorph, audioMorph, autoPlayMorph, onlineToggleMorph, blacklistToggleMorph, resetMorph, scriptEditMorph;
 
+    // Đưa hàm createSvg ra ngoài để có thể tái sử dụng cho danh sách bài hát động
+    const createSvg = (btn) => {
+      btn.textContent = ''; // Xóa emoji tĩnh hiện tại
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      Object.assign(svg.style, {
+        width: '22px', height: '22px', stroke: 'currentColor',
+        strokeWidth: '2', fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'round'
+      });
+      
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      svg.appendChild(path);
+      btn.appendChild(svg);
+      
+      return path; 
+    };
+
     function initMorphicons() {
-      const createSvg = (btn) => {
-        btn.textContent = ''; // Xóa emoji tĩnh hiện tại
-        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svg.setAttribute('viewBox', '0 0 24 24');
-        Object.assign(svg.style, {
-          width: '22px', height: '22px', stroke: 'currentColor',
-          strokeWidth: '2', fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'round'
-        });
-        
-        // SỬA LỖI Ở ĐÂY: Phải tạo thẻ <path> và trả về thẻ path này
-        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        svg.appendChild(path);
-        btn.appendChild(svg);
-        
-        return path; // Morphicons cần thẻ path để vẽ nét
-      };
 
       if (appNavbarToggle) menuMorph = createMorph(createSvg(appNavbarToggle), Menu);
       if (btnPlaybackControl) playMorph = createMorph(createSvg(btnPlaybackControl), Play);
@@ -3589,24 +3593,38 @@
 
                 <div class="song-actions">
                   <button
-                    class="song-action-btn"
+                    class="song-action-btn btn-add-playlist"
                     data-action="add-playlist"
                     data-id="${id}"
-                    title="Thêm vào My Playlist"
+                    title="${addedToPlaylistSet.has(id) ? 'Đã có trong Playlist' : 'Thêm vào My Playlist'}"
                     aria-label="Thêm vào My Playlist"
-                  >❤️</button>
+                    style="color: ${addedToPlaylistSet.has(id) ? '#2e7d32' : '#d32f2f'};"
+                    ${addedToPlaylistSet.has(id) ? 'disabled' : ''}
+                  ></button>
 
                   <button
-                    class="song-action-btn song-delete ${window.isAdmin ? '' : 'admin-only'}"
+                    class="song-action-btn song-delete btn-delete-song ${window.isAdmin ? '' : 'admin-only'}"
                     data-action="delete"
                     data-id="${id}"
                     title="Xóa bài hát"
                     aria-label="Xóa bài hát"
-                  >🗑️</button>
+                  ></button>
                 </div>
               </div>
             `;
           }).join('');
+
+        // BẮT ĐẦU THÊM MỚI: Khởi tạo Morphicons cho các nút vừa được tạo ra
+          songListEl.querySelectorAll('.btn-add-playlist').forEach(btn => {
+            const songId = btn.dataset.id;
+            // Nếu đã thêm thì dùng icon Check, chưa thì dùng Heart
+            btn._morph = createMorph(createSvg(btn), addedToPlaylistSet.has(songId) ? Check : Heart);
+          });
+          
+          songListEl.querySelectorAll('.btn-delete-song').forEach(btn => {
+            createMorph(createSvg(btn), Trash2);
+          });
+          // KẾT THÚC THÊM MỚI
 
         } catch (error) {
           console.error('❌ Lỗi render danh sách bài hát:', error);
@@ -3920,6 +3938,12 @@
       }
 
       alert(`❤️ Đã thêm vào playlist “${playlist.name}”.`);
+      
+      // Đánh dấu bài hát đã được thêm và cập nhật lại giao diện
+      if (song && song.id) {
+        addedToPlaylistSet.add(String(song.id));
+        updateUI(); 
+      }
     }
 
     myPlaylistPickerList?.addEventListener('click', async event => {
