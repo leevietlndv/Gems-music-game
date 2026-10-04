@@ -3085,6 +3085,18 @@
       )`;
     }
 
+    // Nhận thông báo khi bài hát được thêm vào playlist từ một thiết bị khác
+    socket.on('playlistSongAdded', (data) => {
+      // Chỉ nhận nếu cùng tài khoản user và có videoId hợp lệ
+      if (data && data.videoId) {
+        const isSameUser = !data.userId || String(data.userId) === String(userData?.id);
+        if (isSameUser) {
+          addedToPlaylistSet.add(data.videoId);
+          updateUI(); // Tự động biến heart thành check trên điện thoại theo thời gian thực
+        }
+      }
+    });
+
     // ==================== SONG PLAYED ====================
     // Nhận yêu cầu phát bài hát từ một Mini App khác.
     // Client nhận sự kiện sẽ phát ở chế độ MUTE.
@@ -4003,6 +4015,14 @@
       if (videoId) {
         addedToPlaylistSet.add(videoId);
         updateUI(); // Cập nhật lại giao diện ngay lập tức
+
+        // Phát tín hiệu qua Socket để các thiết bị khác (điện thoại) cùng đồng bộ
+        if (socket && socket.connected) {
+          socket.emit('playlistSongAdded', {
+            videoId: videoId,
+            userId: userData?.id
+          });
+        }
       }
     }
 

@@ -3787,6 +3787,10 @@ io.on('connection', (socket) => {
   socket.authenticated = false;
   socket.isAdmin = false;
   socket.adminRole = null;
+  // Chuyển tiếp tín hiệu thêm playlist giữa các thiết bị của user
+  socket.on('playlistSongAdded', (data) => {
+    io.emit('playlistSongAdded', data);
+  });
 
   // Không emit state cho socket CHƯA xác thực initData — chỉ sau khi
   // authenticate thành công mới gửi state hiện tại (chống rò rỉ dữ liệu
