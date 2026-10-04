@@ -2046,7 +2046,7 @@
     <div class="card">
       <div class="song-list-header">
         <div id="listTitle" class="card-title">📋 Danh sách bài hát (0)</div>
-        <button id="btnReset" class="btn-reset btn-reset-icon admin-only" type="button" aria-label="Reset" title="Reset">↻</button>
+        <button id="btnReset" class="btn-reset btn-reset-icon admin-only" type="button" aria-label="Reset" title="Reset"></button>
       </div>
       <div id="songList" class="song-list">
         <div style="text-align: center; color: #888; font-size: 13px; padding: 10px;">Chưa có bài hát nào được gửi.
@@ -2139,7 +2139,7 @@
     // Import engine của Morphicons cho DOM thuần
     import { createMorph } from 'https://esm.sh/morphicons/dom';
     // Import dữ liệu icon nét (stroke-based) từ Lucide
-    import { Play, Pause, Menu, X, Volume2, Volume1, VolumeX, ListOrdered, Shuffle, Square, ChevronDown, ChevronUp } from 'https://esm.sh/lucide';
+    import { Play, Pause, Menu, X, Volume2, Volume1, VolumeX, ListOrdered, Shuffle, Square, ChevronDown, ChevronUp, RefreshCw, Upload } from 'https://esm.sh/lucide';
 
     const tg = window.Telegram?.WebApp;
     if (tg) {
@@ -2609,7 +2609,7 @@
     const blacklistListEl = document.getElementById('blacklistList');
 
     // Toàn cục các biến lưu trữ instance Morph
-    let menuMorph, playMorph, audioMorph, autoPlayMorph, onlineToggleMorph, blacklistToggleMorph;
+    let menuMorph, playMorph, audioMorph, autoPlayMorph, onlineToggleMorph, blacklistToggleMorph, resetMorph;
 
     function initMorphicons() {
       const createSvg = (btn) => {
@@ -2635,6 +2635,7 @@
       if (btnAutoPlay) autoPlayMorph = createMorph(createSvg(btnAutoPlay), Shuffle);
       if (onlineToggleIcon) onlineToggleMorph = createMorph(createSvg(onlineToggleIcon), ChevronDown);
       if (blacklistToggleIcon) blacklistToggleMorph = createMorph(createSvg(blacklistToggleIcon), ChevronDown);
+      if (btnReset) resetMorph = createMorph(createSvg(btnReset), RefreshCw);
     }
 
     // Gọi khởi tạo SVG cho các nút
@@ -3527,6 +3528,19 @@
 
 
       listTitleEl.textContent = `📋 Danh sách bài hát (${songs.length})`;
+
+      // BẮT ĐẦU THÊM MỚI: Chuyển đổi icon Reset / Upload
+      if (resetMorph) {
+        if (songs.length === 0) {
+          resetMorph.morphTo(Upload, 'snappy');
+          btnReset.setAttribute('title', 'Cuộn lên gửi bài hát');
+          btnReset.setAttribute('aria-label', 'Gửi bài hát');
+        } else {
+          resetMorph.morphTo(RefreshCw, 'snappy');
+          btnReset.setAttribute('title', 'Reset danh sách');
+          btnReset.setAttribute('aria-label', 'Reset');
+        }
+      }
 
       if (songs.length === 0) {
         songListEl.innerHTML = `
@@ -5603,7 +5617,19 @@
       });
     });
 
-    btnReset.addEventListener('click', () => {
+  btnReset.addEventListener('click', () => {
+    if (songs.length === 0) {
+      // Trạng thái Upload: Cuộn lên phần form nhập link
+      const inputGroup = document.querySelector('.input-group');
+      if (inputGroup) {
+        inputGroup.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Tự động focus vào ô nhập link sau khi cuộn xong
+        setTimeout(() => {
+          if (songUrlInput) songUrlInput.focus();
+        }, 400); 
+      }
+    } else {
+      // Trạng thái Reset: Xóa danh sách
       if (confirm('Xóa tất cả bài hát?')) {
         clearPlayer();
         fetch('/api/reset', {
@@ -5615,7 +5641,8 @@
           })
         });
       }
-    });
+    }
+  });
 
     // Chỉ kết nối SAU KHI toàn bộ socket.on(...) đã được đăng ký.
     // Tránh trường hợp socket kết nối quá sớm và event connect bị bỏ lỡ.
