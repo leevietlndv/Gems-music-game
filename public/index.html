@@ -2139,7 +2139,7 @@
     // Import engine của Morphicons cho DOM thuần
     import { createMorph } from 'https://esm.sh/morphicons/dom';
     // Import dữ liệu icon nét (stroke-based) từ Lucide
-    import { Play, Pause, Menu, X, Volume2, Volume1, VolumeX, ListOrdered, Shuffle, Square, ChevronDown, ChevronUp, RefreshCw, Upload, Pencil } from 'https://esm.sh/lucide';
+    import { Play, Pause, Menu, X, Volume2, Volume1, VolumeX, ListOrdered, Shuffle, Square, ChevronDown, ChevronUp } from 'https://esm.sh/lucide';
 
     const tg = window.Telegram?.WebApp;
     if (tg) {
@@ -2382,8 +2382,6 @@
         scriptSettingsDetails?.setAttribute('aria-hidden', 'true');
         scriptSettingsEdit?.setAttribute('aria-expanded', 'false');
         if (scriptSettingsEdit) scriptSettingsEdit.title = 'Chỉnh sửa';
-        // Trả icon về trạng thái Edit nếu panel tự động đóng
-        if (editSettingsMorph) editSettingsMorph.morphTo(Pencil, 'snappy');
       }
       updateScriptSettingsCancelUI();
     }
@@ -2397,18 +2395,11 @@
         scriptSettingsDetails.setAttribute('aria-hidden', 'true');
         scriptSettingsEdit.setAttribute('aria-expanded', 'false');
         scriptSettingsEdit.title = 'Chỉnh sửa';
-        
-        // Morphicon: Đóng lại thành cây bút
-        if (editSettingsMorph) editSettingsMorph.morphTo(Pencil, 'snappy');
       } else {
         scriptSettingsDetails.classList.add('open');
         scriptSettingsDetails.setAttribute('aria-hidden', 'false');
         scriptSettingsEdit.setAttribute('aria-expanded', 'true');
         scriptSettingsEdit.title = 'Đóng cài đặt';
-        
-        // Morphicon: Mở ra thành mũi tên hướng lên
-        if (editSettingsMorph) editSettingsMorph.morphTo(ChevronUp, 'snappy');
-        
         sessionDuration?.focus();
       }
     });
@@ -2618,21 +2609,24 @@
     const blacklistListEl = document.getElementById('blacklistList');
 
     // Toàn cục các biến lưu trữ instance Morph
-    let menuMorph, playMorph, audioMorph, autoPlayMorph, onlineToggleMorph, blacklistToggleMorph, resetMorph, editSettingsMorph;
+    let menuMorph, playMorph, audioMorph, autoPlayMorph, onlineToggleMorph, blacklistToggleMorph;
 
-function initMorphicons() {
+    function initMorphicons() {
       const createSvg = (btn) => {
-        btn.textContent = ''; 
+        btn.textContent = ''; // Xóa emoji tĩnh hiện tại
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         svg.setAttribute('viewBox', '0 0 24 24');
         Object.assign(svg.style, {
           width: '22px', height: '22px', stroke: 'currentColor',
           strokeWidth: '2', fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'round'
         });
+        
+        // SỬA LỖI Ở ĐÂY: Phải tạo thẻ <path> và trả về thẻ path này
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         svg.appendChild(path);
         btn.appendChild(svg);
-        return path;
+        
+        return path; // Morphicons cần thẻ path để vẽ nét
       };
 
       if (appNavbarToggle) menuMorph = createMorph(createSvg(appNavbarToggle), Menu);
@@ -2641,12 +2635,13 @@ function initMorphicons() {
       if (btnAutoPlay) autoPlayMorph = createMorph(createSvg(btnAutoPlay), Shuffle);
       if (onlineToggleIcon) onlineToggleMorph = createMorph(createSvg(onlineToggleIcon), ChevronDown);
       if (blacklistToggleIcon) blacklistToggleMorph = createMorph(createSvg(blacklistToggleIcon), ChevronDown);
-      if (btnReset) resetMorph = createMorph(createSvg(btnReset), RefreshCw);
-      if (scriptSettingsEdit) editSettingsMorph = createMorph(createSvg(scriptSettingsEdit), Pencil);
     }
+
+    // Gọi khởi tạo SVG cho các nút
     initMorphicons();
 
     const MUSIC_PREF_KEY = 'gemsMusicAudioPreference';
+
     let isFormOpen = true;
     let songs = [];
     let blockedSongs = [];
@@ -2654,16 +2649,22 @@ function initMorphicons() {
     let isAdmin = false;
     let currentAngle = 0;
     let currentPlayingUrl = null;
-    let currentSongId = null;
+    let currentSongId = null; // ID bài đang phát (bài này KHÔNG còn trong mảng songs)
     let currentAction = null;
     let currentHealth = 5;
-    let currentVote = 0; 
+    let currentVote = 0; // 1 = Like, -1 = Dislike, 0 = chưa vote
     let currentLikeCount = 0;
     let currentDislikeCount = 0;
     let replacementCountdown = null;
+
+    // ==================== REALTIME PLAYBACK SYNC (PHASE 6A) ====================
+    // Server giữ playback state; client chỉ tính vị trí hiện tại từ startedAt.
+    // Không polling socket và không gửi currentTime liên tục.
     let currentPlayback = null;
     let playbackStartTimer = null;
     let playbackScheduleToken = 0;
+    // Phase 6B: timeline là UI cục bộ; không polling server và không gửi
+    // currentTime liên tục. Chỉ gửi seek khi người dùng thả thanh kéo.
     let playbackTimelineTimer = null;
     let playbackTimelineDragging = false;
     let playbackTimelineSeekPending = false;
@@ -2671,13 +2672,22 @@ function initMorphicons() {
     let playbackDurationSec = 0;
     let playbackTimelineSongId = null;
     const PLAYBACK_TIMELINE_TICK_MS = 250;
+
+    // ==================== PLAYBACK CLOCK SYNC (PHASE 6C) ====================
+    // Giữ offset đồng hồ server để timeline UI và nút cập nhật thủ công tính đúng vị trí.
+    // Auto-seek đã tắt: không còn drift-correction interval hoặc foreground recovery.
     let serverClockOffsetMs = 0;
+
+    // Phase 6A.1: giữ dấu vết thao tác Play vừa phát sinh trực tiếp từ user gesture.
+    // Dùng để tránh server echo lại làm reload video, đồng thời reconcile theo
+    // playback state authoritative sau khi server xác nhận.
     let pendingLocalPlayback = null;
     let autoplayBlockedNoticeShown = false;
+
     let youtubeApiPlayer = null;
     let youtubeApiReady = false;
     let youtubeApiReadyCallbacks = [];
-    
+
     function flushYouTubeApiCallbacks() {
       youtubeApiReady = true;
       console.log('🎬 YouTube IFrame API đã sẵn sàng');
@@ -3499,117 +3509,121 @@ function initMorphicons() {
     initFormMascots();
 
     function updateUI() {
-  renderBlacklist();
+      renderBlacklist();
 
-  if (formOpenSwitch) {
-    formOpenSwitch.checked = isFormOpen === true;
-    formOpenSwitch.disabled = window.isAdmin !== true;
-    formOpenSwitch.setAttribute('aria-label', isFormOpen ? 'Đóng form gửi bài hát' : 'Mở form gửi bài hát');
-  }
-
-  if (btnSubmit) btnSubmit.disabled = !isFormOpen;
-
-  if (!Array.isArray(songs)) {
-    console.warn('⚠ songs không phải mảng:', songs);
-    songs = [];
-  }
-
-  if (listTitleEl) listTitleEl.textContent = `📋 Danh sách bài hát (${songs.length})`;
-
-  if (songs.length === 0) {
-    if (resetMorph) resetMorph.morphTo(Upload, 'snappy');
-    if (btnReset) {
-      btnReset.setAttribute('aria-label', 'Đến form gửi bài hát');
-      btnReset.setAttribute('title', 'Thêm bài hát mới');
-    }
-
-    if (songListEl) {
-      songListEl.innerHTML = `
-        <div style="text-align: center; color: #888; font-size: 13px; padding: 10px;">
-          Chưa có bài hát nào được gửi.
-        </div>
-      `;
-    }
-  } else {
-    if (resetMorph) resetMorph.morphTo(RefreshCw, 'snappy');
-    if (btnReset) {
-      btnReset.setAttribute('aria-label', 'Reset');
-      btnReset.setAttribute('title', 'Xóa tất cả bài hát');
-    }
-
-    try {
-      if (songListEl) {
-        songListEl.innerHTML = songs.map((s, idx) => {
-          s = s || {};
-          const user = escapeHtml(s.user || 'Người dùng');
-          const title = escapeHtml(s.title || 'Đang cập nhật tiêu đề...');
-          const id = String(s.id ?? '');
-          const videoId = extractYouTubeId(s.url || '');
-          const thumb = videoId
-            ? `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`
-            : '';
-
-          const isPlaying = currentPlayback?.status === 'playing' &&
-            currentPlayback?.songId != null &&
-            String(currentPlayback.songId) === id;
-
-          return `
-            <div class="song-item${isPlaying ? ' is-playing' : ''}" data-song-id="${id}">
-              <div class="song-thumb-wrap" data-action="reveal-play" data-id="${id}" role="button" tabindex="0" aria-label="Hiện nút phát">
-                ${thumb ? `<img class="song-thumb" src="${escapeHtml(thumb)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<div class="song-thumb"></div>'}
-                <button
-                  class="song-thumb-play ${window.isAdmin ? '' : 'admin-only'}"
-                  data-action="play"
-                  data-id="${id}"
-                  title="Phát bài hát"
-                  aria-label="Phát bài hát"
-                >▶</button>
-              </div>
-
-              <div class="song-main">
-                <div class="song-title" title="${title}">
-                  <span class="song-index">${idx + 1}</span> - ${title}
-                </div>
-                <div class="song-sender" title="${user}">
-                  Người gửi: ${user}
-                </div>
-              </div>
-
-              <div class="song-actions">
-                <button
-                  class="song-action-btn"
-                  data-action="add-playlist"
-                  data-id="${id}"
-                  title="Thêm vào My Playlist"
-                  aria-label="Thêm vào My Playlist"
-                >❤️</button>
-
-                <button
-                  class="song-action-btn song-delete ${window.isAdmin ? '' : 'admin-only'}"
-                  data-action="delete"
-                  data-id="${id}"
-                  title="Xóa bài hát"
-                  aria-label="Xóa bài hát"
-                >🗑️</button>
-              </div>
-            </div>
-          `;
-        }).join('');
+      if (formOpenSwitch) {
+        formOpenSwitch.checked = isFormOpen === true;
+        formOpenSwitch.disabled = window.isAdmin !== true;
+        formOpenSwitch.setAttribute('aria-label', isFormOpen ? 'Đóng form gửi bài hát' : 'Mở form gửi bài hát');
       }
-    } catch (error) {
-      console.error('❌ Lỗi render danh sách bài hát:', error);
-      if (songListEl) {
+
+      btnSubmit.disabled = !isFormOpen;
+
+      // Đảm bảo songs luôn là mảng
+      if (!Array.isArray(songs)) {
+        console.warn('⚠️ songs không phải mảng:', songs);
+        songs = [];
+      }
+
+
+      listTitleEl.textContent = `📋 Danh sách bài hát (${songs.length})`;
+
+      if (songs.length === 0) {
         songListEl.innerHTML = `
-          <div style="text-align: center; color: #ff6b6b; font-size: 13px; padding: 10px;">
-            ⚠️ Lỗi hiển thị danh sách bài hát.
+          <div style="
+            text-align: center;
+            color: #888;
+            font-size: 13px;
+            padding: 10px;
+          ">
+            Chưa có bài hát nào được gửi.
           </div>
         `;
-      }
-    }
-  }
+      } else {
+        try {
+          songListEl.innerHTML = songs.map((s, idx) => {
+            // Bảo vệ trường hợp dữ liệu bài hát bị thiếu
+            s = s || {};
 
-  drawWheel();
-}
+            const user = escapeHtml(
+              s.user || 'Người dùng'
+            );
+
+            const title = escapeHtml(
+              s.title || 'Đang cập nhật tiêu đề...'
+            );
+            const id = String(s.id ?? '');
+            const videoId = extractYouTubeId(s.url || '');
+            const thumb = videoId
+              ? `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`
+              : '';
+
+            const isPlaying = currentPlayback?.status === 'playing' &&
+              currentPlayback?.songId != null &&
+              String(currentPlayback.songId) === id;
+
+            return `
+              <div class="song-item${isPlaying ? ' is-playing' : ''}" data-song-id="${id}">
+                <div class="song-thumb-wrap" data-action="reveal-play" data-id="${id}" role="button" tabindex="0" aria-label="Hiện nút phát">
+                  ${thumb ? `<img class="song-thumb" src="${escapeHtml(thumb)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<div class="song-thumb"></div>'}
+                  <button
+                    class="song-thumb-play ${window.isAdmin ? '' : 'admin-only'}"
+                    data-action="play"
+                    data-id="${id}"
+                    title="Phát bài hát"
+                    aria-label="Phát bài hát"
+                  >▶</button>
+                </div>
+
+                <div class="song-main">
+                  <div class="song-title" title="${title}">
+                    <span class="song-index">${idx + 1}</span> - ${title}
+                  </div>
+                  <div class="song-sender" title="${user}">
+                    Người gửi: ${user}
+                  </div>
+                </div>
+
+                <div class="song-actions">
+                  <button
+                    class="song-action-btn"
+                    data-action="add-playlist"
+                    data-id="${id}"
+                    title="Thêm vào My Playlist"
+                    aria-label="Thêm vào My Playlist"
+                  >❤️</button>
+
+                  <button
+                    class="song-action-btn song-delete ${window.isAdmin ? '' : 'admin-only'}"
+                    data-action="delete"
+                    data-id="${id}"
+                    title="Xóa bài hát"
+                    aria-label="Xóa bài hát"
+                  >🗑️</button>
+                </div>
+              </div>
+            `;
+          }).join('');
+
+        } catch (error) {
+          console.error('❌ Lỗi render danh sách bài hát:', error);
+          console.error('📦 songs hiện tại:', songs);
+
+          songListEl.innerHTML = `
+            <div style="
+              text-align: center;
+              color: #ff6b6b;
+              font-size: 13px;
+              padding: 10px;
+            ">
+              ⚠️ Lỗi hiển thị danh sách bài hát.
+            </div>
+          `;
+        }
+      }
+
+      drawWheel();
+    }
 
 
     function escapeHtml(str) {
@@ -5002,11 +5016,12 @@ function initMorphicons() {
       }
 
       playerCard.style.display = 'none';
-
       if (playerTitleText) {
         playerTitleText.classList.remove('marquee');
         playerTitleText.innerHTML = '';
       }
+      
+      // Xóa mặt nạ mờ 2 cạnh của container khi dừng nhạc
       const titleContainer = document.getElementById('playerTitle');
       if (titleContainer) titleContainer.classList.remove('has-marquee');
 
@@ -5186,46 +5201,49 @@ function initMorphicons() {
     }
 
     function renderPlayer(winner, shouldPlaySound, action = currentAction, playback = currentPlayback) {
-        if (!winner?.url) return;
+      if (!winner?.url) return;
 
-        const videoId = extractYouTubeId(winner.url);
-        if (!videoId) return;
+      const videoId = extractYouTubeId(winner.url);
+      if (!videoId) return;
 
-        currentPlayingUrl = winner.url;
-        currentSongId = winner.id ?? null;
-        currentAction = action || null;
-        currentPlayback = playback || currentPlayback;
-        updatePlaybackControlUI();
-        winnerUser.textContent = winner.user || 'Người dùng';
-        renderWinnerAction(currentAction);
-        playerCard.style.display = 'block';
+      currentPlayingUrl = winner.url;
+      currentSongId = winner.id ?? null;
+      currentAction = action || null;
+      currentPlayback = playback || currentPlayback;
+      updatePlaybackControlUI();
+      winnerUser.textContent = winner.user || 'Người dùng';
+      renderWinnerAction(currentAction);
+      playerCard.style.display = 'block';
 
-        // --- XỬ LÝ HIỆU ỨNG SEAMLESS MARQUEE ---
-        if (playerTitleText) {
-          const container = document.getElementById('playerTitle');
-          const text = winner.title || '-';
+      // --- XỬ LÝ HIỆU ỨNG SEAMLESS MARQUEE ---
+      if (playerTitleText) {
+        const container = document.getElementById('playerTitle');
+        const text = winner.title || '-';
+        
+        // Reset về trạng thái mặc định (chỉ có 1 bản text)
+        playerTitleText.classList.remove('marquee');
+        if (container) container.classList.remove('has-marquee');
+        playerTitleText.innerHTML = escapeHtml(text);
 
-          playerTitleText.classList.remove('marquee');
-          if (container) container.classList.remove('has-marquee');
-          playerTitleText.innerHTML = escapeHtml(text);
+        requestAnimationFrame(() => {
+          if (container && playerTitleText.scrollWidth > container.clientWidth) {
+            playerTitleText.classList.add('marquee');
+            container.classList.add('has-marquee');
+            // Nhân đôi nội dung với khoảng cách gap để loop -50% liền mạch
+            // Thêm aria-hidden cho bản sao để máy đọc màn hình không đọc 2 lần
+            playerTitleText.innerHTML = `<span>${escapeHtml(text)}</span><span aria-hidden="true">${escapeHtml(text)}</span>`;
+          }
+        });
+      }
+      // --------------------------------------------------
 
-          requestAnimationFrame(() => {
-            if (container && playerTitleText.scrollWidth > container.clientWidth) {
-              playerTitleText.classList.add('marquee');
-              container.classList.add('has-marquee');
-              playerTitleText.innerHTML = `<span>${escapeHtml(text)}</span><span aria-hidden="true">${escapeHtml(text)}</span>`;
-            }
-          });
-        }
-        // --------------------------------------------------
+      updateVoteButtons();
 
-        updateVoteButtons();
+      const effectiveSound = getEffectiveSound(shouldPlaySound);
+      updateAudioNotice(effectiveSound && globalVolume > 0);
+      updateAudioControls();
 
-        const effectiveSound = getEffectiveSound(shouldPlaySound);
-        updateAudioNotice(effectiveSound && globalVolume > 0);
-        updateAudioControls();
-
-        loadSongIntoPlayer(winner, shouldPlaySound, currentPlayback);
+      loadSongIntoPlayer(winner, shouldPlaySound, currentPlayback);
     }
 
     function onYouTubePlayerStateChange(event) {
@@ -5586,18 +5604,6 @@ function initMorphicons() {
     });
 
     btnReset.addEventListener('click', () => {
-      // NẾU DANH SÁCH RỖNG -> Kéo màn hình lên form gửi nhạc
-      if (songs.length === 0) {
-        const inputField = document.getElementById('songUrl');
-        if (inputField) {
-          inputField.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          // Highlight nhẹ để thu hút sự chú ý
-          inputField.focus();
-        }
-        return;
-      }
-
-      // NẾU CÓ BÀI HÁT -> Reset
       if (confirm('Xóa tất cả bài hát?')) {
         clearPlayer();
         fetch('/api/reset', {
