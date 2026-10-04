@@ -3125,14 +3125,12 @@
       updateSongPlayingHighlight();
       updatePlaybackControlUI();
 
+      currentPlayingUrl = song.url;
+      currentSongId = song.id ?? null;
+      playbackTimelineSongId = currentSongId;
+      startPlaybackTimelineTicker();
+
       if (matchesPendingLocal && youtubeApiPlayer && youtubePlayerReady) {
-        // Không load lại video: local player đã được khởi động từ user gesture.
-        // Chỉ cập nhật UI + ép vị trí theo server authoritative.
-        currentPlayingUrl = song.url;
-        currentSongId = song.id ?? null;
-        playbackTimelineSongId = currentSongId;
-        startPlaybackTimelineTicker();
-        currentAction = data.action || currentAction;
         winnerUser.textContent = song.user || 'Người dùng';
         playerTitleText.textContent = song.title || '-';
         renderWinnerAction(currentAction);
@@ -3143,11 +3141,25 @@
 
         syncPlayerToPlayback(incomingPlayback, { allowSeek: true });
         pendingLocalPlayback = null;
-        console.log('✅ Local playback đã reconcile theo server authoritative.');
       } else {
+        // Client nhận từ xa (PC khi điện thoại bấm play)
         renderPlayer(song, shouldPlaySound, data.action || currentAction, incomingPlayback || currentPlayback);
         if (isLocalInitiator) {
           pendingLocalPlayback = null;
+        }
+
+        // Đảm bảo YouTube trên PC kích hoạt phát ngay nếu player đã sẵn sàng
+        if (youtubeApiPlayer && youtubePlayerReady) {
+          try {
+            const pos = incomingPlayback ? getPlaybackTargetPosition(incomingPlayback) : 0;
+            const videoId = extractYouTubeId(song.url);
+            if (videoId) {
+              youtubeApiPlayer.loadVideoById(videoId, Math.max(0, pos));
+              youtubeApiPlayer.playVideo();
+            }
+          } catch (err) {
+            console.warn('⚠️ Lỗi kích hoạt phát từ xa:', err);
+          }
         }
       }
     });
