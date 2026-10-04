@@ -4997,65 +4997,45 @@
       // Với playback state 'playing', play ngay hoặc chờ tới startedAt (Spin).
       // Nếu đây là Play vừa được user tap, tránh setTimeout để không làm mất
       // user activation trên mobile.
-      if (hasAuthoritativePlayback && playback.status === 'playing') {
-        const startedAt = Number(playback.startedAt);
-        const delayMs = Number.isFinite(startedAt)
-          ? startedAt - Date.now()
-          : 0;
-
-        if (isLocalGesturePlayback && delayMs <= 50) {
-          iosAutoPlayDiagnostic.record('playVideo_call');
-          try {
-            youtubeApiPlayer.playVideo();
-          } catch (error) {
-            console.warn('⚠️ Không thể phát YouTube trong user gesture:', error);
+      // 1. Nếu video đang bị PAUSE rõ ràng, mới cho dừng video
+      if (playback?.status === 'paused') {
+        try {
+          const cuePosition = Math.max(0, Number(playback.position) || 0);
+          if (typeof youtubeApiPlayer.cueVideoById === 'function') {
+            youtubeApiPlayer.cueVideoById(videoId, cuePosition);
+          } else {
+            youtubeApiPlayer.loadVideoById(videoId, cuePosition);
+            youtubeApiPlayer.pauseVideo();
           }
           if (effectiveSound && globalVolume > 0) {
-            try { youtubeApiPlayer.unMute(); } catch (error) {}
+            youtubeApiPlayer.unMute();
+          } else {
+            youtubeApiPlayer.mute();
           }
-        } else {
-          schedulePlaybackStart(playback);
+        } catch (error) {
+          console.warn('⚠️ Không thể cue YouTube ở trạng thái pause:', error);
         }
-      } else {
-        // QUAN TRỌNG: authoritative state đang PAUSED/STOPPED thì tuyệt đối
-        // không gọi playVideo(). Trước đây nhánh này vẫn tự phát, khiến
-        // reload ngay sau khi video ENDED tạo vòng PLAY/PAUSE.
-        //
-        // RIÊNG trường hợp Play từ danh sách bài hát: đây là user gesture thật.
-        // Server chưa trả playback authoritative nên playback = null, nhưng
-        // pendingLocalPlayback đã được tạo ngay trong click handler. Vì vậy
-        // phải gọi playVideo() ngay tại đây, trước khi user activation trên
-        // Android/WebView mất đi. Sau đó server playbackState sẽ reconcile.
-        if (isLocalGesturePlayback) {
-          iosAutoPlayDiagnostic.record('playVideo_call');
+      } 
+      // 2. Ngược lại (có lệnh phát từ điện thoại hoặc quay số trúng thưởng): Tự động phát video
+      else {
+        const startedAt = Number(playback?.startedAt);
+        const delayMs = Number.isFinite(startedAt) ? startedAt - Date.now() : 0;
+
+        // Nếu có hẹn giờ khởi tạo (như lúc quay bánh xe)
+        if (hasAuthoritativePlayback && delayMs > 50) {
+          schedulePlaybackStart(playback);
+        } else {
+          // Phát ngay lập tức: PC sau khi đã được click 1 lần sẽ tự động chạy tiếp các bài này
           try {
             youtubeApiPlayer.playVideo();
           } catch (error) {
-            console.warn('⚠️ Không thể phát YouTube trong user gesture:', error);
+            console.warn('⚠️ Không thể tự phát YouTube:', error);
           }
+
           if (effectiveSound && globalVolume > 0) {
             try { youtubeApiPlayer.unMute(); } catch (error) {}
           } else {
             try { youtubeApiPlayer.mute(); } catch (error) {}
-          }
-        } else {
-          try {
-            const cuePosition = playback?.status === 'paused'
-              ? Math.max(0, Number(playback.position) || 0)
-              : 0;
-            if (typeof youtubeApiPlayer.cueVideoById === 'function') {
-              youtubeApiPlayer.cueVideoById(videoId, cuePosition);
-            } else {
-              youtubeApiPlayer.loadVideoById(videoId, cuePosition);
-              youtubeApiPlayer.pauseVideo();
-            }
-            if (effectiveSound && globalVolume > 0) {
-              youtubeApiPlayer.unMute();
-            } else {
-              youtubeApiPlayer.mute();
-            }
-          } catch (error) {
-            console.warn('⚠️ Không thể cue YouTube ở trạng thái không phát:', error);
           }
         }
       }
