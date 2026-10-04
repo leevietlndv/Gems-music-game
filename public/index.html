@@ -2620,22 +2620,19 @@
     // Toàn cục các biến lưu trữ instance Morph
     let menuMorph, playMorph, audioMorph, autoPlayMorph, onlineToggleMorph, blacklistToggleMorph, resetMorph, editSettingsMorph;
 
-    function initMorphicons() {
+function initMorphicons() {
       const createSvg = (btn) => {
-        btn.textContent = ''; // Xóa emoji tĩnh hiện tại
+        btn.textContent = ''; 
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         svg.setAttribute('viewBox', '0 0 24 24');
         Object.assign(svg.style, {
           width: '22px', height: '22px', stroke: 'currentColor',
           strokeWidth: '2', fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'round'
         });
-        
-        // SỬA LỖI Ở ĐÂY: Phải tạo thẻ <path> và trả về thẻ path này
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         svg.appendChild(path);
         btn.appendChild(svg);
-        
-        return path; // Morphicons cần thẻ path để vẽ nét
+        return path;
       };
 
       if (appNavbarToggle) menuMorph = createMorph(createSvg(appNavbarToggle), Menu);
@@ -2644,16 +2641,12 @@
       if (btnAutoPlay) autoPlayMorph = createMorph(createSvg(btnAutoPlay), Shuffle);
       if (onlineToggleIcon) onlineToggleMorph = createMorph(createSvg(onlineToggleIcon), ChevronDown);
       if (blacklistToggleIcon) blacklistToggleMorph = createMorph(createSvg(blacklistToggleIcon), ChevronDown);
-      // KHỞI TẠO NÚT RESET VÀ EDIT KỊCH BẢN
       if (btnReset) resetMorph = createMorph(createSvg(btnReset), RefreshCw);
-      if (scriptSettingsEdit) editSettingsMorph = createMorph(createSvg(scriptSettingsEdit), Pencil);    
+      if (scriptSettingsEdit) editSettingsMorph = createMorph(createSvg(scriptSettingsEdit), Pencil);
     }
-
-    // Gọi khởi tạo SVG cho các nút
     initMorphicons();
 
     const MUSIC_PREF_KEY = 'gemsMusicAudioPreference';
-
     let isFormOpen = true;
     let songs = [];
     let blockedSongs = [];
@@ -2661,22 +2654,16 @@
     let isAdmin = false;
     let currentAngle = 0;
     let currentPlayingUrl = null;
-    let currentSongId = null; // ID bài đang phát (bài này KHÔNG còn trong mảng songs)
+    let currentSongId = null;
     let currentAction = null;
     let currentHealth = 5;
-    let currentVote = 0; // 1 = Like, -1 = Dislike, 0 = chưa vote
+    let currentVote = 0; 
     let currentLikeCount = 0;
     let currentDislikeCount = 0;
     let replacementCountdown = null;
-
-    // ==================== REALTIME PLAYBACK SYNC (PHASE 6A) ====================
-    // Server giữ playback state; client chỉ tính vị trí hiện tại từ startedAt.
-    // Không polling socket và không gửi currentTime liên tục.
     let currentPlayback = null;
     let playbackStartTimer = null;
     let playbackScheduleToken = 0;
-    // Phase 6B: timeline là UI cục bộ; không polling server và không gửi
-    // currentTime liên tục. Chỉ gửi seek khi người dùng thả thanh kéo.
     let playbackTimelineTimer = null;
     let playbackTimelineDragging = false;
     let playbackTimelineSeekPending = false;
@@ -2684,22 +2671,13 @@
     let playbackDurationSec = 0;
     let playbackTimelineSongId = null;
     const PLAYBACK_TIMELINE_TICK_MS = 250;
-
-    // ==================== PLAYBACK CLOCK SYNC (PHASE 6C) ====================
-    // Giữ offset đồng hồ server để timeline UI và nút cập nhật thủ công tính đúng vị trí.
-    // Auto-seek đã tắt: không còn drift-correction interval hoặc foreground recovery.
     let serverClockOffsetMs = 0;
-
-    // Phase 6A.1: giữ dấu vết thao tác Play vừa phát sinh trực tiếp từ user gesture.
-    // Dùng để tránh server echo lại làm reload video, đồng thời reconcile theo
-    // playback state authoritative sau khi server xác nhận.
     let pendingLocalPlayback = null;
     let autoplayBlockedNoticeShown = false;
-
     let youtubeApiPlayer = null;
     let youtubeApiReady = false;
     let youtubeApiReadyCallbacks = [];
-
+    
     function flushYouTubeApiCallbacks() {
       youtubeApiReady = true;
       console.log('🎬 YouTube IFrame API đã sẵn sàng');
