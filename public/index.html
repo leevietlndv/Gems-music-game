@@ -2083,7 +2083,7 @@
             <span class="script-toggle-knob" aria-hidden="true"></span>
           </button>
           <button id="scriptSettingsEdit" class="script-settings-edit" type="button"
-            aria-label="Chỉnh sửa cài đặt kịch bản" aria-expanded="false" title="Chỉnh sửa">✏️</button>
+            aria-label="Chỉnh sửa cài đặt kịch bản" aria-expanded="false" title="Chỉnh sửa"></button>
         </div>
       </div>
 
@@ -2139,7 +2139,7 @@
     // Import engine của Morphicons cho DOM thuần
     import { createMorph } from 'https://esm.sh/morphicons/dom';
     // Import dữ liệu icon nét (stroke-based) từ Lucide
-    import { Play, Pause, Menu, X, Volume2, Volume1, VolumeX, ListOrdered, Shuffle, Square, ChevronDown, ChevronUp, RefreshCw, Upload } from 'https://esm.sh/lucide';
+    import { Play, Pause, Menu, X, Volume2, Volume1, VolumeX, ListOrdered, Shuffle, Square, ChevronDown, ChevronUp, RefreshCw, Upload, Pencil } from 'https://esm.sh/lucide';
 
     const tg = window.Telegram?.WebApp;
     if (tg) {
@@ -2382,6 +2382,7 @@
         scriptSettingsDetails?.setAttribute('aria-hidden', 'true');
         scriptSettingsEdit?.setAttribute('aria-expanded', 'false');
         if (scriptSettingsEdit) scriptSettingsEdit.title = 'Chỉnh sửa';
+        if (scriptEditMorph) scriptEditMorph.morphTo(Pencil, 'snappy');
       }
       updateScriptSettingsCancelUI();
     }
@@ -2395,11 +2396,13 @@
         scriptSettingsDetails.setAttribute('aria-hidden', 'true');
         scriptSettingsEdit.setAttribute('aria-expanded', 'false');
         scriptSettingsEdit.title = 'Chỉnh sửa';
+        if (scriptEditMorph) scriptEditMorph.morphTo(Pencil, 'snappy');
       } else {
         scriptSettingsDetails.classList.add('open');
         scriptSettingsDetails.setAttribute('aria-hidden', 'false');
         scriptSettingsEdit.setAttribute('aria-expanded', 'true');
         scriptSettingsEdit.title = 'Đóng cài đặt';
+        if (scriptEditMorph) scriptEditMorph.morphTo(X, 'snappy');
         sessionDuration?.focus();
       }
     });
@@ -2440,6 +2443,7 @@
         scriptSettingsDetails?.setAttribute('aria-hidden', 'true');
         scriptSettingsEdit?.setAttribute('aria-expanded', 'false');
         if (scriptSettingsEdit) scriptSettingsEdit.title = 'Chỉnh sửa';
+        if (scriptEditMorph) scriptEditMorph.morphTo(Pencil, 'snappy');
       } catch (error) {
         console.error('❌ Lỗi bắt đầu phiên phát nhạc:', error);
         alert('Lỗi kết nối đến server!');
@@ -2609,7 +2613,7 @@
     const blacklistListEl = document.getElementById('blacklistList');
 
     // Toàn cục các biến lưu trữ instance Morph
-    let menuMorph, playMorph, audioMorph, autoPlayMorph, onlineToggleMorph, blacklistToggleMorph, resetMorph;
+    let menuMorph, playMorph, audioMorph, autoPlayMorph, onlineToggleMorph, blacklistToggleMorph, resetMorph, scriptEditMorph;
 
     function initMorphicons() {
       const createSvg = (btn) => {
@@ -2636,6 +2640,7 @@
       if (onlineToggleIcon) onlineToggleMorph = createMorph(createSvg(onlineToggleIcon), ChevronDown);
       if (blacklistToggleIcon) blacklistToggleMorph = createMorph(createSvg(blacklistToggleIcon), ChevronDown);
       if (btnReset) resetMorph = createMorph(createSvg(btnReset), RefreshCw);
+      if (scriptSettingsEdit) scriptEditMorph = createMorph(createSvg(scriptSettingsEdit), Pencil);
     }
 
     // Gọi khởi tạo SVG cho các nút
