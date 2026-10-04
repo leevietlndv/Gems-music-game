@@ -24,7 +24,7 @@ h1{font-size:24px;text-align:center;margin:8px 0 6px}.subtitle{text-align:center
 input{width:100%;height:42px;border:1px solid #46536b;border-radius:8px;background:#182031;color:#fff;padding:0 12px;font-size:14px;outline:none}input:focus{border-color:#64b5f6}
 button{border:0;cursor:pointer}.primary{width:100%;height:42px;border-radius:8px;background:#2e7d32;color:#fff;font-weight:700;font-size:14px;margin-top:10px}.secondary{height:36px;border-radius:7px;background:#34415a;color:#fff;padding:0 11px;font-weight:600}.danger{background:#8e3030}.ghost{background:transparent;color:#9ecbff;padding:5px 6px;font-size:13px}
 .section-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}.section-head h2{font-size:17px}.count{color:#91a0b7;font-size:12px}
-.playlist{border:1px solid #3a4860;border-radius:10px;background:#202a3b;margin-bottom:10px;overflow:hidden}.playlist-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 12px}.playlist-name{font-size:15px;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.playlist-name:hover{opacity:.9}.playlist-song-count{color:#91a0b7;font-weight:500}.playlist.collapsed .playlist-body{display:none!important}.song-actions button.gems-sent{opacity:.4;cursor:not-allowed}.playlist-actions{display:flex;gap:4px;flex-shrink:0}.playlist-actions button{background:transparent;color:#c9d4e5;font-size:16px;padding:5px}.playlist-body{padding:0 10px 10px;border-top:1px solid #334057}.song-list{padding-top:8px;min-height:8px}.song{display:flex;align-items:center;gap:8px;background:#29364b;border:1px solid #3b4960;border-radius:9px;padding:7px;margin-bottom:7px;cursor:grab}.song.dragging{opacity:.45}.drag{color:#8290a6;font-size:18px;width:18px;text-align:center;flex-shrink:0;cursor:ns-resize}.thumb{width:72px;height:42px;object-fit:cover;border-radius:6px;background:#111827;flex-shrink:0}.song-main{min-width:0;flex:1;cursor:pointer}.song-title{font-size:13px;font-weight:600;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.song-id{font-size:10px;color:#8190a6;margin-top:3px}.song-actions{display:flex;flex-direction:column;gap:3px}.song-actions button{background:transparent;color:#c9d4e5;padding:4px;font-size:16px}
+.playlist{border:1px solid #3a4860;border-radius:10px;background:#202a3b;margin-bottom:10px;overflow:hidden}.playlist-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 12px}.playlist-name{font-size:15px;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.playlist-name:hover{opacity:.9}.playlist-song-count{color:#91a0b7;font-weight:500}.playlist.collapsed .playlist-body{display:none!important}.song-actions button.gems-sent{opacity:.4;cursor:not-allowed}.playlist-actions{display:flex;gap:4px;flex-shrink:0}.playlist-actions button{background:transparent;color:#c9d4e5;padding:5px;display:inline-flex;align-items:center;justify-content:center}.playlist-body{padding:0 10px 10px;border-top:1px solid #334057}.song-list{padding-top:8px;min-height:8px}.song{display:flex;align-items:center;gap:8px;background:#29364b;border:1px solid #3b4960;border-radius:9px;padding:7px;margin-bottom:7px;cursor:grab}.song.dragging{opacity:.45}.drag{color:#8290a6;font-size:18px;width:18px;text-align:center;flex-shrink:0;cursor:ns-resize}.thumb{width:72px;height:42px;object-fit:cover;border-radius:6px;background:#111827;flex-shrink:0}.song-main{min-width:0;flex:1;cursor:pointer}.song-title{font-size:13px;font-weight:600;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.song-id{font-size:10px;color:#8190a6;margin-top:3px}.song-actions{display:flex;flex-direction:column;gap:3px}.song-actions button{background:transparent;color:#c9d4e5;padding:4px;display:inline-flex;align-items:center;justify-content:center}
 .song-actions button:disabled{opacity:.5;cursor:default}
 .song-actions button.gems-sent{opacity:.4;cursor:default!important}
 .empty{color:#7f8ca1;text-align:center;padding:16px 8px;font-size:13px}
@@ -165,7 +165,7 @@ button{border:0;cursor:pointer}.primary{width:100%;height:42px;border-radius:8px
 
 <script type="module">
 import { createMorph } from 'https://esm.sh/morphicons/dom';
-import { Play, Pause, Repeat, Repeat1, Shuffle, Square, Volume2, Volume1, VolumeX } from 'https://esm.sh/lucide';
+import { Play, Pause, Repeat, Repeat1, Shuffle, Square, Volume2, Volume1, VolumeX, Pencil, Trash2, X } from 'https://esm.sh/lucide';
 
 const tg=window.Telegram?.WebApp;if(tg){tg.ready();tg.expand()}
 let initData=tg?.initData||'';
@@ -361,7 +361,24 @@ if (window.YT && window.YT.Player) {
   setTimeout(() => clearInterval(ytPoll), 10000);
 }
 
-function toggleMute(){if(!playerState.ready||!playerState.player||!currentSong())return;try{if(playerState.volume===0){playerState.player.unMute();playerState.muted=false}else{playerState.player.mute();playerState.muted=true}updatePlayerUI()}catch(e){}}
+function toggleMute(){
+  if(!playerState.ready||!playerState.player||!currentSong())return;
+  try{
+    if(playerState.muted){
+      playerState.player.unMute();
+      playerState.muted=false;
+      // Nếu âm lượng trước đó về 0 thì nâng lên mức nghe được
+      if(playerState.volume===0){
+        playerState.volume=70;
+        playerState.player.setVolume(70);
+      }
+    }else{
+      playerState.player.mute();
+      playerState.muted=true;
+    }
+    updatePlayerUI();
+  }catch(e){}
+}
 function setPlayerVolume(v){if(!playerState.ready||!playerState.player)return;const n=Math.max(0,Math.min(100,Number(v)||0));playerState.volume=n;playerState.muted=n===0;try{if(n===0){playerState.player.setVolume(0);playerState.player.mute()}else{playerState.player.unMute();playerState.player.setVolume(n)}}catch(e){}updatePlayerUI()}
 function endPlayback(){nextGeneration();try{playerState.player?.stopVideo()}catch(e){}playerState.playlistId=null;playerState.songId=null;playerState.status='idle';playerState.duration=0;playerState.currentTime=0;$('playerCard').classList.add('hidden');updatePlayerUI()}
 function playSong(pid,sid){playerState.userActivated=true;if(loadSongIntoPlayer(pid,sid))renderPlaylists()}
@@ -388,12 +405,12 @@ function refreshGemsButtons(){
   });
 }
 
-function playlistHtml(p,songs){const collapsed=state.collapsedPlaylists.has(Number(p.id));return `<div class="playlist${collapsed?' collapsed':''}" data-playlist-id="${p.id}"><div class="playlist-head"><div class="playlist-name" title="${esc(p.name)}">${esc(p.name)} <span class="playlist-song-count">(${songs.length})</span></div><div class="playlist-actions"><button title="Đổi tên" data-action="rename">✏️</button><button title="Xóa playlist" data-action="delete">🗑️</button></div></div><div class="playlist-body"${collapsed?' hidden':''}><div class="song-list" data-song-list="${p.id}">${songs.length?songs.map(songHtml).join(''):'<div class="empty">Playlist này chưa có bài hát.</div>'}</div><div class="add-row"><input data-add-input="${p.id}" placeholder="Dán link YouTube..." maxlength="500"><button data-action="add" title="Thêm bài hát">＋</button></div><div class="playlist-footer"><span>${songs.length} bài hát</span><span>Kéo thả để đổi thứ tự</span></div></div></div>`}
+function playlistHtml(p,songs){const collapsed=state.collapsedPlaylists.has(Number(p.id));return `<div class="playlist${collapsed?' collapsed':''}" data-playlist-id="${p.id}"><div class="playlist-head"><div class="playlist-name" title="${esc(p.name)}">${esc(p.name)} <span class="playlist-song-count">(${songs.length})</span></div><div class="playlist-actions"><button title="Đổi tên" data-action="rename" class="btn-rename-playlist"></button><button title="Xóa playlist" data-action="delete" class="btn-delete-playlist"></button></div></div><div class="playlist-body"${collapsed?' hidden':''}><div class="song-list" data-song-list="${p.id}">${songs.length?songs.map(songHtml).join(''):'<div class="empty">Playlist này chưa có bài hát.</div>'}</div><div class="add-row"><input data-add-input="${p.id}" placeholder="Dán link YouTube..." maxlength="500"><button data-action="add" title="Thêm bài hát">＋</button></div><div class="playlist-footer"><span>${songs.length} bài hát</span><span>Kéo thả để đổi thứ tự</span></div></div></div>`}
 function songHtml(s){
   const thumb=s.thumbnailUrl||`https://i.ytimg.com/vi/${encodeURIComponent(s.youtubeVideoId)}/hqdefault.jpg`;
   const active=Number(playerState.songId)===Number(s.id);
   const sentToGems=state.gemsVideoIds.has(String(s.youtubeVideoId||videoId(s.youtubeUrl)||''));
-  return `<div class="song${active?' active-song':''}" draggable="true" data-song-id="${s.id}"><span class="drag">☷</span><div class="thumb-wrap"><img class="thumb" src="${esc(thumb)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><button class="thumb-play" type="button" data-action="play-song" title="Phát bài hát">▶</button></div><div class="song-main"><div class="song-title" title="${esc(s.title||s.youtubeUrl)}">${esc(s.title||s.youtubeUrl)}</div><div class="song-id">YouTube · ${esc(s.youtubeVideoId)}</div></div><div class="song-actions"><button class="${sentToGems?'gems-sent':''}" title="${sentToGems?'Bài hát đang có trong GEMS Studio':'Gửi bài hát vào GEMS Studio'}" data-action="send-gems"${sentToGems?' disabled':''}>🎵</button><button title="Xóa bài hát" data-action="delete-song">🗑️</button></div></div>`
+  return `<div class="song${active?' active-song':''}" draggable="true" data-song-id="${s.id}"><span class="drag">☷</span><div class="thumb-wrap"><img class="thumb" src="${esc(thumb)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><button class="thumb-play" type="button" data-action="play-song" title="Phát bài hát">▶</button></div><div class="song-main"><div class="song-title" title="${esc(s.title||s.youtubeUrl)}">${esc(s.title||s.youtubeUrl)}</div><div class="song-id">YouTube · ${esc(s.youtubeVideoId)}</div></div><div class="song-actions"><button class="${sentToGems?'gems-sent':''}" title="${sentToGems?'Bài hát đang có trong GEMS Studio':'Gửi bài hát vào GEMS Studio'}" data-action="send-gems"${sentToGems?' disabled':''}>🎵</button><button title="Xóa bài hát" data-action="delete-song" class="btn-delete-song"></button></div></div>`
 }
 async function loadPlaylists(){
   const d=await api('/api/my-playlists');
@@ -411,7 +428,27 @@ async function loadPlaylists(){
   refreshGemsButtons();
   showApp();
 }
-function renderPlaylists(){const wrap=$('playlists');$('playlistCount').textContent=`${state.playlists.length} playlist`;if(!state.playlists.length){wrap.innerHTML='<div class="card"><div class="empty">Chưa có playlist. Hãy tạo playlist đầu tiên.</div></div>';return}wrap.innerHTML=state.playlists.map(p=>playlistHtml(p,p.songs||[])).join('');attachDnD()}
+
+function renderPlaylists(){
+  const wrap=$('playlists');$('playlistCount').textContent=`${state.playlists.length} playlist`;
+  if(!state.playlists.length){
+    wrap.innerHTML='<div class="card"><div class="empty">Chưa có playlist. Hãy tạo playlist đầu tiên.</div></div>';
+    return;
+  }
+  wrap.innerHTML=state.playlists.map(p=>playlistHtml(p,p.songs||[])).join('');
+  attachDnD();
+
+  // Khởi tạo Morphicons cho các nút sửa, xóa playlist và xóa bài hát
+  wrap.querySelectorAll('.btn-rename-playlist').forEach(btn => {
+    createMorph(createSvg(btn, '16px'), Pencil);
+  });
+  wrap.querySelectorAll('.btn-delete-playlist').forEach(btn => {
+    createMorph(createSvg(btn, '16px'), Trash2);
+  });
+  wrap.querySelectorAll('.btn-delete-song').forEach(btn => {
+    createMorph(createSvg(btn, '16px'), X);
+  });
+}
 
 async function createPlaylist(){
   const name = await showCustomModal({type:'prompt', title:'Tạo playlist', message:'Tên playlist mới:', default:'Playlist của tôi'});
