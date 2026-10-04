@@ -1300,7 +1300,7 @@
     }
 
     .playlist-picker-option:hover {
-      background: #00e676;
+      background: #43a047;
       border: 1px solid #34415a;
     }
 
@@ -3897,7 +3897,7 @@
       myPlaylistPickerList.innerHTML = list.length
         ? list.map(p => `
             <button class="playlist-picker-option" type="button" data-playlist-id="${p.id}">
-              ${escapeHtml(p.name)} <span style="color:#91a0b7;font-weight:400">(${Number(p.songCount) || 0} bài)</span>
+              ${escapeHtml(p.name)} <span style="color:#fff;font-weight:400">(${Number(p.songCount) || 0} bài)</span>
             </button>
           `).join('')
         : '<div class="playlist-picker-empty">Bạn chưa có playlist nào. Hãy đặt tên và tạo playlist mới bên dưới để thêm bài hát ngay.</div>';
