@@ -1868,6 +1868,11 @@
       }
 
     }
+    /* CSS cho nút đã thêm vào playlist thành công */
+    .song-action-btn.saved {
+      cursor: default !important;
+      opacity: 0.7; /* Làm mờ nhẹ để biết là không bấm được nữa */
+    }
   </style>
 </head>
 
@@ -2857,14 +2862,50 @@
       }
     }
 
+    // Biến cờ để chỉ chạy tải playlist 1 lần
+    let hasPreloadedSavedSongs = false;
+
+    // Hàm chạy ngầm tải toàn bộ nhạc trong playlist của user
+    async function preloadUserSavedSongs() {
+      if (!telegramInitData) return;
+      try {
+        const listRes = await fetch(`/api/my-playlists?initData=${encodeURIComponent(telegramInitData)}`);
+        if (!listRes.ok) return;
+        const listData = await listRes.json();
+        if (!listData.success || !Array.isArray(listData.playlists)) return;
+
+        // Quét từng playlist để lấy bài hát
+        for (const p of listData.playlists) {
+          try {
+            const songsRes = await fetch(`/api/my-playlists/${p.id}/songs?initData=${encodeURIComponent(telegramInitData)}`);
+            if (!songsRes.ok) continue;
+            const songsData = await songsRes.json();
+            if (songsData.success && Array.isArray(songsData.songs)) {
+              songsData.songs.forEach(s => {
+                const vid = extractYouTubeId(s.youtubeUrl);
+                if (vid) addedToPlaylistSet.add(vid); // Thêm Video ID vào bộ nhớ tạm
+              });
+            }
+          } catch (e) {}
+        }
+        updateUI(); // Render lại các nút Heart/Check
+      } catch (e) {
+        console.warn('⚠️ Lỗi tải trước playlist:', e);
+      }
+    }
+
     function authenticateSocket() {
       if (!socket.connected || socketAuthenticated) return;
 
       resolveTelegramInitData();
 
+      // Gọi tải ngầm playlist ngay khi có telegramInitData
+      if (!hasPreloadedSavedSongs && telegramInitData) {
+        hasPreloadedSavedSongs = true;
+        preloadUserSavedSongs();
+      }
+
       // Trong Telegram Mini App phải có initData thật.
-      // Không gửi authenticate rỗng nữa vì nó có thể làm client rơi vào
-      // trạng thái view-only trước khi Telegram kịp tiêm initData.
       if (!telegramInitData) {
         authAttempts++;
         setConnectionStatus(`⏳ Chờ Telegram xác thực... (${authAttempts}/${MAX_AUTH_ATTEMPTS})`);
@@ -3569,6 +3610,10 @@
               currentPlayback?.songId != null &&
               String(currentPlayback.songId) === id;
 
+            // Kiểm tra Video ID xem đã có trong playlist chưa
+            const videoId = extractYouTubeId(s.url || '');
+            const isSaved = videoId && addedToPlaylistSet.has(videoId);
+
             return `
               <div class="song-item${isPlaying ? ' is-playing' : ''}" data-song-id="${id}">
                 <div class="song-thumb-wrap" data-action="reveal-play" data-id="${id}" role="button" tabindex="0" aria-label="Hiện nút phát">
@@ -3593,13 +3638,14 @@
 
                 <div class="song-actions">
                   <button
-                    class="song-action-btn btn-add-playlist"
+                    class="song-action-btn btn-add-playlist ${isSaved ? 'saved' : ''}"
                     data-action="add-playlist"
                     data-id="${id}"
-                    title="${addedToPlaylistSet.has(id) ? 'Đã có trong Playlist' : 'Thêm vào My Playlist'}"
+                    data-vid="${videoId}"
+                    title="${isSaved ? 'Đã có trong Playlist' : 'Thêm vào My Playlist'}"
                     aria-label="Thêm vào My Playlist"
-                    style="color: ${addedToPlaylistSet.has(id) ? '#2e7d32' : '#d32f2f'};"
-                    ${addedToPlaylistSet.has(id) ? 'disabled' : ''}
+                    style="color: ${isSaved ? '#2e7d32' : '#d32f2f'};"
+                    ${isSaved ? 'disabled' : ''}
                   ></button>
 
                   <button
@@ -3614,16 +3660,17 @@
             `;
           }).join('');
 
-        // BẮT ĐẦU THÊM MỚI: Khởi tạo Morphicons cho các nút vừa được tạo ra
+          // Khởi tạo Morphicons cho các nút vừa được tạo ra
           songListEl.querySelectorAll('.btn-add-playlist').forEach(btn => {
-            const songId = btn.dataset.id;
-            // Nếu đã thêm thì dùng icon Check, chưa thì dùng Heart
-            btn._morph = createMorph(createSvg(btn), addedToPlaylistSet.has(songId) ? Check : Heart);
+            const vid = btn.dataset.vid;
+            const isSaved = vid && addedToPlaylistSet.has(vid);
+            btn._morph = createMorph(createSvg(btn), isSaved ? Check : Heart);
           });
           
           songListEl.querySelectorAll('.btn-delete-song').forEach(btn => {
             createMorph(createSvg(btn), Trash2);
           });
+
           // KẾT THÚC THÊM MỚI
 
         } catch (error) {
@@ -3843,9 +3890,7 @@
         return;
       }
 
-      button.disabled = true;
-      const oldText = button.textContent;
-      button.textContent = '⏳';
+      button.disabled = true; // Chỉ làm mờ, không ghi đè textContent
 
       try {
         const listRes = await fetch(`/api/my-playlists?initData=${encodeURIComponent(telegramInitData)}`);
@@ -3855,22 +3900,26 @@
         if (listRes.status === 403 && listData.code === 'MY_PLAYLIST_NOT_REGISTERED') {
           const go = confirm('Bạn chưa đăng ký My Playlist. Mở My Playlist để đăng ký ngay?');
           if (go) window.location.href = '/myplaylist.html';
+          // Bật lại nút nếu user hủy
+          button.disabled = false;
           return;
         }
 
         if (!listRes.ok || !listData.success) {
           alert(listData.message || 'Không thể tải danh sách My Playlist.');
+          button.disabled = false;
           return;
         }
 
         const playlists = Array.isArray(listData.playlists) ? listData.playlists : [];
         showMyPlaylistPicker(song, playlists);
+        
+        // Mở popup chọn thì mở lại nút để có thể bấm lại sau nếu muốn
+        button.disabled = false;
       } catch (error) {
         console.error('❌ Lỗi thêm vào My Playlist:', error);
         alert('Lỗi kết nối đến My Playlist!');
-      } finally {
         button.disabled = false;
-        button.textContent = oldText;
       }
     }
 
@@ -3939,10 +3988,10 @@
 
       alert(`❤️ Đã thêm vào playlist “${playlist.name}”.`);
       
-      // Đánh dấu bài hát đã được thêm và cập nhật lại giao diện
-      if (song && song.id) {
-        addedToPlaylistSet.add(String(song.id));
-        updateUI(); 
+      // Đánh dấu bài hát đã lưu thành công bằng Video ID
+      if (videoId) {
+        addedToPlaylistSet.add(videoId);
+        updateUI(); // Cập nhật lại giao diện ngay lập tức
       }
     }
 
