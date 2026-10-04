@@ -3422,8 +3422,11 @@
           return;
         }
 
-        // Server broadcast stateUpdate mới; không tự sửa mảng để tránh lệch state.
-        console.log('🔓 Đã gỡ chặn:', data.song || blockedSong);
+        // Cập nhật ngay mảng blockedSongs tại client và vẽ lại giao diện
+        blockedSongs = blockedSongs.filter(item => String(item.id) !== String(blockedSongId));
+        renderBlacklist();
+
+        console.log('🔓 Đã gỡ chặn thành công:', data.song || blockedSong);
       } catch (error) {
         console.error('❌ Lỗi gỡ chặn bài hát:', error);
         alert('Lỗi kết nối đến server!');
