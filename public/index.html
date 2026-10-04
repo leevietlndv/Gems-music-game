@@ -4966,91 +4966,33 @@
       // Nếu Spin đang trong 4 giây animation, không dùng loadVideoById vì
       // YouTube có thể tự bắt đầu phát ngay. Cue trước, rồi mới play đúng
       // startedAt. Với playback đã bắt đầu, load thẳng tại vị trí hiện tại.
-      if (hasAuthoritativePlayback && playback.status === 'playing') {
-        const startedAt = Number(playback.startedAt);
-        const isFutureStart = Number.isFinite(startedAt) && startedAt > Date.now() + 50;
+      // 1. Nạp video theo vị trí hiện tại (giống bản index_3.html)
+      const targetPos = Math.max(0, targetPosition || 0);
+      youtubeApiPlayer.loadVideoById(videoId, targetPos);
 
-        if (isFutureStart && typeof youtubeApiPlayer.cueVideoById === 'function') {
-          youtubeApiPlayer.cueVideoById(videoId, 0);
-        } else {
-          youtubeApiPlayer.loadVideoById(videoId, Math.max(0, targetPosition));
-        }
-      } else {
-        youtubeApiPlayer.loadVideoById(videoId);
-      }
-
-      // Phase 6D.2: áp dụng volume authoritative trước khi xử lý mute/unmute.
+      // 2. Đồng bộ Volume & Mute/Unmute
       applyGlobalVolumeToPlayer(true);
 
-      const isLocalGesturePlayback =
-        pendingLocalPlayback &&
-        String(pendingLocalPlayback.songId) === String(song.id);
-
-      iosAutoPlayDiagnostic.record('load_song_into_player', {
-        songId: song.id ?? null,
-        hasAuthoritativePlayback,
-        playbackStatus: playback?.status ?? null,
-        isLocalGesturePlayback: !!isLocalGesturePlayback
-      });
-
-      // Mobile/WebView: khi user vừa tap Play, ưu tiên chuỗi mute -> load -> play
-      // -> unmute trong cùng call stack. Cách này cho trình duyệt cơ hội xem
-      // playVideo() là hành động phát được khởi tạo bởi user gesture.
-      if (isLocalGesturePlayback && effectiveSound && globalVolume > 0) {
-        try {
-          youtubeApiPlayer.mute();
-        } catch (error) {}
-      } else if (effectiveSound && globalVolume > 0) {
-        youtubeApiPlayer.unMute();
+      if (effectiveSound && globalVolume > 0) {
+        try { youtubeApiPlayer.unMute(); } catch (e) {}
       } else {
-        youtubeApiPlayer.mute();
+        try { youtubeApiPlayer.mute(); } catch (e) {}
       }
 
-      // Với playback state 'playing', play ngay hoặc chờ tới startedAt (Spin).
-      // Nếu đây là Play vừa được user tap, tránh setTimeout để không làm mất
-      // user activation trên mobile.
-      // 1. Nếu video đang bị PAUSE rõ ràng, mới cho dừng video
+      // 3. Xử lý phát video:
+      // Chỉ khi video đang PAUSED rõ ràng thì mới dừng lại, còn lại phát tự do như bản cũ
       if (playback?.status === 'paused') {
         try {
-          const cuePosition = Math.max(0, Number(playback.position) || 0);
-          if (typeof youtubeApiPlayer.cueVideoById === 'function') {
-            youtubeApiPlayer.cueVideoById(videoId, cuePosition);
-          } else {
-            youtubeApiPlayer.loadVideoById(videoId, cuePosition);
-            youtubeApiPlayer.pauseVideo();
-          }
-          if (effectiveSound && globalVolume > 0) {
-            youtubeApiPlayer.unMute();
-          } else {
-            youtubeApiPlayer.mute();
-          }
+          youtubeApiPlayer.pauseVideo();
+        } catch (e) {}
+      } else {
+        // Tự động play ngay: PC đã kích hoạt 1 lần sẽ nhận lệnh và tự phát xuyên suốt
+        try {
+          youtubeApiPlayer.playVideo();
         } catch (error) {
-          console.warn('⚠️ Không thể cue YouTube ở trạng thái pause:', error);
+          console.warn('⚠️ Không thể tự phát YouTube:', error);
         }
       } 
-      // 2. Ngược lại (có lệnh phát từ điện thoại hoặc quay số trúng thưởng): Tự động phát video
-      else {
-        const startedAt = Number(playback?.startedAt);
-        const delayMs = Number.isFinite(startedAt) ? startedAt - Date.now() : 0;
-
-        // Nếu có hẹn giờ khởi tạo (như lúc quay bánh xe)
-        if (hasAuthoritativePlayback && delayMs > 50) {
-          schedulePlaybackStart(playback);
-        } else {
-          // Phát ngay lập tức: PC sau khi đã được click 1 lần sẽ tự động chạy tiếp các bài này
-          try {
-            youtubeApiPlayer.playVideo();
-          } catch (error) {
-            console.warn('⚠️ Không thể tự phát YouTube:', error);
-          }
-
-          if (effectiveSound && globalVolume > 0) {
-            try { youtubeApiPlayer.unMute(); } catch (error) {}
-          } else {
-            try { youtubeApiPlayer.mute(); } catch (error) {}
-          }
-        }
-      }
 
       updateAudioNotice(effectiveSound && globalVolume > 0);
       updateAudioControls();
