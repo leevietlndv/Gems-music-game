@@ -329,7 +329,37 @@ function onYouTubeStateChange(e){if(!playerState.player)return;if(e.data===YT.Pl
 function onYouTubeReady(e){playerState.player=e.target;playerState.ready=true;playerState.muted=playerState.volume===0;try{if(playerState.muted){playerState.player.setVolume(0);playerState.player.mute()}else{playerState.player.unMute();playerState.player.setVolume(playerState.volume)}}catch(x){}startTimelineTimer();updatePlayerUI()}
 function onYouTubeError(e){playerState.status='error';playerState.pendingPlay=false;setPlayerStatus('❌ '+(e.data===101||e.data===150?'Video không cho phép phát trong trình phát nhúng.':'Không thể phát video này.'),'error');updatePlayerUI()}
 function onYouTubeAutoplayBlocked(){playerState.status='blocked';playerState.autoplayBlocked=true;playerState.pendingPlay=false;setPlayerStatus('▶ Hãy bấm Play để bắt đầu','blocked');updatePlayerUI()}
-window.onYouTubeIframeAPIReady=function(){if(!window.YT?.Player)return;playerState.player=new YT.Player('youtubePlayer',{width:'100%',height:'100%',playerVars:{playsinline:1,controls:1,rel:0,modestbranding:1},events:{onReady:onYouTubeReady,onStateChange:onYouTubeStateChange,onError:onYouTubeError,onAutoplayBlocked:onYouTubeAutoplayBlocked}})}
+function setupYouTubePlayer() {
+  if (playerState.player || !window.YT?.Player) return;
+  playerState.player = new YT.Player('youtubePlayer', {
+    width: '100%',
+    height: '100%',
+    playerVars: { playsinline: 1, controls: 1, rel: 0, modestbranding: 1 },
+    events: {
+      onReady: onYouTubeReady,
+      onStateChange: onYouTubeStateChange,
+      onError: onYouTubeError,
+      onAutoplayBlocked: onYouTubeAutoplayBlocked
+    }
+  });
+}
+
+// Gán ra window cho callback của YouTube
+window.onYouTubeIframeAPIReady = setupYouTubePlayer;
+
+// Dự phòng: Nếu YouTube API đã tải xong trước khi module kịp chạy, chủ động khởi tạo ngay
+if (window.YT && window.YT.Player) {
+  setupYouTubePlayer();
+} else {
+  // Poll nhẹ để bắt kịp ngay khi YouTube API sẵn sàng
+  const ytPoll = setInterval(() => {
+    if (window.YT && window.YT.Player) {
+      clearInterval(ytPoll);
+      setupYouTubePlayer();
+    }
+  }, 100);
+  setTimeout(() => clearInterval(ytPoll), 10000);
+}
 
 function toggleMute(){if(!playerState.ready||!playerState.player||!currentSong())return;try{if(playerState.volume===0){playerState.player.unMute();playerState.muted=false}else{playerState.player.mute();playerState.muted=true}updatePlayerUI()}catch(e){}}
 function setPlayerVolume(v){if(!playerState.ready||!playerState.player)return;const n=Math.max(0,Math.min(100,Number(v)||0));playerState.volume=n;playerState.muted=n===0;try{if(n===0){playerState.player.setVolume(0);playerState.player.mute()}else{playerState.player.unMute();playerState.player.setVolume(n)}}catch(e){}updatePlayerUI()}
