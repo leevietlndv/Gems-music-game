@@ -161,6 +161,16 @@ async function initDatabase() {
     )
   `);
 
+  // Theme System Phase 3C: lựa chọn giao diện cá nhân, tách biệt khỏi users.
+  // Không có FK để tránh phụ thuộc thứ tự đăng ký/ghi nhận Telegram user.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_theme_preferences (
+      telegram_id TEXT PRIMARY KEY,
+      theme_id TEXT NOT NULL CHECK (theme_id IN ('default', 'cyber')),
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS admin_users (
       telegram_id TEXT PRIMARY KEY,
@@ -1589,6 +1599,87 @@ const userLimiter = rateLimit({
   message: { success: false, message: 'Bạn đã gửi quá nhiều yêu cầu, vui lòng thử lại sau.' }
 });
 app.use('/api/', userLimiter);
+
+// ==================== THEME SYSTEM PHASE 3C ====================
+// Telegram ID luôn được lấy từ initData đã xác minh, không nhận ID từ client.
+// Theme mặc định giữ nguyên giao diện Cyber HUD hiện tại nếu chưa có lựa chọn.
+const DEFAULT_USER_THEME = 'cyber';
+const ALLOWED_USER_THEMES = new Set(['default', 'cyber']);
+
+app.post('/api/user/theme/read', async (req, res) => {
+  const auth = validateTelegramInitData(req.body?.initData || '');
+  if (!auth.valid) {
+    return res.status(401).json({
+      success: false,
+      message: `Xác thực Telegram thất bại: ${auth.message}`
+    });
+  }
+
+  const telegramId = String(auth.user.id);
+  try {
+    const result = await pool.query(`
+      SELECT theme_id
+      FROM user_theme_preferences
+      WHERE telegram_id = $1
+      LIMIT 1
+    `, [telegramId]);
+
+    return res.json({
+      success: true,
+      themeId: result.rows[0]?.theme_id || DEFAULT_USER_THEME
+    });
+  } catch (error) {
+    console.error('❌ Không thể đọc Theme preference:', error.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Không thể tải giao diện đã lưu.'
+    });
+  }
+});
+
+app.post('/api/user/theme/save', async (req, res) => {
+  const auth = validateTelegramInitData(req.body?.initData || '');
+  if (!auth.valid) {
+    return res.status(401).json({
+      success: false,
+      message: `Xác thực Telegram thất bại: ${auth.message}`
+    });
+  }
+
+  const themeId = String(req.body?.themeId || '').trim();
+  if (!ALLOWED_USER_THEMES.has(themeId)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Theme không hợp lệ.'
+    });
+  }
+
+  const telegramId = String(auth.user.id);
+  try {
+    const result = await pool.query(`
+      INSERT INTO user_theme_preferences (telegram_id, theme_id, updated_at)
+      VALUES ($1, $2, CURRENT_TIMESTAMP)
+      ON CONFLICT (telegram_id)
+      DO UPDATE SET
+        theme_id = EXCLUDED.theme_id,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING theme_id
+    `, [telegramId, themeId]);
+
+    return res.json({
+      success: true,
+      themeId: result.rows[0].theme_id,
+      message: 'Đã lưu giao diện.'
+    });
+  } catch (error) {
+    console.error('❌ Không thể lưu Theme preference:', error.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Không thể lưu giao diện. Vui lòng thử lại.'
+    });
+  }
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 

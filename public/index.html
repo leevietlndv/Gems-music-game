@@ -2521,6 +2521,17 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
       }
     }
 
+    // Theme System Phase 3C: cầu nối tối thiểu để Theme UI dùng đúng initData
+    // đã được module hiện tại quản lý; không đọc ID từ initDataUnsafe để ghi DB.
+    window.GemsRadioThemeBridge = {
+      onReady: onTelegramReady,
+      getInitData: function () {
+        resolveTelegramInitData();
+        return telegramInitData;
+      }
+    };
+    window.dispatchEvent(new Event('gems-radio-theme-bridge-ready'));
+
     if (tg) {
       try { tg.ready(flushTelegramReadyWaiters); } catch (e) { console.warn('tg.ready(cb) lỗi:', e); }
       // ready() có thể không nhận callback trên một số phiên bản — poll an toàn
@@ -6013,7 +6024,7 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
   <div id="gemsThemeOverlay" class="gems-theme-overlay" hidden>
     <section class="gems-theme-dialog" role="dialog" aria-modal="true" aria-labelledby="gemsThemeTitle">
       <h2 id="gemsThemeTitle">🎨 Giao diện GEMS Radio</h2>
-      <p class="gems-theme-help">Chọn giao diện để xem trước ngay lập tức. Thay đổi ở Phase 3B chỉ có hiệu lực trong lần mở trang này.</p>
+      <p class="gems-theme-help">Chọn giao diện để xem trước ngay lập tức. Chỉ khi nhấn Lưu, lựa chọn mới được ghi vào tài khoản Telegram của bạn.</p>
       <div class="gems-theme-options">
         <button class="gems-theme-option" type="button" data-theme-preview="default" aria-pressed="false">
           <span class="gems-theme-swatch" style="background:linear-gradient(135deg,#1c2333 50%,#35445c 50%)"></span>
@@ -6025,6 +6036,7 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
         </button>
       </div>
       <div class="gems-theme-dialog-actions">
+        <button id="gemsThemeSave" type="button">Lưu</button>
         <button class="gems-theme-rollback" id="gemsThemeRollback" type="button">↶ Hoàn tác</button>
         <button id="gemsThemeClose" type="button">Đóng</button>
       </div>
@@ -6040,27 +6052,49 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
   var openButton = document.getElementById('themeSettingsOpen');
   var closeButton = document.getElementById('gemsThemeClose');
   var rollbackButton = document.getElementById('gemsThemeRollback');
+  var saveButton = document.getElementById('gemsThemeSave');
   var status = document.getElementById('gemsThemeStatus');
   var options = Array.prototype.slice.call(document.querySelectorAll('[data-theme-preview]'));
-  if (!body || !overlay || !openButton || !closeButton || !rollbackButton || !status || !options.length) return;
-
-  // Phase 3B intentionally has no persistence: the entry theme is the rollback point.
-  var entryTheme = normalizeTheme(body.getAttribute('data-theme'));
-  var previewTheme = entryTheme;
-  var isOpen = false;
+  if (!body || !overlay || !openButton || !closeButton || !rollbackButton || !saveButton || !status || !options.length) return;
 
   function normalizeTheme(value) {
-    return value === 'default' || value === 'cyber' ? value : 'default';
+    return value === 'default' || value === 'cyber' ? value : 'cyber';
   }
-  function applyTheme(theme) {
+
+  // Giữ Cyber HUD làm fallback để không đổi giao diện các tài khoản chưa có bản ghi.
+  var savedTheme = normalizeTheme(body.getAttribute('data-theme'));
+  var previewTheme = savedTheme;
+  var previewChanged = false;
+  var isOpen = false;
+  var isSaving = false;
+  var authReady = false;
+  var loadStarted = false;
+  var loadFinished = false;
+
+  function themeLabel(theme) {
+    return theme === 'cyber' ? 'Cyber HUD' : 'Default';
+  }
+
+  function setBusy(busy) {
+    isSaving = !!busy;
+    saveButton.disabled = isSaving || !authReady || !loadFinished;
+    options.forEach(function (button) { button.disabled = isSaving; });
+    rollbackButton.disabled = isSaving;
+    closeButton.disabled = isSaving;
+  }
+
+  function applyTheme(theme, updateStatus) {
     var safeTheme = normalizeTheme(theme);
     body.setAttribute('data-theme', safeTheme);
     previewTheme = safeTheme;
     options.forEach(function (button) {
       button.setAttribute('aria-pressed', button.getAttribute('data-theme-preview') === safeTheme ? 'true' : 'false');
     });
-    status.textContent = safeTheme === 'cyber' ? 'Đang xem trước: Cyber HUD' : 'Đang xem trước: Default';
+    if (updateStatus !== false) {
+      status.textContent = 'Đang xem trước: ' + themeLabel(safeTheme) + '. Chưa lưu.';
+    }
   }
+
   function openDialog() {
     var navbarDropdown = document.getElementById('appNavbarDropdown');
     var navbarToggle = document.getElementById('appNavbarToggle');
@@ -6069,30 +6103,114 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
       navbarToggle.setAttribute('aria-expanded', 'false');
       navbarToggle.setAttribute('aria-label', 'Mở menu');
     }
-    entryTheme = normalizeTheme(body.getAttribute('data-theme'));
-    previewTheme = entryTheme;
+    previewTheme = savedTheme;
+    previewChanged = false;
     isOpen = true;
     overlay.hidden = false;
-    applyTheme(previewTheme);
+    applyTheme(savedTheme, false);
+    if (!authReady) {
+      status.textContent = 'Hãy mở GEMS Radio bên trong Telegram để tải và lưu Theme cá nhân.';
+    } else {
+      status.textContent = 'Theme đã lưu: ' + themeLabel(savedTheme) + '. Bạn có thể xem trước trước khi lưu.';
+    }
+    setBusy(false);
     closeButton.focus();
   }
+
   function closeDialog(shouldRollback) {
-    if (!isOpen) return;
-    if (shouldRollback) applyTheme(entryTheme);
+    if (!isOpen || isSaving) return;
+    if (shouldRollback) {
+      applyTheme(savedTheme, false);
+      previewChanged = false;
+    }
     overlay.hidden = true;
     isOpen = false;
     openButton.focus();
   }
 
+  async function loadSavedTheme(initData) {
+    if (loadStarted || !initData) return;
+    loadStarted = true;
+    authReady = true;
+    setBusy(false);
+    try {
+      var response = await fetch('/api/user/theme/read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initData: initData })
+      });
+      var data = await response.json().catch(function () { return {}; });
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || ('Không thể tải Theme (HTTP ' + response.status + ').'));
+      }
+      savedTheme = normalizeTheme(data.themeId);
+      if (!isOpen || !previewChanged) applyTheme(savedTheme, false);
+      if (isOpen) {
+        status.textContent = previewChanged
+          ? 'Theme đã lưu: ' + themeLabel(savedTheme) + '. Đang xem trước: ' + themeLabel(previewTheme) + ' (chưa lưu).'
+          : 'Theme đã lưu: ' + themeLabel(savedTheme) + '. Bạn có thể xem trước trước khi lưu.';
+      }
+    } catch (error) {
+      console.error('❌ Theme System: không thể tải Theme đã lưu:', error);
+      if (isOpen) status.textContent = (error && error.message) || 'Không thể tải Theme đã lưu.';
+    } finally {
+      loadFinished = true;
+      setBusy(false);
+    }
+  }
+
+  async function saveTheme() {
+    if (isSaving) return;
+    var bridge = window.GemsRadioThemeBridge;
+    var initData = bridge && bridge.getInitData ? bridge.getInitData() : '';
+    if (!initData) {
+      status.textContent = 'Không thể lưu: hãy mở GEMS Radio bên trong Telegram.';
+      return;
+    }
+
+    setBusy(true);
+    status.textContent = 'Đang lưu giao diện…';
+    try {
+      var response = await fetch('/api/user/theme/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initData: initData, themeId: previewTheme })
+      });
+      var data = await response.json().catch(function () { return {}; });
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || ('Không thể lưu Theme (HTTP ' + response.status + ').'));
+      }
+
+      savedTheme = normalizeTheme(data.themeId || previewTheme);
+      previewChanged = false;
+      applyTheme(savedTheme, false);
+      status.textContent = 'Đã lưu giao diện ' + themeLabel(savedTheme) + '.';
+      overlay.hidden = true;
+      isOpen = false;
+      openButton.focus();
+    } catch (error) {
+      console.error('❌ Theme System: lưu Theme thất bại:', error);
+      status.textContent = (error && error.message) || 'Không thể lưu giao diện. Vui lòng thử lại.';
+    } finally {
+      setBusy(false);
+    }
+  }
+
   openButton.addEventListener('click', openDialog);
   options.forEach(function (button) {
     button.addEventListener('click', function () {
-      if (!isOpen) return;
+      if (!isOpen || isSaving) return;
       applyTheme(button.getAttribute('data-theme-preview'));
+      previewChanged = previewTheme !== savedTheme;
     });
   });
+  saveButton.addEventListener('click', saveTheme);
   rollbackButton.addEventListener('click', function () {
-    if (isOpen) applyTheme(entryTheme);
+    if (isOpen && !isSaving) {
+      applyTheme(savedTheme, false);
+      previewChanged = false;
+    }
+    if (isOpen) status.textContent = 'Đã hoàn tác về Theme đã lưu: ' + themeLabel(savedTheme) + '.';
   });
   closeButton.addEventListener('click', function () { closeDialog(true); });
   overlay.addEventListener('click', function (event) {
@@ -6101,6 +6219,18 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
   document.addEventListener('keydown', function (event) {
     if (event.key === 'Escape' && isOpen) closeDialog(true);
   });
+
+  function connectAuthBridge() {
+    var bridge = window.GemsRadioThemeBridge;
+    if (!bridge || typeof bridge.onReady !== 'function') return;
+    bridge.onReady(function () {
+      var initData = bridge.getInitData();
+      if (initData) loadSavedTheme(initData);
+    });
+  }
+
+  if (window.GemsRadioThemeBridge) connectAuthBridge();
+  else window.addEventListener('gems-radio-theme-bridge-ready', connectAuthBridge, { once: true });
 })();
 </script>
 </body>
