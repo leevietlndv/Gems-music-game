@@ -2171,6 +2171,48 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
 
   
 </style>
+
+<style id="theme-preview-ui-styles">
+  /* GEMS RADIO · THEME SYSTEM PHASE 3B — preview controls only */
+  .gems-theme-overlay[hidden] { display: none !important; }
+  .gems-theme-overlay {
+    position: fixed; inset: 0; z-index: 10050;
+    display: flex; align-items: center; justify-content: center;
+    padding: 18px; background: rgba(0,0,0,.68);
+    backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+  }
+  .gems-theme-dialog {
+    width: min(100%, 390px); max-height: min(82vh, 620px); overflow: auto;
+    padding: 18px; border: 1px solid rgba(130,160,190,.35); border-radius: 16px;
+    background: #202b3d; color: #f3f7ff; box-shadow: 0 18px 55px rgba(0,0,0,.48);
+  }
+  .gems-theme-dialog h2 { margin: 0 0 7px; font-size: 19px; }
+  .gems-theme-help { margin: 0 0 16px; color: #b9c7d9; font-size: 13px; line-height: 1.45; }
+  .gems-theme-options { display: grid; gap: 10px; }
+  .gems-theme-option {
+    width: 100%; min-height: 58px; display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px; border: 1px solid #53647a; border-radius: 11px;
+    background: #29384d; color: inherit; text-align: left; cursor: pointer;
+  }
+  .gems-theme-option[aria-pressed="true"] { border: 2px solid #35c9e8; padding: 9px 11px; background: #244454; }
+  .gems-theme-swatch { width: 30px; height: 30px; flex: 0 0 30px; border-radius: 9px; border: 1px solid rgba(255,255,255,.35); }
+  .gems-theme-option strong { display: block; font-size: 14px; }
+  .gems-theme-option small { display: block; margin-top: 3px; color: #c1ccda; font-size: 11px; }
+  .gems-theme-dialog-actions { display: flex; gap: 9px; margin-top: 17px; }
+  .gems-theme-dialog-actions button {
+    flex: 1; min-height: 40px; border: 1px solid #64758b; border-radius: 9px;
+    background: #33445b; color: #fff; font-weight: 600; cursor: pointer;
+  }
+  .gems-theme-dialog-actions .gems-theme-rollback { background: #172333; }
+  .gems-theme-status { min-height: 17px; margin-top: 11px; color: #9fdff0; font-size: 12px; }
+  body[data-theme="cyber"] .gems-theme-dialog { border-color: rgba(0,229,255,.5); box-shadow: 0 0 28px rgba(0,229,255,.12), 0 18px 55px rgba(0,0,0,.48); }
+  body[data-theme="cyber"] .gems-theme-option[aria-pressed="true"] { border-color: #00e5ff; background: rgba(0,100,125,.35); }
+  @media (max-width: 420px) {
+    .gems-theme-overlay { padding: 12px; }
+    .gems-theme-dialog { padding: 15px; }
+  }
+</style>
+
 </head>
 
 <body data-theme="cyber">
@@ -2197,6 +2239,7 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
       <button class="app-navbar-item" type="button" role="menuitem" data-nav-target="songList">📋 Danh sách bài hát</button>
       <a class="app-navbar-item" href="/myplaylist.html" role="menuitem">🎧 My Playlist</a>
       <button class="app-navbar-item" type="button" role="menuitem" data-nav-action="copyTelegramId">🔑 Lấy Telegram ID</button>
+      <button class="app-navbar-item" type="button" role="menuitem" id="themeSettingsOpen">🎨 Giao diện</button>
 
       <div class="app-navbar-divider"></div>
       <div class="app-navbar-section-label admin-only">Admin</div>
@@ -5965,6 +6008,101 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
     setConnectionStatus('⏳ Đang kết nối máy chủ...');
     socket.connect();
   </script>
+
+  <!-- Theme preview dialog: preview only; no server write in Phase 3B. -->
+  <div id="gemsThemeOverlay" class="gems-theme-overlay" hidden>
+    <section class="gems-theme-dialog" role="dialog" aria-modal="true" aria-labelledby="gemsThemeTitle">
+      <h2 id="gemsThemeTitle">🎨 Giao diện GEMS Radio</h2>
+      <p class="gems-theme-help">Chọn giao diện để xem trước ngay lập tức. Thay đổi ở Phase 3B chỉ có hiệu lực trong lần mở trang này.</p>
+      <div class="gems-theme-options">
+        <button class="gems-theme-option" type="button" data-theme-preview="default" aria-pressed="false">
+          <span class="gems-theme-swatch" style="background:linear-gradient(135deg,#1c2333 50%,#35445c 50%)"></span>
+          <span><strong>Default</strong><small>Giao diện GEMS Radio nguyên bản</small></span>
+        </button>
+        <button class="gems-theme-option" type="button" data-theme-preview="cyber" aria-pressed="false">
+          <span class="gems-theme-swatch" style="background:linear-gradient(135deg,#071521 50%,#00bcd4 50%)"></span>
+          <span><strong>Cyber HUD</strong><small>Giao diện HUD hiện tại</small></span>
+        </button>
+      </div>
+      <div class="gems-theme-dialog-actions">
+        <button class="gems-theme-rollback" id="gemsThemeRollback" type="button">↶ Hoàn tác</button>
+        <button id="gemsThemeClose" type="button">Đóng</button>
+      </div>
+      <p class="gems-theme-status" id="gemsThemeStatus" aria-live="polite"></p>
+    </section>
+  </div>
+
+  <script id="gems-theme-preview-engine">
+(function () {
+  'use strict';
+  var body = document.body;
+  var overlay = document.getElementById('gemsThemeOverlay');
+  var openButton = document.getElementById('themeSettingsOpen');
+  var closeButton = document.getElementById('gemsThemeClose');
+  var rollbackButton = document.getElementById('gemsThemeRollback');
+  var status = document.getElementById('gemsThemeStatus');
+  var options = Array.prototype.slice.call(document.querySelectorAll('[data-theme-preview]'));
+  if (!body || !overlay || !openButton || !closeButton || !rollbackButton || !status || !options.length) return;
+
+  // Phase 3B intentionally has no persistence: the entry theme is the rollback point.
+  var entryTheme = normalizeTheme(body.getAttribute('data-theme'));
+  var previewTheme = entryTheme;
+  var isOpen = false;
+
+  function normalizeTheme(value) {
+    return value === 'default' || value === 'cyber' ? value : 'default';
+  }
+  function applyTheme(theme) {
+    var safeTheme = normalizeTheme(theme);
+    body.setAttribute('data-theme', safeTheme);
+    previewTheme = safeTheme;
+    options.forEach(function (button) {
+      button.setAttribute('aria-pressed', button.getAttribute('data-theme-preview') === safeTheme ? 'true' : 'false');
+    });
+    status.textContent = safeTheme === 'cyber' ? 'Đang xem trước: Cyber HUD' : 'Đang xem trước: Default';
+  }
+  function openDialog() {
+    var navbarDropdown = document.getElementById('appNavbarDropdown');
+    var navbarToggle = document.getElementById('appNavbarToggle');
+    if (navbarDropdown) navbarDropdown.classList.remove('open');
+    if (navbarToggle) {
+      navbarToggle.setAttribute('aria-expanded', 'false');
+      navbarToggle.setAttribute('aria-label', 'Mở menu');
+    }
+    entryTheme = normalizeTheme(body.getAttribute('data-theme'));
+    previewTheme = entryTheme;
+    isOpen = true;
+    overlay.hidden = false;
+    applyTheme(previewTheme);
+    closeButton.focus();
+  }
+  function closeDialog(shouldRollback) {
+    if (!isOpen) return;
+    if (shouldRollback) applyTheme(entryTheme);
+    overlay.hidden = true;
+    isOpen = false;
+    openButton.focus();
+  }
+
+  openButton.addEventListener('click', openDialog);
+  options.forEach(function (button) {
+    button.addEventListener('click', function () {
+      if (!isOpen) return;
+      applyTheme(button.getAttribute('data-theme-preview'));
+    });
+  });
+  rollbackButton.addEventListener('click', function () {
+    if (isOpen) applyTheme(entryTheme);
+  });
+  closeButton.addEventListener('click', function () { closeDialog(true); });
+  overlay.addEventListener('click', function (event) {
+    if (event.target === overlay) closeDialog(true);
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && isOpen) closeDialog(true);
+  });
+})();
+</script>
 </body>
 
 </html>
