@@ -1666,6 +1666,12 @@ app.post('/api/user/theme/save', async (req, res) => {
       RETURNING theme_id
     `, [telegramId, themeId]);
 
+    // Phase 3D: chỉ phát realtime sau khi DB xác nhận lưu thành công.
+    // Room được gắn với Telegram ID lấy từ initData đã xác thực, không từ client.
+    io.to(`theme:${telegramId}`).emit('userThemeUpdated', {
+      themeId: result.rows[0].theme_id
+    });
+
     return res.json({
       success: true,
       themeId: result.rows[0].theme_id,
@@ -3896,6 +3902,10 @@ io.on('connection', (socket) => {
     if (socket.authenticated === true || socketAuth.has(socket.id)) {
       removeOnlineUser(socket.id, true);
     }
+    // Phase 3D: không để socket giữ room Theme của tài khoản cũ khi re-authenticate.
+    for (const room of Array.from(socket.rooms)) {
+      if (room.startsWith('theme:')) socket.leave(room);
+    }
     socket.authenticated = false;
     socket.isAdmin = false;
     socket.adminRole = null;
@@ -3931,6 +3941,10 @@ io.on('connection', (socket) => {
     socket.isAdmin = admin;
     socket.adminRole = adminRole;
     socket.telegramId = telegramId;
+
+    // Phase 3D: room riêng để đồng bộ Theme tới mọi thiết bị của cùng Telegram ID.
+    // Chỉ tham gia sau khi initData đã được server xác thực.
+    socket.join(`theme:${telegramId}`);
 
     // Room riêng cho My Playlist của chính Telegram user này.
     // telegramId lấy từ initData đã được server xác thực.

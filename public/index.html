@@ -2561,6 +2561,14 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
     const userData = getTelegramUserData();
     const socket = io({ autoConnect: false });
 
+    // Phase 3D: chuyển sự kiện Theme từ Socket.IO hiện có sang Theme controller.
+    // Không tạo socket mới; server chỉ gửi sự kiện trong room của Telegram ID đã xác thực.
+    socket.on('userThemeUpdated', (payload = {}) => {
+      window.dispatchEvent(new CustomEvent('gems-radio-user-theme-updated', {
+        detail: payload
+      }));
+    });
+
     const deviceInfo = {
       platform: tg?.platform || '',
       userAgent: navigator.userAgent || ''
@@ -6074,6 +6082,27 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
   function themeLabel(theme) {
     return theme === 'cyber' ? 'Cyber HUD' : 'Default';
   }
+
+  // Phase 3D: nhận Theme đã lưu từ thiết bị khác cùng Telegram account.
+  // Nếu người dùng đang xem trước lựa chọn chưa lưu, giữ nguyên preview đó.
+  window.addEventListener('gems-radio-user-theme-updated', function (event) {
+    var payload = event && event.detail ? event.detail : {};
+    if (payload.themeId !== 'default' && payload.themeId !== 'cyber') return;
+
+    savedTheme = normalizeTheme(payload.themeId);
+
+    if (isOpen && previewChanged) {
+      status.textContent = 'Theme đã lưu trên thiết bị khác: ' + themeLabel(savedTheme) +
+        '. Đang xem trước: ' + themeLabel(previewTheme) + ' (chưa lưu).';
+      return;
+    }
+
+    previewChanged = false;
+    applyTheme(savedTheme, false);
+    if (isOpen) {
+      status.textContent = 'Theme vừa được cập nhật từ thiết bị khác: ' + themeLabel(savedTheme) + '.';
+    }
+  });
 
   function setBusy(busy) {
     isSaving = !!busy;
