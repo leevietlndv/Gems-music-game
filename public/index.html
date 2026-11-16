@@ -2172,6 +2172,202 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
   
 </style>
 
+
+<style id="theme-christmas-colors">
+/* =========================================================
+   GEMS RADIO · CHRISTMAS CLASSIC · PHASE 4B.1
+   Color-only presentation layer. No layout or behavior changes.
+   Activate with: body[data-theme="christmas"]
+   ========================================================= */
+body[data-theme="christmas"] {
+  color-scheme: light;
+  --gems-xmas-cream: #F7F0E5;
+  --gems-xmas-card: #FFFDF8;
+  --gems-xmas-green: #176B45;
+  --gems-xmas-red: #8B1E2D;
+  --gems-xmas-gold: #D4AF5A;
+  --gems-xmas-text: #332B24;
+  --gems-xmas-muted: #74685B;
+  --gems-xmas-border: #E5D8C5;
+  --gems-xmas-soft: #F1E7D8;
+  background: var(--gems-xmas-cream);
+  color: var(--gems-xmas-text);
+}
+body[data-theme="christmas"] .header h1 { color: var(--gems-xmas-green); }
+body[data-theme="christmas"] #playerCard { border-color: var(--gems-xmas-gold) !important; }
+body[data-theme="christmas"] #winnerUser { color: var(--gems-xmas-green) !important; }
+body[data-theme="christmas"] #playerCard .player-label { color: var(--gems-xmas-muted); }
+body[data-theme="christmas"] .app-navbar-bar,
+body[data-theme="christmas"] .online-bar,
+body[data-theme="christmas"] .script-settings-bar,
+body[data-theme="christmas"] .script-settings-details,
+body[data-theme="christmas"] .card,
+body[data-theme="christmas"] .online-details,
+body[data-theme="christmas"] .blacklist-details,
+body[data-theme="christmas"] .playlist-picker-card {
+  background: var(--gems-xmas-card);
+  color: var(--gems-xmas-text);
+  border: 1px solid var(--gems-xmas-border);
+  box-shadow: 0 3px 12px rgba(77, 55, 31, .08);
+}
+body[data-theme="christmas"] .app-navbar-title,
+body[data-theme="christmas"] .card-title,
+body[data-theme="christmas"] #onlineUserCount,
+body[data-theme="christmas"] .online-detail-title,
+body[data-theme="christmas"] .player-label,
+body[data-theme="christmas"] .health-title,
+body[data-theme="christmas"] .action-label,
+body[data-theme="christmas"] .online-summary,
+body[data-theme="christmas"] .blacklist-summary,
+body[data-theme="christmas"] .script-settings-summary,
+body[data-theme="christmas"] .script-settings-field label,
+body[data-theme="christmas"] .blacklist-title,
+body[data-theme="christmas"] .song-title,
+body[data-theme="christmas"] .playback-time-row,
+body[data-theme="christmas"] .health-status-countdown {
+  color: var(--gems-xmas-text);
+}
+body[data-theme="christmas"] .app-navbar-toggle,
+body[data-theme="christmas"] .script-settings-edit,
+body[data-theme="christmas"] .online-details-toggle,
+body[data-theme="christmas"] .blacklist-details-toggle,
+body[data-theme="christmas"] .btn-reset-icon,
+body[data-theme="christmas"] .btn-playback-control,
+body[data-theme="christmas"] .btn-toggle,
+body[data-theme="christmas"] .btn-auto-play,
+body[data-theme="christmas"] .btn-audio-toggle {
+  background: var(--gems-xmas-soft);
+  color: var(--gems-xmas-green);
+  border: 1px solid var(--gems-xmas-border);
+}
+body[data-theme="christmas"] .app-navbar-toggle:hover,
+body[data-theme="christmas"] .script-settings-edit:hover,
+body[data-theme="christmas"] .online-details-toggle:hover,
+body[data-theme="christmas"] .blacklist-details-toggle:hover,
+body[data-theme="christmas"] .btn-reset-icon:hover,
+body[data-theme="christmas"] .btn-playback-control:hover {
+  background: #E9DDCA;
+}
+body[data-theme="christmas"] .app-navbar-dropdown {
+  background: var(--gems-xmas-card);
+  border: 1px solid var(--gems-xmas-border);
+  box-shadow: 0 10px 28px rgba(77, 55, 31, .18);
+}
+body[data-theme="christmas"] .app-navbar-item { color: var(--gems-xmas-text); }
+body[data-theme="christmas"] .app-navbar-item:hover { background: var(--gems-xmas-soft); }
+body[data-theme="christmas"] .app-navbar-divider { background: var(--gems-xmas-border); }
+body[data-theme="christmas"] .app-navbar-section-label,
+body[data-theme="christmas"] .script-settings-unit,
+body[data-theme="christmas"] .online-empty,
+body[data-theme="christmas"] .blacklist-empty,
+body[data-theme="christmas"] .playback-time-duration,
+body[data-theme="christmas"] #volumeValue,
+body[data-theme="christmas"] .action-label { color: var(--gems-xmas-muted); }
+body[data-theme="christmas"] .app-navbar-session-timer,
+body[data-theme="christmas"] .form-countdown { color: var(--gems-xmas-green); }
+body[data-theme="christmas"] .script-settings-input,
+body[data-theme="christmas"] input[type="text"],
+body[data-theme="christmas"] .playlist-picker-create input {
+  background: #FFFEFB;
+  color: var(--gems-xmas-text);
+  border: 1px solid var(--gems-xmas-border);
+}
+body[data-theme="christmas"] .script-settings-input:focus,
+body[data-theme="christmas"] input[type="text"]:focus,
+body[data-theme="christmas"] .playlist-picker-create input:focus {
+  border-color: var(--gems-xmas-green);
+  outline-color: rgba(23, 107, 69, .22);
+}
+body[data-theme="christmas"] button:focus-visible,
+body[data-theme="christmas"] input:focus-visible,
+body[data-theme="christmas"] a:focus-visible {
+  outline: 2px solid var(--gems-xmas-gold);
+  outline-offset: 2px;
+}
+body[data-theme="christmas"] .btn-submit,
+body[data-theme="christmas"] .playlist-picker-create button,
+body[data-theme="christmas"] .playlist-picker-option,
+body[data-theme="christmas"] .script-settings-confirm,
+body[data-theme="christmas"] .btn-unblock-song,
+body[data-theme="christmas"] .vote-button.like,
+body[data-theme="christmas"] .btn-audio-toggle.enabled {
+  background: var(--gems-xmas-green);
+  color: #FFFDF8;
+}
+body[data-theme="christmas"] .script-settings-confirm:hover,
+body[data-theme="christmas"] .btn-unblock-song:hover,
+body[data-theme="christmas"] .playlist-picker-option:hover { background: #105638; }
+body[data-theme="christmas"] .script-settings-reset,
+body[data-theme="christmas"] .btn-playback-sync { background: var(--gems-xmas-gold); color: #332B24; }
+body[data-theme="christmas"] .script-settings-toggle.active,
+body[data-theme="christmas"] .form-switch input:checked + .form-switch-track { background: var(--gems-xmas-green); }
+body[data-theme="christmas"] .status-badge { background: #E4F0E7; color: var(--gems-xmas-green); }
+body[data-theme="christmas"] .status-badge.closed { background: #F6E4E4; color: var(--gems-xmas-red); }
+body[data-theme="christmas"] .status-badge.offline { background: #EEE9E1; color: var(--gems-xmas-muted); }
+body[data-theme="christmas"] .online-user-chip { background: #EAF2EB; color: var(--gems-xmas-green); }
+body[data-theme="christmas"] .blacklist-bar,
+body[data-theme="christmas"] .blacklist-details { background: #FBF3F0; border-color: #E8C9C5; }
+body[data-theme="christmas"] .blacklist-summary strong,
+body[data-theme="christmas"] .blacklist-detail-title,
+body[data-theme="christmas"] .blacklist-title { color: var(--gems-xmas-red); }
+body[data-theme="christmas"] .blacklist-item,
+body[data-theme="christmas"] .health-box,
+body[data-theme="christmas"] .playback-timeline,
+body[data-theme="christmas"] .audio-controls { background: #F1E9DD; color: var(--gems-xmas-text); }
+body[data-theme="christmas"] .blacklist-user-reason,
+body[data-theme="christmas"] .action-user { color: var(--gems-xmas-green); }
+body[data-theme="christmas"] .song-item { background: #FFFCF6; border-color: var(--gems-xmas-border); color: var(--gems-xmas-text); }
+body[data-theme="christmas"] .song-item.is-playing { border-color: var(--gems-xmas-gold); }
+body[data-theme="christmas"] .song-thumb { background: #E8DED0; }
+body[data-theme="christmas"] .song-thumb-play { background: var(--gems-xmas-green); color: #fff; }
+body[data-theme="christmas"] .song-index,
+body[data-theme="christmas"] .song-sender,
+body[data-theme="christmas"] #playerTitleText,
+body[data-theme="christmas"] .playback-time-current { color: var(--gems-xmas-red); }
+body[data-theme="christmas"] .song-action-btn { color: var(--gems-xmas-green); }
+body[data-theme="christmas"] .playlist-picker { background: rgba(51, 43, 36, .55); }
+body[data-theme="christmas"] .playlist-picker-title { color: var(--gems-xmas-text); }
+body[data-theme="christmas"] .playlist-picker-empty { color: var(--gems-xmas-muted); }
+body[data-theme="christmas"] .playlist-picker-cancel { background: #E8DED0; color: var(--gems-xmas-text); }
+body[data-theme="christmas"] .audio-notice.unmuted { background: #E4F0E7; color: var(--gems-xmas-green); }
+body[data-theme="christmas"] .audio-notice.muted { background: #F3E8D8; color: #76521B; }
+body[data-theme="christmas"] .health-segment { background: #D9CDBB; }
+body[data-theme="christmas"] .health-segment.active:nth-child(1),
+body[data-theme="christmas"] .vote-button.dislike { background: var(--gems-xmas-red); }
+body[data-theme="christmas"] .health-segment.active:nth-child(2) { background: #B65A3C; }
+body[data-theme="christmas"] .health-segment.active:nth-child(3) { background: #C58A36; }
+body[data-theme="christmas"] .health-segment.active:nth-child(4) { background: #8A9A43; }
+body[data-theme="christmas"] .health-segment.active:nth-child(5) { background: var(--gems-xmas-green); }
+body[data-theme="christmas"] .vote-button { color: #fff; }
+body[data-theme="christmas"] #playbackTimeline { accent-color: var(--gems-xmas-green); }
+body[data-theme="christmas"] .btn-playback-sync:hover { background: #C49B43; }
+body[data-theme="christmas"] .btn-audio-toggle { background: #D9CDBB; color: var(--gems-xmas-text); }
+body[data-theme="christmas"] .am-luong { background-color: var(--gems-xmas-green); }
+body[data-theme="christmas"] #volumeSlider { accent-color: var(--gems-xmas-green); }
+body[data-theme="christmas"] #volumeSlider::-webkit-slider-thumb { background: var(--gems-xmas-green); }
+body[data-theme="christmas"] #volumeSlider::-moz-range-thumb { background: var(--gems-xmas-green); }
+body[data-theme="christmas"] .gems-theme-dialog {
+  background: var(--gems-xmas-card);
+  color: var(--gems-xmas-text);
+  border: 1px solid var(--gems-xmas-border);
+  box-shadow: 0 18px 55px rgba(77, 55, 31, .22);
+}
+body[data-theme="christmas"] .gems-theme-dialog h2,
+body[data-theme="christmas"] .gems-theme-option strong { color: var(--gems-xmas-text); }
+body[data-theme="christmas"] .gems-theme-help,
+body[data-theme="christmas"] .gems-theme-option small { color: var(--gems-xmas-muted); }
+body[data-theme="christmas"] .gems-theme-option { background: #FBF6ED; border-color: var(--gems-xmas-border); color: var(--gems-xmas-text); }
+body[data-theme="christmas"] .gems-theme-option[aria-pressed="true"] { background: #EAF2EB; border-color: var(--gems-xmas-green); }
+body[data-theme="christmas"] .gems-theme-option-state { color: var(--gems-xmas-muted); }
+body[data-theme="christmas"] .gems-theme-option[aria-pressed="true"] .gems-theme-option-state { background: #DDECE1; color: var(--gems-xmas-green); }
+body[data-theme="christmas"] .gems-theme-dialog-actions #gemsThemeSave { background: var(--gems-xmas-green); border-color: var(--gems-xmas-green); color: #fff; }
+body[data-theme="christmas"] .gems-theme-dialog-actions .gems-theme-rollback { background: #EEE6DA; color: var(--gems-xmas-text); }
+body[data-theme="christmas"] .gems-theme-status { color: var(--gems-xmas-muted); }
+body[data-theme="christmas"] .gems-theme-status[data-state="error"] { color: var(--gems-xmas-red); }
+body[data-theme="christmas"] .gems-theme-status[data-state="success"] { color: var(--gems-xmas-green); }
+body[data-theme="christmas"] .gems-theme-status[data-state="saving"] { color: #8A641E; }
+</style>
+
 <style id="theme-preview-ui-styles">
   /* GEMS RADIO · THEME SYSTEM PHASE 3B — preview controls only */
   .gems-theme-overlay[hidden] { display: none !important; }
