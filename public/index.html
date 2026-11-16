@@ -1887,8 +1887,14 @@
 /* Phase 4B.3 — Snowfall: visual-only overlay, isolated to Christmas Classic. */
 #xmasSnowCanvas { display: none; }
 body[data-theme="christmas"] #xmasSnowCanvas {
+  /* Full-screen transparent overlay: explicitly reset the global wheel-canvas styling. */
   display: block; position: fixed; inset: 0; width: 100vw; height: 100vh;
   z-index: 850; pointer-events: none;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  filter: none !important;
+  margin: 0 !important;
+  background: transparent !important;
 }
 #xmasSnowToggle { display: none; }
 body[data-theme="christmas"] #xmasSnowToggle {
