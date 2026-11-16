@@ -2512,6 +2512,67 @@ body[data-theme="christmas"] #blacklistBar {
   border-radius: 10px;
   box-shadow: 0 3px 12px rgba(77, 55, 31, .08);
 }
+
+/* =========================================================
+   GEMS RADIO · CHRISTMAS CLASSIC · PHASE 4B.4
+   Balanced Frosted Ivory: translucent surfaces let the snowfall
+   remain visible while preserving readable foreground content.
+   Theme-scoped only; no DOM or application behavior changes.
+   ========================================================= */
+body[data-theme="christmas"] {
+  --gems-xmas-glass-card: rgba(255, 253, 248, .78);
+  --gems-xmas-glass-bar: rgba(255, 253, 248, .68);
+  --gems-xmas-glass-subtle: rgba(255, 253, 248, .55);
+  --gems-xmas-glass-inner: rgba(255, 252, 246, .88);
+  --gems-xmas-glass-overlay: rgba(255, 253, 248, .92);
+}
+
+/* Primary navigation and compact section bars. */
+body[data-theme="christmas"] .app-navbar-bar,
+body[data-theme="christmas"] .online-bar,
+body[data-theme="christmas"] .script-settings-bar,
+body[data-theme="christmas"] #blacklistBar {
+  background: var(--gems-xmas-glass-bar) !important;
+}
+
+/* Main cards and expanded content panels. */
+body[data-theme="christmas"] .card,
+body[data-theme="christmas"] .script-settings-details,
+body[data-theme="christmas"] .online-details,
+body[data-theme="christmas"] .blacklist-details,
+body[data-theme="christmas"] .playlist-picker-card {
+  background: var(--gems-xmas-glass-card) !important;
+}
+
+/* Inner rows retain a little more opacity so text and controls stay clear. */
+body[data-theme="christmas"] .song-item,
+body[data-theme="christmas"] .blacklist-item,
+body[data-theme="christmas"] .health-box,
+body[data-theme="christmas"] .playback-timeline,
+body[data-theme="christmas"] .audio-controls {
+  background-color: var(--gems-xmas-glass-inner) !important;
+}
+
+/* Small utility surfaces and menus are more opaque for legibility. */
+body[data-theme="christmas"] .app-navbar-dropdown,
+body[data-theme="christmas"] .gems-theme-dialog {
+  background: var(--gems-xmas-glass-overlay) !important;
+}
+body[data-theme="christmas"] .script-settings-input,
+body[data-theme="christmas"] input[type="text"],
+body[data-theme="christmas"] .playlist-picker-create input {
+  background: var(--gems-xmas-glass-overlay) !important;
+}
+
+/* Less transparency on narrow screens keeps dense mobile content readable. */
+@media (max-width: 600px) {
+  body[data-theme="christmas"] {
+    --gems-xmas-glass-card: rgba(255, 253, 248, .84);
+    --gems-xmas-glass-bar: rgba(255, 253, 248, .76);
+    --gems-xmas-glass-subtle: rgba(255, 253, 248, .64);
+    --gems-xmas-glass-inner: rgba(255, 252, 246, .92);
+  }
+}
 </style>
 
 <style id="theme-preview-ui-styles">
