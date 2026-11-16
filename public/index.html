@@ -2366,6 +2366,18 @@ body[data-theme="christmas"] .gems-theme-status { color: var(--gems-xmas-muted);
 body[data-theme="christmas"] .gems-theme-status[data-state="error"] { color: var(--gems-xmas-red); }
 body[data-theme="christmas"] .gems-theme-status[data-state="success"] { color: var(--gems-xmas-green); }
 body[data-theme="christmas"] .gems-theme-status[data-state="saving"] { color: #8A641E; }
+
+/* Phase 4B.1.1 — targeted contrast corrections reported during TEST. */
+body[data-theme="christmas"] #volumeValue {
+  color: #FFFDF8;
+}
+body[data-theme="christmas"] #btnAutoPlay svg {
+  color: #FFFDF8;
+}
+body[data-theme="christmas"] .song-sender-label {
+  color: var(--gems-xmas-text);
+  font-weight: 700;
+}
 </style>
 
 <style id="theme-preview-ui-styles">
@@ -4226,7 +4238,7 @@ body[data-theme="christmas"] .gems-theme-status[data-state="saving"] { color: #8
                     <span class="song-index">${idx + 1}</span> - ${title}
                   </div>
                   <div class="song-sender" title="${user}">
-                    Người gửi: ${user}
+                    <span class="song-sender-label">Người gửi:</span> ${user}
                   </div>
                 </div>
 
