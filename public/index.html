@@ -2234,7 +2234,7 @@ body[data-theme="christmas"] {
   color: var(--gems-xmas-text);
 }
 body[data-theme="christmas"] .header h1 { color: var(--gems-xmas-green); }
-body[data-theme="christmas"] #playerCard { border-color: var(--gems-xmas-gold) !important; }
+body[data-theme="christmas"] #playerCard { border-color: var(--gems-xmas-green) !important; }
 body[data-theme="christmas"] #winnerUser { color: var(--gems-xmas-green) !important; }
 body[data-theme="christmas"] #playerCard .player-label { color: var(--gems-xmas-muted); }
 body[data-theme="christmas"] .app-navbar-bar,
@@ -3089,6 +3089,9 @@ body[data-theme="christmas"] .playlist-picker-create input {
       // Chuyển động icon Menu <-> Close
       if (menuMorph) menuMorph.morphTo(isOpen ? X : Menu, 'snappy');
     }
+
+    // Cầu nối để Theme Gallery có thể đóng Navbar và đồng bộ cả trạng thái Morph icon.
+    window.GemsRadioSetNavbarOpen = setNavbarOpen;
 
     function updateNavbarAdminUI() {
       const isAdmin = window.isAdmin === true;
@@ -6795,7 +6798,13 @@ body[data-theme="christmas"] .playlist-picker-create input {
     }
   }
 
-  function openDialog() {
+  function closeNavbarMenu() {
+    if (typeof window.GemsRadioSetNavbarOpen === 'function') {
+      window.GemsRadioSetNavbarOpen(false);
+      return;
+    }
+
+    // Fallback an toàn nếu Navbar bridge chưa sẵn sàng.
     var navbarDropdown = document.getElementById('appNavbarDropdown');
     var navbarToggle = document.getElementById('appNavbarToggle');
     if (navbarDropdown) navbarDropdown.classList.remove('open');
@@ -6803,6 +6812,10 @@ body[data-theme="christmas"] .playlist-picker-create input {
       navbarToggle.setAttribute('aria-expanded', 'false');
       navbarToggle.setAttribute('aria-label', 'Mở menu');
     }
+  }
+
+  function openDialog() {
+    closeNavbarMenu();
     previewTheme = savedTheme;
     previewChanged = false;
     isOpen = true;
@@ -6888,6 +6901,7 @@ body[data-theme="christmas"] .playlist-picker-create input {
       body.setAttribute('data-theme', savedTheme);
       overlay.hidden = true;
       isOpen = false;
+      closeNavbarMenu();
       openButton.focus();
     } catch (error) {
       console.error('❌ Theme System: lưu Theme thất bại:', error);
