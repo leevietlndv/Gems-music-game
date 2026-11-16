@@ -6057,6 +6057,11 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
           <span class="gems-theme-option-copy"><strong>Cyber HUD</strong><small>Giao diện HUD công nghệ</small></span>
           <span class="gems-theme-option-state" data-theme-state>—</span>
         </button>
+        <button class="gems-theme-option" type="button" data-theme-preview="christmas" aria-pressed="false">
+          <span class="gems-theme-swatch" style="background:linear-gradient(135deg,#F7F0E5 50%,#176B45 50%)"></span>
+          <span class="gems-theme-option-copy"><strong>Christmas Classic</strong><small>Giao diện Noel kem ấm</small></span>
+          <span class="gems-theme-option-state" data-theme-state>—</span>
+        </button>
       </div>
       <div class="gems-theme-dialog-actions">
         <button id="gemsThemeSave" type="button" disabled>Lưu</button>
@@ -6081,7 +6086,7 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
   if (!body || !overlay || !openButton || !closeButton || !rollbackButton || !saveButton || !status || !options.length) return;
 
   function normalizeTheme(value) {
-    return value === 'default' || value === 'cyber' ? value : 'cyber';
+    return value === 'default' || value === 'cyber' || value === 'christmas' ? value : 'cyber';
   }
 
   // Giữ nguyên fallback Cyber HUD của Phase 3D.
@@ -6095,7 +6100,9 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
   var loadFinished = false;
 
   function themeLabel(theme) {
-    return theme === 'cyber' ? 'Cyber HUD' : 'Default';
+    if (theme === 'cyber') return 'Cyber HUD';
+    if (theme === 'christmas') return 'Christmas Classic';
+    return 'Default';
   }
 
   function setStatus(message, state) {
@@ -6126,7 +6133,7 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
   // Không ghi đè một preview chưa lưu đang được người dùng chủ động xem.
   window.addEventListener('gems-radio-user-theme-updated', function (event) {
     var payload = event && event.detail ? event.detail : {};
-    if (payload.themeId !== 'default' && payload.themeId !== 'cyber') return;
+    if (payload.themeId !== 'default' && payload.themeId !== 'cyber' && payload.themeId !== 'christmas') return;
 
     savedTheme = normalizeTheme(payload.themeId);
     if (isOpen && previewChanged) {

@@ -166,9 +166,19 @@ async function initDatabase() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS user_theme_preferences (
       telegram_id TEXT PRIMARY KEY,
-      theme_id TEXT NOT NULL CHECK (theme_id IN ('default', 'cyber')),
+      theme_id TEXT NOT NULL CHECK (theme_id IN ('default', 'cyber', 'christmas')),
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
+  `);
+
+  // Phase 4A: mở rộng CHECK constraint cho Christmas Classic.
+  // Drop/add theo tên constraint mặc định của PostgreSQL để migration chạy lặp an toàn.
+  await pool.query(`
+    ALTER TABLE user_theme_preferences
+    DROP CONSTRAINT IF EXISTS user_theme_preferences_theme_id_check;
+    ALTER TABLE user_theme_preferences
+    ADD CONSTRAINT user_theme_preferences_theme_id_check
+    CHECK (theme_id IN ('default', 'cyber', 'christmas'));
   `);
 
   await pool.query(`
@@ -1604,7 +1614,7 @@ app.use('/api/', userLimiter);
 // Telegram ID luôn được lấy từ initData đã xác minh, không nhận ID từ client.
 // Theme mặc định giữ nguyên giao diện Cyber HUD hiện tại nếu chưa có lựa chọn.
 const DEFAULT_USER_THEME = 'cyber';
-const ALLOWED_USER_THEMES = new Set(['default', 'cyber']);
+const ALLOWED_USER_THEMES = new Set(['default', 'cyber', 'christmas']);
 
 app.post('/api/user/theme/read', async (req, res) => {
   const auth = validateTelegramInitData(req.body?.initData || '');
