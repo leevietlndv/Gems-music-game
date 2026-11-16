@@ -2433,6 +2433,52 @@ body[data-theme="christmas"] .song-sender-label {
   filter: none !important;
   text-shadow: none !important;
 }
+
+/* Phase 4B.2.1 — align sender label with the adjacent "Play bởi:" label. */
+body[data-theme="christmas"] #playerCard .winner-sender-label {
+  color: var(--gems-xmas-muted) !important;
+  font-size: inherit !important;
+  font-weight: 400 !important;
+  opacity: 1 !important;
+  filter: none !important;
+  text-shadow: none !important;
+}
+
+/* Online details: explicit high-contrast text on the light Christmas card. */
+body[data-theme="christmas"] #onlineDetails .online-detail-title {
+  color: var(--gems-xmas-text) !important;
+}
+body[data-theme="christmas"] #onlineDetails .online-user-chip {
+  background: #EAF2EB !important;
+  color: #145C3B !important;
+  border: 1px solid #C8DDCE;
+}
+body[data-theme="christmas"] #onlineDetails .online-connections {
+  color: var(--gems-xmas-text) !important;
+}
+body[data-theme="christmas"] #onlineDetails .online-connections strong {
+  color: var(--gems-xmas-green) !important;
+  font-weight: 800 !important;
+}
+body[data-theme="christmas"] #onlineDetails .online-empty {
+  color: var(--gems-xmas-muted) !important;
+}
+
+/* Blacklist header adopts the same warm card treatment and alignment as
+   the other working bars, while keeping its existing DOM position. */
+body[data-theme="christmas"] #blacklistBar {
+  width: 100%;
+  max-width: 480px;
+  min-height: 42px;
+  margin: 10px 0 12px;
+  padding: 8px 16px 8px 14px;
+  box-sizing: border-box;
+  background: var(--gems-xmas-card) !important;
+  color: var(--gems-xmas-text) !important;
+  border: 1px solid var(--gems-xmas-border) !important;
+  border-radius: 10px;
+  box-shadow: 0 3px 12px rgba(77, 55, 31, .08);
+}
 </style>
 
 <style id="theme-preview-ui-styles">
