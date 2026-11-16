@@ -2195,16 +2195,29 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
     background: #29384d; color: inherit; text-align: left; cursor: pointer;
   }
   .gems-theme-option[aria-pressed="true"] { border: 2px solid #35c9e8; padding: 9px 11px; background: #244454; }
-  .gems-theme-swatch { width: 30px; height: 30px; flex: 0 0 30px; border-radius: 9px; border: 1px solid rgba(255,255,255,.35); }
+  .gems-theme-option:disabled { opacity: .72; cursor: default; }
+  .gems-theme-option-copy { min-width: 0; flex: 1 1 auto; }
   .gems-theme-option strong { display: block; font-size: 14px; }
-  .gems-theme-option small { display: block; margin-top: 3px; color: #c1ccda; font-size: 11px; }
+  .gems-theme-option small { display: block; margin-top: 3px; color: #c1ccda; font-size: 11px; line-height: 1.35; }
+  .gems-theme-option-state {
+    flex: 0 0 auto; max-width: 100px; padding: 4px 7px; border-radius: 999px;
+    background: rgba(255,255,255,.09); color: #c8d4e2; font-size: 9px;
+    font-weight: 800; letter-spacing: .035em; text-align: center; white-space: nowrap;
+  }
+  .gems-theme-option[aria-pressed="true"] .gems-theme-option-state { background: rgba(53,201,232,.16); color: #8deaff; }
   .gems-theme-dialog-actions { display: flex; gap: 9px; margin-top: 17px; }
   .gems-theme-dialog-actions button {
-    flex: 1; min-height: 40px; border: 1px solid #64758b; border-radius: 9px;
+    flex: 1; min-width: 0; min-height: 40px; border: 1px solid #64758b; border-radius: 9px;
     background: #33445b; color: #fff; font-weight: 600; cursor: pointer;
   }
+  .gems-theme-dialog-actions button:disabled { opacity: .42; cursor: not-allowed; }
+  .gems-theme-dialog-actions #gemsThemeSave { background: #176b45; border-color: #31845e; }
+  .gems-theme-dialog-actions #gemsThemeSave:disabled { background: #33445b; }
   .gems-theme-dialog-actions .gems-theme-rollback { background: #172333; }
-  .gems-theme-status { min-height: 17px; margin-top: 11px; color: #9fdff0; font-size: 12px; }
+  .gems-theme-status { min-height: 34px; margin-top: 11px; color: #b9d5e8; font-size: 12px; line-height: 1.45; }
+  .gems-theme-status[data-state="error"] { color: #ff8e8e; }
+  .gems-theme-status[data-state="success"] { color: #8fe0ae; }
+  .gems-theme-status[data-state="saving"] { color: #f5d27a; }
   body[data-theme="cyber"] .gems-theme-dialog { border-color: rgba(0,229,255,.5); box-shadow: 0 0 28px rgba(0,229,255,.12), 0 18px 55px rgba(0,0,0,.48); }
   body[data-theme="cyber"] .gems-theme-option[aria-pressed="true"] { border-color: #00e5ff; background: rgba(0,100,125,.35); }
   @media (max-width: 420px) {
@@ -6036,16 +6049,18 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
       <div class="gems-theme-options">
         <button class="gems-theme-option" type="button" data-theme-preview="default" aria-pressed="false">
           <span class="gems-theme-swatch" style="background:linear-gradient(135deg,#1c2333 50%,#35445c 50%)"></span>
-          <span><strong>Default</strong><small>Giao diện GEMS Radio nguyên bản</small></span>
+          <span class="gems-theme-option-copy"><strong>Default</strong><small>Giao diện GEMS Radio nguyên bản</small></span>
+          <span class="gems-theme-option-state" data-theme-state>—</span>
         </button>
         <button class="gems-theme-option" type="button" data-theme-preview="cyber" aria-pressed="false">
           <span class="gems-theme-swatch" style="background:linear-gradient(135deg,#071521 50%,#00bcd4 50%)"></span>
-          <span><strong>Cyber HUD</strong><small>Giao diện HUD hiện tại</small></span>
+          <span class="gems-theme-option-copy"><strong>Cyber HUD</strong><small>Giao diện HUD công nghệ</small></span>
+          <span class="gems-theme-option-state" data-theme-state>—</span>
         </button>
       </div>
       <div class="gems-theme-dialog-actions">
-        <button id="gemsThemeSave" type="button">Lưu</button>
-        <button class="gems-theme-rollback" id="gemsThemeRollback" type="button">↶ Hoàn tác</button>
+        <button id="gemsThemeSave" type="button" disabled>Lưu</button>
+        <button class="gems-theme-rollback" id="gemsThemeRollback" type="button" disabled>↶ Hoàn tác</button>
         <button id="gemsThemeClose" type="button">Đóng</button>
       </div>
       <p class="gems-theme-status" id="gemsThemeStatus" aria-live="polite"></p>
@@ -6069,7 +6084,7 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
     return value === 'default' || value === 'cyber' ? value : 'cyber';
   }
 
-  // Giữ Cyber HUD làm fallback để không đổi giao diện các tài khoản chưa có bản ghi.
+  // Giữ nguyên fallback Cyber HUD của Phase 3D.
   var savedTheme = normalizeTheme(body.getAttribute('data-theme'));
   var previewTheme = savedTheme;
   var previewChanged = false;
@@ -6083,44 +6098,60 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
     return theme === 'cyber' ? 'Cyber HUD' : 'Default';
   }
 
-  // Phase 3D: nhận Theme đã lưu từ thiết bị khác cùng Telegram account.
-  // Nếu người dùng đang xem trước lựa chọn chưa lưu, giữ nguyên preview đó.
+  function setStatus(message, state) {
+    status.textContent = message || '';
+    if (state) status.setAttribute('data-state', state);
+    else status.removeAttribute('data-state');
+  }
+
+  function updateControls() {
+    saveButton.disabled = isSaving || !authReady || !loadFinished || !previewChanged;
+    rollbackButton.disabled = isSaving || !previewChanged;
+    closeButton.disabled = isSaving;
+    options.forEach(function (button) {
+      var theme = button.getAttribute('data-theme-preview');
+      var state = button.querySelector('[data-theme-state]');
+      var isPreview = theme === previewTheme;
+      button.setAttribute('aria-pressed', isPreview ? 'true' : 'false');
+      if (state) {
+        if (isSaving && isPreview && previewChanged) state.textContent = 'ĐANG LƯU';
+        else if (theme === savedTheme) state.textContent = 'ĐANG DÙNG';
+        else if (isPreview && previewChanged) state.textContent = 'XEM TRƯỚC';
+        else state.textContent = '—';
+      }
+    });
+  }
+
+  // Phase 3D: cập nhật trạng thái lưu từ thiết bị khác cùng Telegram account.
+  // Không ghi đè một preview chưa lưu đang được người dùng chủ động xem.
   window.addEventListener('gems-radio-user-theme-updated', function (event) {
     var payload = event && event.detail ? event.detail : {};
     if (payload.themeId !== 'default' && payload.themeId !== 'cyber') return;
 
     savedTheme = normalizeTheme(payload.themeId);
-
     if (isOpen && previewChanged) {
-      status.textContent = 'Theme đã lưu trên thiết bị khác: ' + themeLabel(savedTheme) +
-        '. Đang xem trước: ' + themeLabel(previewTheme) + ' (chưa lưu).';
+      updateControls();
+      setStatus('Theme đã lưu trên thiết bị khác: ' + themeLabel(savedTheme) +
+        '. Bản xem trước hiện tại vẫn được giữ lại.', '');
       return;
     }
 
     previewChanged = false;
     applyTheme(savedTheme, false);
-    if (isOpen) {
-      status.textContent = 'Theme vừa được cập nhật từ thiết bị khác: ' + themeLabel(savedTheme) + '.';
-    }
+    updateControls();
+    if (isOpen) setStatus('Theme vừa được cập nhật từ thiết bị khác: ' + themeLabel(savedTheme) + '.');
   });
-
-  function setBusy(busy) {
-    isSaving = !!busy;
-    saveButton.disabled = isSaving || !authReady || !loadFinished;
-    options.forEach(function (button) { button.disabled = isSaving; });
-    rollbackButton.disabled = isSaving;
-    closeButton.disabled = isSaving;
-  }
 
   function applyTheme(theme, updateStatus) {
     var safeTheme = normalizeTheme(theme);
     body.setAttribute('data-theme', safeTheme);
     previewTheme = safeTheme;
-    options.forEach(function (button) {
-      button.setAttribute('aria-pressed', button.getAttribute('data-theme-preview') === safeTheme ? 'true' : 'false');
-    });
-    if (updateStatus !== false) {
-      status.textContent = 'Đang xem trước: ' + themeLabel(safeTheme) + '. Chưa lưu.';
+    previewChanged = previewTheme !== savedTheme;
+    updateControls();
+    if (updateStatus !== false && previewChanged) {
+      setStatus('Đang xem trước: ' + themeLabel(safeTheme) + '. Chưa lưu.');
+    } else if (updateStatus !== false) {
+      setStatus('Đây là giao diện đang dùng. Chưa có thay đổi cần lưu.');
     }
   }
 
@@ -6137,12 +6168,12 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
     isOpen = true;
     overlay.hidden = false;
     applyTheme(savedTheme, false);
-    if (!authReady) {
-      status.textContent = 'Hãy mở GEMS Radio bên trong Telegram để tải và lưu Theme cá nhân.';
+    if (!authReady || !loadFinished) {
+      setStatus('Hãy mở GEMS Radio bên trong Telegram để tải và lưu Theme cá nhân.');
     } else {
-      status.textContent = 'Theme đã lưu: ' + themeLabel(savedTheme) + '. Bạn có thể xem trước trước khi lưu.';
+      setStatus('Theme đang dùng: ' + themeLabel(savedTheme) + '. Chọn giao diện khác để xem trước.');
     }
-    setBusy(false);
+    updateControls();
     closeButton.focus();
   }
 
@@ -6161,7 +6192,7 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
     if (loadStarted || !initData) return;
     loadStarted = true;
     authReady = true;
-    setBusy(false);
+    updateControls();
     try {
       var response = await fetch('/api/user/theme/read', {
         method: 'POST',
@@ -6175,30 +6206,31 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
       savedTheme = normalizeTheme(data.themeId);
       if (!isOpen || !previewChanged) applyTheme(savedTheme, false);
       if (isOpen) {
-        status.textContent = previewChanged
-          ? 'Theme đã lưu: ' + themeLabel(savedTheme) + '. Đang xem trước: ' + themeLabel(previewTheme) + ' (chưa lưu).'
-          : 'Theme đã lưu: ' + themeLabel(savedTheme) + '. Bạn có thể xem trước trước khi lưu.';
+        setStatus(previewChanged
+          ? 'Theme đang dùng: ' + themeLabel(savedTheme) + '. Đang xem trước: ' + themeLabel(previewTheme) + '.'
+          : 'Theme đang dùng: ' + themeLabel(savedTheme) + '. Chọn giao diện khác để xem trước.');
       }
     } catch (error) {
       console.error('❌ Theme System: không thể tải Theme đã lưu:', error);
-      if (isOpen) status.textContent = (error && error.message) || 'Không thể tải Theme đã lưu.';
+      if (isOpen) setStatus((error && error.message) || 'Không thể tải Theme đã lưu.', 'error');
     } finally {
       loadFinished = true;
-      setBusy(false);
+      updateControls();
     }
   }
 
   async function saveTheme() {
-    if (isSaving) return;
+    if (isSaving || !previewChanged || !authReady || !loadFinished) return;
     var bridge = window.GemsRadioThemeBridge;
     var initData = bridge && bridge.getInitData ? bridge.getInitData() : '';
     if (!initData) {
-      status.textContent = 'Không thể lưu: hãy mở GEMS Radio bên trong Telegram.';
+      setStatus('Không thể lưu: hãy mở GEMS Radio bên trong Telegram.', 'error');
       return;
     }
 
-    setBusy(true);
-    status.textContent = 'Đang lưu giao diện…';
+    isSaving = true;
+    updateControls();
+    setStatus('Đang lưu giao diện ' + themeLabel(previewTheme) + '…', 'saving');
     try {
       var response = await fetch('/api/user/theme/save', {
         method: 'POST',
@@ -6211,17 +6243,22 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
       }
 
       savedTheme = normalizeTheme(data.themeId || previewTheme);
+      previewTheme = savedTheme;
       previewChanged = false;
-      applyTheme(savedTheme, false);
-      status.textContent = 'Đã lưu giao diện ' + themeLabel(savedTheme) + '.';
+      body.setAttribute('data-theme', savedTheme);
       overlay.hidden = true;
       isOpen = false;
       openButton.focus();
     } catch (error) {
       console.error('❌ Theme System: lưu Theme thất bại:', error);
-      status.textContent = (error && error.message) || 'Không thể lưu giao diện. Vui lòng thử lại.';
+      // Save thất bại: quay về theme đã lưu trước đó, không giữ preview như thể đã lưu.
+      previewTheme = savedTheme;
+      previewChanged = false;
+      body.setAttribute('data-theme', savedTheme);
+      setStatus((error && error.message) || 'Không thể lưu giao diện. Vui lòng thử lại.', 'error');
     } finally {
-      setBusy(false);
+      isSaving = false;
+      updateControls();
     }
   }
 
@@ -6230,16 +6267,14 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
     button.addEventListener('click', function () {
       if (!isOpen || isSaving) return;
       applyTheme(button.getAttribute('data-theme-preview'));
-      previewChanged = previewTheme !== savedTheme;
+      if (!previewChanged) setStatus('Đã trở về giao diện đang dùng: ' + themeLabel(savedTheme) + '.');
     });
   });
   saveButton.addEventListener('click', saveTheme);
   rollbackButton.addEventListener('click', function () {
-    if (isOpen && !isSaving) {
-      applyTheme(savedTheme, false);
-      previewChanged = false;
-    }
-    if (isOpen) status.textContent = 'Đã hoàn tác về Theme đã lưu: ' + themeLabel(savedTheme) + '.';
+    if (!isOpen || isSaving || !previewChanged) return;
+    applyTheme(savedTheme, false);
+    setStatus('Đã hoàn tác về giao diện đang dùng: ' + themeLabel(savedTheme) + '.');
   });
   closeButton.addEventListener('click', function () { closeDialog(true); });
   overlay.addEventListener('click', function (event) {
@@ -6258,6 +6293,7 @@ body[data-theme="cyber"] .wheel-container::after { inset: -11px; }
     });
   }
 
+  updateControls();
   if (window.GemsRadioThemeBridge) connectAuthBridge();
   else window.addEventListener('gems-radio-theme-bridge-ready', connectAuthBridge, { once: true });
 })();
