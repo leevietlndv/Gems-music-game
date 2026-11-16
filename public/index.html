@@ -1496,6 +1496,13 @@
       font-weight: 400;
     }
 
+    /* Giữ nguyên kiểu hiển thị mặc định của dòng người gửi trong Player Card. */
+    .winner-sender-row {
+      font-size: 13px;
+      color: #ddd;
+      margin-bottom: 6px;
+    }
+
     .action-user {
       color: #64b5f6;
       font-weight: 700;
@@ -2378,6 +2385,54 @@ body[data-theme="christmas"] .song-sender-label {
   color: var(--gems-xmas-text);
   font-weight: 700;
 }
+
+/* Phase 4B.2 — Christmas Decorations. These are visual-only and theme-isolated. */
+#xmasHeaderGarland,
+.xmas-holly-mark { display: none; }
+body[data-theme="christmas"] .header {
+  position: relative;
+  padding-top: 46px;
+}
+body[data-theme="christmas"] #xmasHeaderGarland {
+  display: block;
+  position: absolute;
+  top: -3px;
+  left: 0;
+  width: 100%;
+  height: 44px;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 0;
+}
+body[data-theme="christmas"] .header h1 {
+  position: relative;
+  z-index: 1;
+}
+body[data-theme="christmas"] .xmas-holly-mark {
+  display: inline-block;
+  width: 30px;
+  height: 20px;
+  margin-left: 6px;
+  vertical-align: -5px;
+  pointer-events: none;
+}
+
+/* Explicit contrast correction: the legacy inline #ddd color made this label
+   too pale on the warm-cream Player Card. No opacity/filter should dim it. */
+body[data-theme="christmas"] #playerCard .winner-sender-row {
+  color: var(--gems-xmas-text) !important;
+  opacity: 1 !important;
+  filter: none !important;
+  text-shadow: none !important;
+}
+body[data-theme="christmas"] #playerCard .winner-sender-label,
+body[data-theme="christmas"] .song-sender-label {
+  color: #332B24 !important;
+  font-weight: 700 !important;
+  opacity: 1 !important;
+  filter: none !important;
+  text-shadow: none !important;
+}
 </style>
 
 <style id="theme-preview-ui-styles">
@@ -2439,6 +2494,74 @@ body[data-theme="christmas"] .song-sender-label {
 <body data-theme="cyber">
 
   <div class="header">
+    <!-- Christmas Classic: dây thông và đèn Noel trang trí, ẩn ở các theme khác. -->
+    <svg id="xmasHeaderGarland" class="xmas-header-garland" viewBox="0 0 480 48"
+      role="presentation" aria-hidden="true" focusable="false">
+      <defs>
+        <filter id="xmasLightGlow" x="-100%" y="-100%" width="300%" height="300%">
+          <feGaussianBlur stdDeviation="2" result="blur" />
+          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+        <linearGradient id="xmasBaubleRed" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#D85B61" />
+          <stop offset="1" stop-color="#8B1E2D" />
+        </linearGradient>
+        <linearGradient id="xmasBellGold" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#F4D889" />
+          <stop offset="1" stop-color="#B88932" />
+        </linearGradient>
+      </defs>
+      <!-- Sợi dây và nhánh thông rủ cong theo chiều ngang header. -->
+      <path d="M5 4 C118 42 362 42 475 4" fill="none" stroke="#8B6A3F" stroke-width="1.5" />
+      <path d="M5 4 C118 42 362 42 475 4" fill="none" stroke="#176B45" stroke-width="4.5" stroke-linecap="round" />
+      <g fill="#238354" stroke="#105638" stroke-width="0.55">
+        <ellipse cx="28" cy="10" rx="3.4" ry="9" transform="rotate(-48 28 10)" />
+        <ellipse cx="43" cy="15" rx="3.2" ry="9" transform="rotate(48 43 15)" />
+        <ellipse cx="74" cy="20" rx="3.3" ry="9" transform="rotate(-55 74 20)" />
+        <ellipse cx="91" cy="24" rx="3.2" ry="9" transform="rotate(52 91 24)" />
+        <ellipse cx="126" cy="30" rx="3.3" ry="9" transform="rotate(-58 126 30)" />
+        <ellipse cx="145" cy="34" rx="3.2" ry="9" transform="rotate(55 145 34)" />
+        <ellipse cx="180" cy="37" rx="3.1" ry="8" transform="rotate(-60 180 37)" />
+        <ellipse cx="198" cy="39" rx="3.1" ry="8" transform="rotate(58 198 39)" />
+        <ellipse cx="282" cy="39" rx="3.1" ry="8" transform="rotate(-58 282 39)" />
+        <ellipse cx="300" cy="37" rx="3.1" ry="8" transform="rotate(60 300 37)" />
+        <ellipse cx="335" cy="34" rx="3.2" ry="9" transform="rotate(-55 335 34)" />
+        <ellipse cx="354" cy="30" rx="3.3" ry="9" transform="rotate(58 354 30)" />
+        <ellipse cx="389" cy="24" rx="3.2" ry="9" transform="rotate(-52 389 24)" />
+        <ellipse cx="406" cy="20" rx="3.3" ry="9" transform="rotate(55 406 20)" />
+        <ellipse cx="437" cy="15" rx="3.2" ry="9" transform="rotate(-48 437 15)" />
+        <ellipse cx="452" cy="10" rx="3.4" ry="9" transform="rotate(48 452 10)" />
+      </g>
+      <!-- Đèn vàng ấm xen kẽ trên dây thông. -->
+      <g filter="url(#xmasLightGlow)">
+        <circle cx="22" cy="10" r="2.6" fill="#F7D77A" />
+        <circle cx="61" cy="16" r="2.4" fill="#FFF0B5" />
+        <circle cx="154" cy="32" r="2.5" fill="#F7D77A" />
+        <circle cx="207" cy="39" r="2.4" fill="#FFF0B5" />
+        <circle cx="273" cy="39" r="2.4" fill="#F7D77A" />
+        <circle cx="326" cy="32" r="2.5" fill="#FFF0B5" />
+        <circle cx="419" cy="16" r="2.4" fill="#F7D77A" />
+        <circle cx="458" cy="10" r="2.6" fill="#FFF0B5" />
+      </g>
+      <!-- Quả châu đỏ treo hai bên. -->
+      <g>
+        <path d="M103 20 L103 26 M377 20 L377 26" stroke="#B58A3C" stroke-width="1.3" />
+        <rect x="99.5" y="25" width="7" height="3.8" rx="1" fill="#D4AF5A" />
+        <rect x="373.5" y="25" width="7" height="3.8" rx="1" fill="#D4AF5A" />
+        <circle cx="103" cy="33.5" r="6.2" fill="url(#xmasBaubleRed)" stroke="#741927" stroke-width=".8" />
+        <circle cx="377" cy="33.5" r="6.2" fill="url(#xmasBaubleRed)" stroke="#741927" stroke-width=".8" />
+        <circle cx="101" cy="31.5" r="1.6" fill="#FFE5D7" opacity=".75" />
+        <circle cx="375" cy="31.5" r="1.6" fill="#FFE5D7" opacity=".75" />
+      </g>
+      <!-- Chuông vàng ở giữa garland. -->
+      <g transform="translate(240 0)">
+        <path d="M0 28 C-1 24 -7 25 -7 31 L-9 37 Q0 42 9 37 L7 31 C7 25 1 24 0 28Z"
+          fill="url(#xmasBellGold)" stroke="#9A7027" stroke-width=".9" />
+        <path d="M-4 27 Q0 23 4 27" fill="none" stroke="#D4AF5A" stroke-width="2" stroke-linecap="round" />
+        <path d="M-10 38 Q0 41 10 38" fill="none" stroke="#F5D98B" stroke-width="1.2" />
+        <circle cx="0" cy="41" r="2" fill="#8B1E2D" />
+      </g>
+    </svg>
     <h1>🎵 GEMS Radio</h1>
   </div>
 
@@ -2520,8 +2643,8 @@ body[data-theme="christmas"] .song-sender-label {
       <strong id="playerTitleText">-</strong>
     </div>
 
-    <div style="font-size: 13px; color: #ddd; margin-bottom: 6px;">
-      Người gửi:
+    <div class="winner-sender-row">
+      <span class="winner-sender-label">Người gửi:</span>
       <strong id="winnerUser" style="color: #64b5f6;">-</strong>
       <span id="winnerAction"></span>
     </div>
@@ -2678,7 +2801,17 @@ body[data-theme="christmas"] .song-sender-label {
     </div>
 
     <div id="blacklistDetails" class="blacklist-details">
-      <div class="blacklist-detail-title">🚫 Danh sách bài hát đã chặn</div>
+      <div class="blacklist-detail-title">
+        🚫 Danh sách bài hát đã chặn
+        <svg class="xmas-holly-mark" viewBox="0 0 36 24" aria-hidden="true" focusable="false">
+          <path d="M4 17 C10 6 19 5 29 7 C24 17 14 21 4 17Z" fill="#176B45" />
+          <path d="M11 18 C12 9 20 4 32 4 C29 15 21 20 11 18Z" fill="#238354" />
+          <path d="M7 17 L28 7 M13 17 L29 5" stroke="#D5E7D5" stroke-width=".8" opacity=".75" />
+          <circle cx="27" cy="17" r="3.1" fill="#8B1E2D" />
+          <circle cx="32" cy="14" r="2.8" fill="#A92A39" />
+          <circle cx="31" cy="20" r="2.5" fill="#8B1E2D" />
+        </svg>
+      </div>
       <div id="blacklistList" class="blacklist-list"></div>
     </div>
 
