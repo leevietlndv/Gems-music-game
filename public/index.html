@@ -1882,7 +1882,34 @@
     }
   
 
-    </style>
+    
+
+/* Phase 4B.3 — Snowfall: visual-only overlay, isolated to Christmas Classic. */
+#xmasSnowCanvas { display: none; }
+body[data-theme="christmas"] #xmasSnowCanvas {
+  display: block; position: fixed; inset: 0; width: 100vw; height: 100vh;
+  z-index: 850; pointer-events: none;
+}
+#xmasSnowToggle { display: none; }
+body[data-theme="christmas"] #xmasSnowToggle {
+  position: relative; z-index: 851;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  margin: 0 auto 8px; padding: 6px 12px; min-height: 30px;
+  border: 1px solid #D4AF5A; border-radius: 999px;
+  background: #FFFDF8; color: #176B45; font-size: 12px; font-weight: 650;
+  line-height: 1.2; cursor: pointer; box-shadow: 0 2px 7px rgba(51,43,36,.09);
+}
+body[data-theme="christmas"] #xmasSnowToggle[aria-pressed="false"] {
+  background: #EEE6DA; color: #74685B; border-color: #D8CDBD;
+}
+body[data-theme="christmas"] #xmasSnowToggle:focus-visible {
+  outline: 2px solid #176B45; outline-offset: 3px;
+}
+@media (max-width: 600px) {
+  body[data-theme="christmas"] #xmasSnowToggle { margin-bottom: 7px; }
+}
+
+</style>
 
 <style id="theme-cyber-styles">
 /* =========================================================
@@ -2538,6 +2565,7 @@ body[data-theme="christmas"] #blacklistBar {
 </head>
 
 <body data-theme="cyber">
+  <canvas id="xmasSnowCanvas" aria-hidden="true"></canvas>
 
   <div class="header">
     <!-- Christmas Classic: dây thông và đèn Noel trang trí, ẩn ở các theme khác. -->
@@ -2609,6 +2637,7 @@ body[data-theme="christmas"] #blacklistBar {
       </g>
     </svg>
     <h1>🎵 GEMS Radio</h1>
+    <button id="xmasSnowToggle" type="button" aria-pressed="true" aria-label="Tắt hiệu ứng tuyết rơi">❄ Tuyết rơi: Bật</button>
   </div>
 
   <!-- NAVBAR FRAMEWORK: chỉ là lớp điều hướng UI, chưa di chuyển chức năng hiện tại. -->
@@ -6459,7 +6488,157 @@ body[data-theme="christmas"] #blacklistBar {
     </section>
   </div>
 
-  <script id="gems-theme-preview-engine">
+  
+<script id="gems-christmas-snowfall">
+(function () {
+  'use strict';
+  var body = document.body;
+  var canvas = document.getElementById('xmasSnowCanvas');
+  var toggle = document.getElementById('xmasSnowToggle');
+  if (!body || !canvas || !toggle || !canvas.getContext) return;
+
+  var ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  var active = false;
+  var enabled = true;
+  var rafId = 0;
+  var flakes = [];
+  var width = 0;
+  var height = 0;
+  var dpr = 1;
+  var lastFrame = 0;
+  var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  function setToggleUI() {
+    toggle.textContent = enabled ? '❄ Tuyết rơi: Bật' : '❄ Tuyết rơi: Tắt';
+    toggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+    toggle.setAttribute('aria-label', enabled ? 'Tắt hiệu ứng tuyết rơi' : 'Bật hiệu ứng tuyết rơi');
+  }
+
+  function resizeCanvas() {
+    width = Math.max(1, window.innerWidth || document.documentElement.clientWidth || 1);
+    height = Math.max(1, window.innerHeight || document.documentElement.clientHeight || 1);
+    dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    createFlakes();
+    if (active && enabled && reducedMotion && reducedMotion.matches) drawStatic();
+  }
+
+  function createFlakes() {
+    var mobile = width <= 600;
+    var count = Math.max(12, Math.min(mobile ? 22 : 42, Math.round(width / (mobile ? 19 : 17))));
+    flakes = [];
+    for (var i = 0; i < count; i++) {
+      flakes.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        radius: mobile ? (1 + Math.random() * 1.5) : (1.1 + Math.random() * 2),
+        speed: 0.28 + Math.random() * 0.52,
+        drift: (Math.random() - 0.5) * 0.34,
+        phase: Math.random() * Math.PI * 2,
+        alpha: 0.42 + Math.random() * 0.38
+      });
+    }
+  }
+
+  function clear() { ctx.clearRect(0, 0, width, height); }
+
+  function drawStatic() {
+    if (!active || !enabled) return;
+    clear();
+    flakes.forEach(function (f) {
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(255,255,255,' + f.alpha + ')';
+      ctx.shadowColor = 'rgba(255,255,255,.45)';
+      ctx.shadowBlur = 3;
+      ctx.arc(f.x, f.y, f.radius, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.shadowBlur = 0;
+  }
+
+  function frame(timestamp) {
+    if (!active || !enabled || (reducedMotion && reducedMotion.matches)) { rafId = 0; return; }
+    if (timestamp - lastFrame < 28) { rafId = requestAnimationFrame(frame); return; }
+    lastFrame = timestamp;
+    clear();
+    flakes.forEach(function (f) {
+      f.y += f.speed;
+      f.x += f.drift + Math.sin(timestamp / 1900 + f.phase) * 0.12;
+      if (f.y > height + 5) { f.y = -5; f.x = Math.random() * width; }
+      if (f.x < -5) f.x = width + 5;
+      if (f.x > width + 5) f.x = -5;
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(255,255,255,' + f.alpha + ')';
+      ctx.shadowColor = 'rgba(255,255,255,.5)';
+      ctx.shadowBlur = 3;
+      ctx.arc(f.x, f.y, f.radius, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.shadowBlur = 0;
+    rafId = requestAnimationFrame(frame);
+  }
+
+  function stopAnimation() {
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = 0;
+    clear();
+  }
+
+  function startAnimation() {
+    stopAnimation();
+    if (!active || !enabled) return;
+    if (reducedMotion && reducedMotion.matches) { drawStatic(); return; }
+    lastFrame = 0;
+    rafId = requestAnimationFrame(frame);
+  }
+
+  function syncTheme() {
+    var shouldBeActive = body.getAttribute('data-theme') === 'christmas';
+    if (shouldBeActive && !active) {
+      active = true;
+      enabled = true; // mỗi lần vào Christmas Classic đều bật mặc định, không lưu lựa chọn
+      setToggleUI();
+      resizeCanvas();
+      startAnimation();
+    } else if (!shouldBeActive && active) {
+      active = false;
+      enabled = true;
+      setToggleUI();
+      stopAnimation();
+    }
+  }
+
+  toggle.addEventListener('click', function () {
+    if (!active) return;
+    enabled = !enabled;
+    setToggleUI();
+    if (enabled) startAnimation();
+    else stopAnimation();
+  });
+  window.addEventListener('resize', function () {
+    if (!active) return;
+    resizeCanvas();
+    startAnimation();
+  }, { passive: true });
+  if (reducedMotion) {
+    var onMotionChange = function () { if (active && enabled) startAnimation(); };
+    if (typeof reducedMotion.addEventListener === 'function') reducedMotion.addEventListener('change', onMotionChange);
+    else if (typeof reducedMotion.addListener === 'function') reducedMotion.addListener(onMotionChange);
+  }
+
+  var observer = new MutationObserver(syncTheme);
+  observer.observe(body, { attributes: true, attributeFilter: ['data-theme'] });
+  setToggleUI();
+  syncTheme();
+})();
+</script>
+
+<script id="gems-theme-preview-engine">
 (function () {
   'use strict';
   var body = document.body;
