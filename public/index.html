@@ -2840,6 +2840,81 @@ body[data-theme="christmas_victorian"] a:focus-visible {
     box-shadow: 0 3px 12px rgba(0, 0, 0, .18);
   }
 }
+
+/* =========================================================
+   PHASE 3 — VICTORIAN DECORATIONS
+   Decorative-only layer: no controls, player logic, or theme data changes.
+   ========================================================= */
+body[data-theme="christmas_victorian"] .app-navbar {
+  padding-top: 17px;
+}
+body[data-theme="christmas_victorian"] .victorian-navbar-garland {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  width: 100%;
+  height: 25px;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 2;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .35));
+}
+body[data-theme="christmas_victorian"] .app-navbar-bar {
+  position: relative;
+  border-top-color: rgba(197, 161, 90, .72) !important;
+}
+body[data-theme="christmas_victorian"] .app-navbar-toggle {
+  box-shadow: inset 0 0 0 1px rgba(197, 161, 90, .22), 0 1px 4px rgba(0, 0, 0, .24);
+}
+
+/* Fine antique corner-work on content cards; kept inside the card padding. */
+body[data-theme="christmas_victorian"] .card {
+  position: relative;
+  isolation: isolate;
+}
+body[data-theme="christmas_victorian"] .card::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: 8px;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    linear-gradient(var(--gems-victorian-gold), var(--gems-victorian-gold)) left top / 18px 1px no-repeat,
+    linear-gradient(var(--gems-victorian-gold), var(--gems-victorian-gold)) left top / 1px 18px no-repeat,
+    linear-gradient(var(--gems-victorian-gold), var(--gems-victorian-gold)) right top / 18px 1px no-repeat,
+    linear-gradient(var(--gems-victorian-gold), var(--gems-victorian-gold)) right top / 1px 18px no-repeat,
+    linear-gradient(var(--gems-victorian-gold), var(--gems-victorian-gold)) left bottom / 18px 1px no-repeat,
+    linear-gradient(var(--gems-victorian-gold), var(--gems-victorian-gold)) left bottom / 1px 18px no-repeat,
+    linear-gradient(var(--gems-victorian-gold), var(--gems-victorian-gold)) right bottom / 18px 1px no-repeat,
+    linear-gradient(var(--gems-victorian-gold), var(--gems-victorian-gold)) right bottom / 1px 18px no-repeat;
+  opacity: .78;
+}
+body[data-theme="christmas_victorian"] .card::after {
+  content: "❧";
+  position: absolute;
+  top: 5px;
+  left: 8px;
+  color: var(--gems-victorian-gold);
+  font-family: Georgia, serif;
+  font-size: 13px;
+  line-height: 1;
+  opacity: .82;
+  pointer-events: none;
+  z-index: 0;
+}
+body[data-theme="christmas_victorian"] .card > * {
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 600px) {
+  body[data-theme="christmas_victorian"] .app-navbar { padding-top: 13px; }
+  body[data-theme="christmas_victorian"] .victorian-navbar-garland { height: 20px; }
+  body[data-theme="christmas_victorian"] .card::before { inset: 5px; opacity: .58; }
+  body[data-theme="christmas_victorian"] .card::after { top: 4px; left: 6px; font-size: 11px; opacity: .65; }
+}
 </style>
 
 <style id="theme-preview-ui-styles">
@@ -2976,6 +3051,26 @@ body[data-theme="christmas_victorian"] a:focus-visible {
 
   <!-- NAVBAR FRAMEWORK: chỉ là lớp điều hướng UI, chưa di chuyển chức năng hiện tại. -->
   <nav id="appNavbar" class="app-navbar" aria-label="Điều hướng ứng dụng">
+    <svg class="victorian-navbar-garland" viewBox="0 0 480 34" role="presentation" aria-hidden="true" focusable="false">
+      <path d="M4 5 C112 31 368 31 476 5" fill="none" stroke="#8B7355" stroke-width="2"/>
+      <path d="M4 5 C112 31 368 31 476 5" fill="none" stroke="#344C3A" stroke-width="5" stroke-linecap="round"/>
+      <g fill="#49634A" stroke="#213A2A" stroke-width=".6">
+        <ellipse cx="22" cy="9" rx="3" ry="9" transform="rotate(-48 22 9)"/><ellipse cx="38" cy="13" rx="3" ry="9" transform="rotate(48 38 13)"/>
+        <ellipse cx="72" cy="19" rx="3" ry="9" transform="rotate(-52 72 19)"/><ellipse cx="90" cy="22" rx="3" ry="9" transform="rotate(52 90 22)"/>
+        <ellipse cx="125" cy="26" rx="3" ry="8" transform="rotate(-55 125 26)"/><ellipse cx="144" cy="28" rx="3" ry="8" transform="rotate(55 144 28)"/>
+        <ellipse cx="336" cy="28" rx="3" ry="8" transform="rotate(-55 336 28)"/><ellipse cx="355" cy="26" rx="3" ry="8" transform="rotate(55 355 26)"/>
+        <ellipse cx="390" cy="22" rx="3" ry="9" transform="rotate(-52 390 22)"/><ellipse cx="408" cy="19" rx="3" ry="9" transform="rotate(52 408 19)"/>
+        <ellipse cx="442" cy="13" rx="3" ry="9" transform="rotate(-48 442 13)"/><ellipse cx="458" cy="9" rx="3" ry="9" transform="rotate(48 458 9)"/>
+      </g>
+      <!-- Velvet bows at both ends and a small antique bell at center. -->
+      <g stroke="#C5A15A" stroke-width="1.1" fill="none" stroke-linecap="round">
+        <path d="M105 18 C97 8 88 10 91 18 C95 23 101 21 105 18 C109 21 115 23 119 18 C122 10 113 8 105 18Z" fill="#722B35"/>
+        <path d="M375 18 C367 8 358 10 361 18 C365 23 371 21 375 18 C379 21 385 23 389 18 C392 10 383 8 375 18Z" fill="#722B35"/>
+        <path d="M240 14 C235 14 233 18 234 23 L231 28 Q240 32 249 28 L246 23 C247 18 245 14 240 14Z" fill="#C5A15A"/>
+        <path d="M236 13 Q240 9 244 13 M231 29 Q240 32 249 29"/>
+      </g>
+      <circle cx="240" cy="31" r="1.8" fill="#722B35" stroke="#C5A15A" stroke-width=".7"/>
+    </svg>
     <div class="app-navbar-bar">
       <label class="form-switch-wrap" title="Bật/tắt form gửi bài hát">
         <span class="form-switch">
