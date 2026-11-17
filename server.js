@@ -166,7 +166,7 @@ async function initDatabase() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS user_theme_preferences (
       telegram_id TEXT PRIMARY KEY,
-      theme_id TEXT NOT NULL CHECK (theme_id IN ('default', 'cyber', 'christmas')),
+      theme_id TEXT NOT NULL CHECK (theme_id IN ('default', 'cyber', 'christmas', 'christmas_victorian')),
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -178,7 +178,7 @@ async function initDatabase() {
     DROP CONSTRAINT IF EXISTS user_theme_preferences_theme_id_check;
     ALTER TABLE user_theme_preferences
     ADD CONSTRAINT user_theme_preferences_theme_id_check
-    CHECK (theme_id IN ('default', 'cyber', 'christmas'));
+    CHECK (theme_id IN ('default', 'cyber', 'christmas', 'christmas_victorian'));
   `);
 
   await pool.query(`
@@ -1614,7 +1614,7 @@ app.use('/api/', userLimiter);
 // Telegram ID luôn được lấy từ initData đã xác minh, không nhận ID từ client.
 // Theme mặc định giữ nguyên giao diện Cyber HUD hiện tại nếu chưa có lựa chọn.
 const DEFAULT_USER_THEME = 'cyber';
-const ALLOWED_USER_THEMES = new Set(['default', 'cyber', 'christmas']);
+const ALLOWED_USER_THEMES = new Set(['default', 'cyber', 'christmas', 'christmas_victorian']);
 
 app.post('/api/user/theme/read', async (req, res) => {
   const auth = validateTelegramInitData(req.body?.initData || '');
