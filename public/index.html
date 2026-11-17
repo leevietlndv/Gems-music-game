@@ -2971,6 +2971,121 @@ body[data-theme="christmas_victorian"] .card > * {
   }
 </style>
 
+
+
+<style id="theme-victorian-red-velvet-player">
+/* =========================================================
+   GEMS RADIO · VICTORIAN CHRISTMAS · PHASE 4
+   Red Velvet Player visual treatment only.
+   CSS-only: preserve player DOM, JavaScript, and playback behavior.
+   ========================================================= */
+body[data-theme="christmas_victorian"] #playerCard {
+  background: var(--gems-victorian-wine) !important;
+  color: var(--gems-victorian-ivory) !important;
+  border: 2px solid var(--gems-victorian-gold) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(233, 221, 200, .08),
+    0 7px 22px rgba(0, 0, 0, .34) !important;
+}
+
+/* The card frame changes to moss green only while playback is active.
+   The existing playback-control aria-label is updated by the app's
+   authoritative playback state handler. */
+body[data-theme="christmas_victorian"] #playerCard:has(#btnPlaybackControl[aria-label="Tạm dừng"]) {
+  border-color: var(--gems-victorian-moss) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(233, 221, 200, .08),
+    0 0 0 1px rgba(52, 76, 58, .42),
+    0 7px 22px rgba(0, 0, 0, .34) !important;
+}
+
+body[data-theme="christmas_victorian"] #playerCard .player-label,
+body[data-theme="christmas_victorian"] #playerCard #playerTitleText,
+body[data-theme="christmas_victorian"] #playerCard .winner-sender-row,
+body[data-theme="christmas_victorian"] #playerCard .winner-sender-label,
+body[data-theme="christmas_victorian"] #playerCard #winnerUser,
+body[data-theme="christmas_victorian"] #playerCard .playback-time-row,
+body[data-theme="christmas_victorian"] #playerCard #playbackCurrentTime,
+body[data-theme="christmas_victorian"] #playerCard #playbackDuration {
+  color: var(--gems-victorian-ivory) !important;
+}
+
+/* Recessed velvet-toned control wells. */
+body[data-theme="christmas_victorian"] #playerCard .playback-timeline,
+body[data-theme="christmas_victorian"] #playerCard .audio-controls {
+  background: #51232B !important;
+  border: 1px solid rgba(197, 161, 90, .42) !important;
+  color: var(--gems-victorian-ivory) !important;
+  box-shadow: inset 0 1px 4px rgba(0, 0, 0, .22);
+}
+
+/* Admin Play/Pause: antique-gold focal control. */
+body[data-theme="christmas_victorian"] #playerCard .btn-playback-control {
+  background: var(--gems-victorian-gold) !important;
+  color: #211B1B !important;
+  border: 1px solid #E0C27D !important;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, .28);
+}
+body[data-theme="christmas_victorian"] #playerCard .btn-playback-control:hover:not(:disabled) {
+  background: #D8B96F !important;
+  color: #211B1B !important;
+}
+body[data-theme="christmas_victorian"] #playerCard .btn-playback-control:disabled {
+  opacity: .48;
+}
+
+/* Bronze timeline rail with a gold progress indicator and thumb. */
+body[data-theme="christmas_victorian"] #playerCard #playbackTimeline {
+  height: 18px;
+  background: transparent !important;
+  accent-color: var(--gems-victorian-gold);
+  cursor: pointer;
+}
+body[data-theme="christmas_victorian"] #playerCard #playbackTimeline::-webkit-slider-runnable-track {
+  height: 5px;
+  background: var(--gems-victorian-bronze);
+  border: 0;
+  border-radius: 999px;
+}
+body[data-theme="christmas_victorian"] #playerCard #playbackTimeline::-moz-range-track {
+  height: 5px;
+  background: var(--gems-victorian-bronze);
+  border: 0;
+  border-radius: 999px;
+}
+body[data-theme="christmas_victorian"] #playerCard #playbackTimeline::-moz-range-progress {
+  height: 5px;
+  background: var(--gems-victorian-gold);
+  border-radius: 999px;
+}
+body[data-theme="christmas_victorian"] #playerCard #playbackTimeline:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+/* Keep secondary audio actions visually subordinate to Play/Pause. */
+body[data-theme="christmas_victorian"] #playerCard .btn-playback-sync {
+  background: var(--gems-victorian-gold) !important;
+  color: #211B1B !important;
+  border: 1px solid #E0C27D !important;
+}
+body[data-theme="christmas_victorian"] #playerCard .btn-auto-play,
+body[data-theme="christmas_victorian"] #playerCard .btn-audio-toggle {
+  background: #3D2929 !important;
+  color: var(--gems-victorian-ivory) !important;
+  border: 1px solid rgba(197, 161, 90, .5) !important;
+}
+
+@media (max-width: 600px) {
+  body[data-theme="christmas_victorian"] #playerCard {
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .28) !important;
+  }
+  body[data-theme="christmas_victorian"] #playerCard:has(#btnPlaybackControl[aria-label="Tạm dừng"]) {
+    box-shadow: 0 0 0 1px rgba(52, 76, 58, .42), 0 4px 14px rgba(0, 0, 0, .28) !important;
+  }
+}
+</style>
+
 </head>
 
 <body data-theme="cyber">
