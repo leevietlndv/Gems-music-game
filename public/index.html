@@ -2575,6 +2575,273 @@ body[data-theme="christmas"] .playlist-picker-create input {
 }
 </style>
 
+<style id="theme-victorian-color-system">
+/* =========================================================
+   GEMS RADIO · VICTORIAN CHRISTMAS · PHASE 2
+   Dark Victorian color system only.
+   Scoped to christmas_victorian; no DOM, JS, player layout,
+   decoration, snowfall, or existing-theme behavior changes.
+   ========================================================= */
+body[data-theme="christmas_victorian"] {
+  color-scheme: dark;
+  --gems-victorian-charcoal: #211B1B;
+  --gems-victorian-wine: #722B35;
+  --gems-victorian-moss: #344C3A;
+  --gems-victorian-gold: #C5A15A;
+  --gems-victorian-ivory: #E9DDC8;
+  --gems-victorian-bronze: #8B7355;
+  --gems-victorian-muted: #B6A58D;
+  --gems-victorian-surface: #2B2322;
+  --gems-victorian-surface-raised: #342A28;
+  --gems-victorian-surface-soft: #3A302C;
+  --gems-victorian-border: rgba(197, 161, 90, .48);
+  --gems-victorian-border-soft: rgba(139, 115, 85, .42);
+  background: var(--gems-victorian-charcoal) !important;
+  color: var(--gems-victorian-ivory) !important;
+}
+
+/* Base typography and page title. */
+body[data-theme="christmas_victorian"] .header h1 {
+  color: var(--gems-victorian-gold) !important;
+  text-shadow: 0 1px 10px rgba(197, 161, 90, .12);
+}
+body[data-theme="christmas_victorian"] .header,
+body[data-theme="christmas_victorian"] .header * {
+  --theme-victorian-text: var(--gems-victorian-ivory);
+}
+body[data-theme="christmas_victorian"] .card,
+body[data-theme="christmas_victorian"] .online-details,
+body[data-theme="christmas_victorian"] .script-settings-details,
+body[data-theme="christmas_victorian"] .blacklist-details,
+body[data-theme="christmas_victorian"] .playlist-picker-card {
+  background: var(--gems-victorian-surface) !important;
+  color: var(--gems-victorian-ivory) !important;
+  border: 1px solid var(--gems-victorian-border) !important;
+  box-shadow: 0 5px 18px rgba(0, 0, 0, .22);
+}
+body[data-theme="christmas_victorian"] .app-navbar-bar,
+body[data-theme="christmas_victorian"] .online-bar,
+body[data-theme="christmas_victorian"] .script-settings-bar,
+body[data-theme="christmas_victorian"] #blacklistBar {
+  background: var(--gems-victorian-moss) !important;
+  color: var(--gems-victorian-ivory) !important;
+  border: 1px solid var(--gems-victorian-border) !important;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, .2);
+}
+body[data-theme="christmas_victorian"] .app-navbar-title,
+body[data-theme="christmas_victorian"] .card-title,
+body[data-theme="christmas_victorian"] #onlineUserCount,
+body[data-theme="christmas_victorian"] .online-detail-title,
+body[data-theme="christmas_victorian"] .player-label,
+body[data-theme="christmas_victorian"] .health-title,
+body[data-theme="christmas_victorian"] .online-summary,
+body[data-theme="christmas_victorian"] .blacklist-summary,
+body[data-theme="christmas_victorian"] .script-settings-summary,
+body[data-theme="christmas_victorian"] .script-settings-field label,
+body[data-theme="christmas_victorian"] .blacklist-title,
+body[data-theme="christmas_victorian"] .song-title,
+body[data-theme="christmas_victorian"] .playback-time-row,
+body[data-theme="christmas_victorian"] .health-status-countdown,
+body[data-theme="christmas_victorian"] #playerTitleText {
+  color: var(--gems-victorian-ivory) !important;
+}
+body[data-theme="christmas_victorian"] .app-navbar-section-label,
+body[data-theme="christmas_victorian"] .script-settings-unit,
+body[data-theme="christmas_victorian"] .online-empty,
+body[data-theme="christmas_victorian"] .blacklist-empty,
+body[data-theme="christmas_victorian"] .playback-time-duration,
+body[data-theme="christmas_victorian"] .action-label,
+body[data-theme="christmas_victorian"] .song-sender,
+body[data-theme="christmas_victorian"] .blacklist-user-reason {
+  color: var(--gems-victorian-muted) !important;
+}
+
+/* Navbar, compact controls, and secondary actions. */
+body[data-theme="christmas_victorian"] .app-navbar-toggle,
+body[data-theme="christmas_victorian"] .script-settings-edit,
+body[data-theme="christmas_victorian"] .online-details-toggle,
+body[data-theme="christmas_victorian"] .blacklist-details-toggle,
+body[data-theme="christmas_victorian"] .btn-reset-icon,
+body[data-theme="christmas_victorian"] .btn-playback-control,
+body[data-theme="christmas_victorian"] .btn-toggle,
+body[data-theme="christmas_victorian"] .btn-auto-play,
+body[data-theme="christmas_victorian"] .btn-audio-toggle {
+  background: var(--gems-victorian-surface-soft) !important;
+  color: var(--gems-victorian-gold) !important;
+  border-color: var(--gems-victorian-border-soft) !important;
+}
+body[data-theme="christmas_victorian"] .app-navbar-toggle:hover,
+body[data-theme="christmas_victorian"] .script-settings-edit:hover,
+body[data-theme="christmas_victorian"] .online-details-toggle:hover,
+body[data-theme="christmas_victorian"] .blacklist-details-toggle:hover,
+body[data-theme="christmas_victorian"] .btn-reset-icon:hover,
+body[data-theme="christmas_victorian"] .btn-playback-control:hover {
+  background: var(--gems-victorian-moss) !important;
+}
+body[data-theme="christmas_victorian"] .app-navbar-dropdown {
+  background: var(--gems-victorian-surface-raised) !important;
+  color: var(--gems-victorian-ivory) !important;
+  border: 1px solid var(--gems-victorian-border) !important;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .42);
+}
+body[data-theme="christmas_victorian"] .app-navbar-item { color: var(--gems-victorian-ivory) !important; }
+body[data-theme="christmas_victorian"] .app-navbar-item:hover { background: var(--gems-victorian-moss) !important; }
+body[data-theme="christmas_victorian"] .app-navbar-divider { background: var(--gems-victorian-border-soft) !important; }
+body[data-theme="christmas_victorian"] .app-navbar-session-timer,
+body[data-theme="christmas_victorian"] .form-countdown { color: var(--gems-victorian-gold) !important; }
+
+/* Song rows, blacklist rows, and player support surfaces. */
+body[data-theme="christmas_victorian"] .song-item,
+body[data-theme="christmas_victorian"] .blacklist-item,
+body[data-theme="christmas_victorian"] .health-box,
+body[data-theme="christmas_victorian"] .playback-timeline,
+body[data-theme="christmas_victorian"] .audio-controls {
+  background: var(--gems-victorian-surface-raised) !important;
+  color: var(--gems-victorian-ivory) !important;
+  border-color: var(--gems-victorian-border-soft) !important;
+}
+body[data-theme="christmas_victorian"] .song-item.is-playing {
+  border-color: var(--gems-victorian-gold) !important;
+}
+body[data-theme="christmas_victorian"] .song-index,
+body[data-theme="christmas_victorian"] .song-sender-label,
+body[data-theme="christmas_victorian"] .blacklist-summary strong,
+body[data-theme="christmas_victorian"] .blacklist-detail-title,
+body[data-theme="christmas_victorian"] .playback-time-current {
+  color: var(--gems-victorian-gold) !important;
+}
+body[data-theme="christmas_victorian"] .song-thumb {
+  background: var(--gems-victorian-surface-soft) !important;
+}
+body[data-theme="christmas_victorian"] .song-thumb-play,
+body[data-theme="christmas_victorian"] .btn-submit,
+body[data-theme="christmas_victorian"] .playlist-picker-create button,
+body[data-theme="christmas_victorian"] .script-settings-confirm,
+body[data-theme="christmas_victorian"] .btn-unblock-song,
+body[data-theme="christmas_victorian"] .vote-button.like {
+  background: var(--gems-victorian-moss) !important;
+  color: var(--gems-victorian-ivory) !important;
+  border-color: var(--gems-victorian-gold) !important;
+}
+body[data-theme="christmas_victorian"] .script-settings-reset,
+body[data-theme="christmas_victorian"] .btn-playback-sync {
+  background: var(--gems-victorian-gold) !important;
+  color: var(--gems-victorian-charcoal) !important;
+  border-color: var(--gems-victorian-gold) !important;
+}
+body[data-theme="christmas_victorian"] .song-action-btn { color: var(--gems-victorian-gold) !important; }
+
+/* Form fields and playlist chooser. */
+body[data-theme="christmas_victorian"] .script-settings-input,
+body[data-theme="christmas_victorian"] input[type="text"],
+body[data-theme="christmas_victorian"] .playlist-picker-create input {
+  background: #1B1717 !important;
+  color: var(--gems-victorian-ivory) !important;
+  border: 1px solid var(--gems-victorian-border-soft) !important;
+}
+body[data-theme="christmas_victorian"] .script-settings-input::placeholder,
+body[data-theme="christmas_victorian"] input[type="text"]::placeholder,
+body[data-theme="christmas_victorian"] .playlist-picker-create input::placeholder {
+  color: var(--gems-victorian-muted) !important;
+  opacity: .8;
+}
+body[data-theme="christmas_victorian"] .script-settings-input:focus,
+body[data-theme="christmas_victorian"] input[type="text"]:focus,
+body[data-theme="christmas_victorian"] .playlist-picker-create input:focus {
+  border-color: var(--gems-victorian-gold) !important;
+  outline-color: rgba(197, 161, 90, .25) !important;
+}
+body[data-theme="christmas_victorian"] .playlist-picker { background: rgba(10, 8, 8, .76) !important; }
+body[data-theme="christmas_victorian"] .playlist-picker-title { color: var(--gems-victorian-ivory) !important; }
+body[data-theme="christmas_victorian"] .playlist-picker-empty { color: var(--gems-victorian-muted) !important; }
+body[data-theme="christmas_victorian"] .playlist-picker-option {
+  background: var(--gems-victorian-surface-raised) !important;
+  color: var(--gems-victorian-ivory) !important;
+  border-color: var(--gems-victorian-border-soft) !important;
+}
+body[data-theme="christmas_victorian"] .playlist-picker-cancel {
+  background: var(--gems-victorian-surface-soft) !important;
+  color: var(--gems-victorian-ivory) !important;
+}
+
+/* Theme Gallery dialog follows the selected Victorian palette. */
+body[data-theme="christmas_victorian"] .gems-theme-dialog {
+  background: var(--gems-victorian-surface) !important;
+  color: var(--gems-victorian-ivory) !important;
+  border-color: var(--gems-victorian-border) !important;
+  box-shadow: 0 18px 55px rgba(0, 0, 0, .5) !important;
+}
+body[data-theme="christmas_victorian"] .gems-theme-dialog h2,
+body[data-theme="christmas_victorian"] .gems-theme-option strong { color: var(--gems-victorian-ivory) !important; }
+body[data-theme="christmas_victorian"] .gems-theme-help,
+body[data-theme="christmas_victorian"] .gems-theme-option small { color: var(--gems-victorian-muted) !important; }
+body[data-theme="christmas_victorian"] .gems-theme-option {
+  background: var(--gems-victorian-surface-raised) !important;
+  color: var(--gems-victorian-ivory) !important;
+  border-color: var(--gems-victorian-border-soft) !important;
+}
+body[data-theme="christmas_victorian"] .gems-theme-option[aria-pressed="true"] {
+  background: rgba(52, 76, 58, .62) !important;
+  border-color: var(--gems-victorian-gold) !important;
+}
+body[data-theme="christmas_victorian"] .gems-theme-option-state {
+  background: rgba(197, 161, 90, .14) !important;
+  color: var(--gems-victorian-gold) !important;
+}
+body[data-theme="christmas_victorian"] .gems-theme-dialog-actions button {
+  background: var(--gems-victorian-surface-soft) !important;
+  color: var(--gems-victorian-ivory) !important;
+  border-color: var(--gems-victorian-border-soft) !important;
+}
+body[data-theme="christmas_victorian"] .gems-theme-dialog-actions #gemsThemeSave {
+  background: var(--gems-victorian-moss) !important;
+  color: var(--gems-victorian-ivory) !important;
+  border-color: var(--gems-victorian-gold) !important;
+}
+body[data-theme="christmas_victorian"] .gems-theme-dialog-actions .gems-theme-rollback {
+  background: var(--gems-victorian-wine) !important;
+}
+body[data-theme="christmas_victorian"] .gems-theme-status { color: var(--gems-victorian-muted) !important; }
+
+/* Keep semantic status colors legible and distinct from decoration colors. */
+body[data-theme="christmas_victorian"] .status-badge,
+body[data-theme="christmas_victorian"] .online-user-chip {
+  background: var(--gems-victorian-moss) !important;
+  color: var(--gems-victorian-ivory) !important;
+  border-color: rgba(197, 161, 90, .3) !important;
+}
+body[data-theme="christmas_victorian"] .status-badge.closed {
+  background: #5A252B !important;
+  color: #F2D8D6 !important;
+}
+body[data-theme="christmas_victorian"] .status-badge.offline {
+  background: #403A35 !important;
+  color: #C4B8A6 !important;
+}
+body[data-theme="christmas_victorian"] .audio-notice.unmuted {
+  background: #244A35 !important; color: #E6F3E8 !important;
+}
+body[data-theme="christmas_victorian"] .audio-notice.muted {
+  background: #5A4725 !important; color: #F5E7C6 !important;
+}
+body[data-theme="christmas_victorian"] button:focus-visible,
+body[data-theme="christmas_victorian"] input:focus-visible,
+body[data-theme="christmas_victorian"] a:focus-visible {
+  outline: 2px solid var(--gems-victorian-gold) !important;
+  outline-offset: 2px;
+}
+
+@media (max-width: 600px) {
+  body[data-theme="christmas_victorian"] .card,
+  body[data-theme="christmas_victorian"] .online-details,
+  body[data-theme="christmas_victorian"] .script-settings-details,
+  body[data-theme="christmas_victorian"] .blacklist-details,
+  body[data-theme="christmas_victorian"] .playlist-picker-card {
+    box-shadow: 0 3px 12px rgba(0, 0, 0, .18);
+  }
+}
+</style>
+
 <style id="theme-preview-ui-styles">
   /* GEMS RADIO · THEME SYSTEM PHASE 3B — preview controls only */
   .gems-theme-overlay[hidden] { display: none !important; }
@@ -6549,7 +6816,7 @@ body[data-theme="christmas"] .playlist-picker-create input {
           <span class="gems-theme-option-state" data-theme-state>—</span>
         </button>
         <button class="gems-theme-option" type="button" data-theme-preview="christmas_victorian" aria-pressed="false">
-          <span class="gems-theme-swatch" style="background:linear-gradient(135deg,#211B1B 50%,#722B35 50%)"></span>
+          <span class="gems-theme-swatch" style="background:linear-gradient(135deg,#211B1B 34%,#722B35 34% 67%,#344C3A 67%)"></span>
           <span class="gems-theme-option-copy"><strong>Victorian Christmas</strong><small>Giáng sinh cổ điển phong cách Dark Victorian</small></span>
           <span class="gems-theme-option-state" data-theme-state>—</span>
         </button>
