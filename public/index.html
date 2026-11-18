@@ -1915,6 +1915,34 @@ body[data-theme="christmas"] #xmasSnowToggle:focus-visible {
   body[data-theme="christmas"] #xmasSnowToggle { margin-bottom: 7px; }
 }
 
+/* Phase 5 — Victorian snowfall controls and transparent, non-interactive overlay. */
+body[data-theme="christmas_victorian"] #xmasSnowCanvas {
+  display: block; position: fixed; inset: 0; width: 100vw; height: 100vh;
+  z-index: 850; pointer-events: none; border-radius: 0 !important;
+  box-shadow: none !important; filter: none !important; margin: 0 !important;
+  background: transparent !important;
+}
+body[data-theme="christmas_victorian"] #xmasSnowToggle {
+  position: relative; z-index: 851; display: inline-flex;
+  align-items: center; justify-content: center; gap: 6px;
+  margin: 0 auto 8px; padding: 6px 12px; min-height: 30px;
+  border: 1px solid #C5A15A; border-radius: 999px;
+  background: #344C3A; color: #E9DDC8; font-size: 12px;
+  font-weight: 650; line-height: 1.2; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,.28);
+}
+body[data-theme="christmas_victorian"] #xmasSnowToggle[aria-pressed="false"] {
+  background: #211B1B; color: #B7A98F; border-color: #8B7355;
+}
+body[data-theme="christmas_victorian"] #xmasSnowToggle:focus-visible {
+  outline: 2px solid #C5A15A; outline-offset: 3px;
+}
+@media (max-width: 600px) {
+  body[data-theme="christmas_victorian"] #xmasSnowToggle {
+    margin-bottom: 7px; padding: 5px 10px; min-height: 28px;
+  }
+}
+
 </style>
 
 <style id="theme-cyber-styles">
@@ -7052,6 +7080,7 @@ body[data-theme="christmas_victorian"] #playerCard .btn-audio-toggle {
   var ctx = canvas.getContext('2d');
   if (!ctx) return;
   var active = false;
+  var activeTheme = '';
   var enabled = true;
   var rafId = 0;
   var flakes = [];
@@ -7061,6 +7090,10 @@ body[data-theme="christmas_victorian"] #playerCard .btn-audio-toggle {
   var lastFrame = 0;
   var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
 
+  function isSnowTheme(theme) {
+    return theme === 'christmas' || theme === 'christmas_victorian';
+  }
+  function isVictorian() { return activeTheme === 'christmas_victorian'; }
   function setToggleUI() {
     toggle.textContent = enabled ? '❄ Tuyết rơi: Bật' : '❄ Tuyết rơi: Tắt';
     toggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
@@ -7082,21 +7115,33 @@ body[data-theme="christmas_victorian"] #playerCard .btn-audio-toggle {
 
   function createFlakes() {
     var mobile = width <= 600;
-    var count = Math.max(12, Math.min(mobile ? 22 : 42, Math.round(width / (mobile ? 19 : 17))));
+    var victorian = isVictorian();
+    var count = victorian
+      ? Math.max(mobile ? 16 : 28, Math.min(mobile ? 22 : 40, Math.round(width / (mobile ? 18 : 19))))
+      : Math.max(12, Math.min(mobile ? 22 : 42, Math.round(width / (mobile ? 19 : 17))));
     flakes = [];
     for (var i = 0; i < count; i++) {
+      var large = victorian && i % 7 === 0;
       flakes.push({
         x: Math.random() * width,
         y: Math.random() * height,
-        radius: mobile ? (1 + Math.random() * 1.5) : (1.1 + Math.random() * 2),
-        speed: 0.28 + Math.random() * 0.52,
-        drift: (Math.random() - 0.5) * 0.34,
+        radius: victorian
+          ? (mobile ? (large ? 2.2 + Math.random() * .8 : .8 + Math.random() * 1.1) : (large ? 3 + Math.random() * 1.4 : 1 + Math.random() * 1.5))
+          : (mobile ? (1 + Math.random() * 1.5) : (1.1 + Math.random() * 2)),
+        speed: victorian ? (large ? .34 + Math.random() * .22 : .22 + Math.random() * .38) : (.28 + Math.random() * .52),
+        drift: (Math.random() - 0.5) * (victorian ? .25 : .34),
         phase: Math.random() * Math.PI * 2,
-        alpha: 0.42 + Math.random() * 0.38
+        alpha: victorian ? (.48 + Math.random() * .34) : (.42 + Math.random() * .38),
+        large: large
       });
     }
   }
 
+  function flakeColor(alpha) {
+    return isVictorian()
+      ? 'rgba(233,221,200,' + alpha + ')'
+      : 'rgba(255,255,255,' + alpha + ')';
+  }
   function clear() { ctx.clearRect(0, 0, width, height); }
 
   function drawStatic() {
@@ -7104,9 +7149,9 @@ body[data-theme="christmas_victorian"] #playerCard .btn-audio-toggle {
     clear();
     flakes.forEach(function (f) {
       ctx.beginPath();
-      ctx.fillStyle = 'rgba(255,255,255,' + f.alpha + ')';
-      ctx.shadowColor = 'rgba(255,255,255,.45)';
-      ctx.shadowBlur = 3;
+      ctx.fillStyle = flakeColor(f.alpha);
+      ctx.shadowColor = isVictorian() ? 'rgba(233,221,200,.38)' : 'rgba(255,255,255,.45)';
+      ctx.shadowBlur = f.large ? 4 : 3;
       ctx.arc(f.x, f.y, f.radius, 0, Math.PI * 2);
       ctx.fill();
     });
@@ -7120,14 +7165,14 @@ body[data-theme="christmas_victorian"] #playerCard .btn-audio-toggle {
     clear();
     flakes.forEach(function (f) {
       f.y += f.speed;
-      f.x += f.drift + Math.sin(timestamp / 1900 + f.phase) * 0.12;
-      if (f.y > height + 5) { f.y = -5; f.x = Math.random() * width; }
-      if (f.x < -5) f.x = width + 5;
-      if (f.x > width + 5) f.x = -5;
+      f.x += f.drift + Math.sin(timestamp / (isVictorian() ? 2300 : 1900) + f.phase) * (isVictorian() ? .09 : .12);
+      if (f.y > height + 6) { f.y = -6; f.x = Math.random() * width; }
+      if (f.x < -6) f.x = width + 6;
+      if (f.x > width + 6) f.x = -6;
       ctx.beginPath();
-      ctx.fillStyle = 'rgba(255,255,255,' + f.alpha + ')';
-      ctx.shadowColor = 'rgba(255,255,255,.5)';
-      ctx.shadowBlur = 3;
+      ctx.fillStyle = flakeColor(f.alpha);
+      ctx.shadowColor = isVictorian() ? 'rgba(233,221,200,.42)' : 'rgba(255,255,255,.5)';
+      ctx.shadowBlur = f.large ? 5 : 3;
       ctx.arc(f.x, f.y, f.radius, 0, Math.PI * 2);
       ctx.fill();
     });
@@ -7140,7 +7185,6 @@ body[data-theme="christmas_victorian"] #playerCard .btn-audio-toggle {
     rafId = 0;
     clear();
   }
-
   function startAnimation() {
     stopAnimation();
     if (!active || !enabled) return;
@@ -7150,15 +7194,18 @@ body[data-theme="christmas_victorian"] #playerCard .btn-audio-toggle {
   }
 
   function syncTheme() {
-    var shouldBeActive = body.getAttribute('data-theme') === 'christmas';
-    if (shouldBeActive && !active) {
+    var theme = body.getAttribute('data-theme') || '';
+    var shouldBeActive = isSnowTheme(theme);
+    if (shouldBeActive && (!active || activeTheme !== theme)) {
       active = true;
-      enabled = true; // mỗi lần vào Christmas Classic đều bật mặc định, không lưu lựa chọn
+      activeTheme = theme;
+      enabled = true; // Mỗi lần vào theme có tuyết đều bật mặc định; không lưu DB.
       setToggleUI();
       resizeCanvas();
       startAnimation();
     } else if (!shouldBeActive && active) {
       active = false;
+      activeTheme = '';
       enabled = true;
       setToggleUI();
       stopAnimation();
