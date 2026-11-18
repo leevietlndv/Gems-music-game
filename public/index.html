@@ -3086,6 +3086,37 @@ body[data-theme="christmas_victorian"] #playerCard #playbackTimeline::-moz-range
   background: var(--gems-victorian-gold);
   border-radius: 999px;
 }
+/* Explicitly normalize the native range control so the thumb stays
+   vertically centered on the custom rail across Chromium and Firefox. */
+body[data-theme="christmas_victorian"] #playerCard #playbackTimeline {
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+body[data-theme="christmas_victorian"] #playerCard #playbackTimeline::-webkit-slider-runnable-track {
+  height: 5px;
+}
+body[data-theme="christmas_victorian"] #playerCard #playbackTimeline::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -5.5px;
+  border: 1px solid #E0C27D;
+  border-radius: 50%;
+  background: var(--gems-victorian-gold);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .3);
+}
+body[data-theme="christmas_victorian"] #playerCard #playbackTimeline::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid #E0C27D;
+  border-radius: 50%;
+  background: var(--gems-victorian-gold);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .3);
+}
 body[data-theme="christmas_victorian"] #playerCard #playbackTimeline:disabled {
   opacity: .45;
   cursor: not-allowed;
