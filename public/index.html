@@ -3782,6 +3782,24 @@ body[data-theme="tet_vietnam"] a.app-navbar-item {
 }
 </style>
 
+
+<style id="theme-seasonal-decoration-visibility-guard">
+/* Hotfix: each seasonal header ornament is visible only in its own theme.
+   Keep this guard late in the cascade so legacy/global SVG rules cannot leak. */
+body:not([data-theme="christmas"]) #xmasHeaderGarland,
+body:not([data-theme="christmas"]) .xmas-holly-mark {
+  display: none !important;
+}
+body:not([data-theme="christmas_victorian"]) .victorian-navbar-garland {
+  display: none !important;
+}
+body:not([data-theme="tet_vietnam"]) .tet-header-apricot,
+body:not([data-theme="tet_vietnam"]) .tet-navbar-apricot,
+body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
+  display: none !important;
+}
+</style>
+
 </head>
 
 <body data-theme="cyber">
@@ -6232,6 +6250,7 @@ body[data-theme="tet_vietnam"] a.app-navbar-item {
       ctx.restore();
     }
 
+
     function drawWheel(wheelSongs = songs) {
       const sourceSongs = Array.isArray(wheelSongs) ? wheelSongs : songs;
       const numSlices = sourceSongs.length;
@@ -6251,7 +6270,6 @@ body[data-theme="tet_vietnam"] a.app-navbar-item {
       }
 
       const sliceAngle = (2 * Math.PI) / numSlices;
-      // Vẽ các lát màu trước để hoa văn nằm trực tiếp trên mặt vòng quay.
       for (let i = 0; i < numSlices; i++) {
         const start = currentAngle + i * sliceAngle;
         const end = start + sliceAngle;
@@ -6267,7 +6285,7 @@ body[data-theme="tet_vietnam"] a.app-navbar-item {
         ctx.stroke();
       }
 
-      // Hoa văn được phủ nhẹ lên các lát màu; chữ người chơi luôn vẽ phía trên.
+      // Phủ hoa văn lên mặt vòng quay, phía dưới tên người chơi.
       drawDongSonDrumOverlay();
 
       for (let i = 0; i < numSlices; i++) {
@@ -6288,7 +6306,7 @@ body[data-theme="tet_vietnam"] a.app-navbar-item {
       }
     }
 
-    // Theme preview engine gọi bridge này để cập nhật hoa văn ngay khi đổi theme.
+    // Cho phép Theme System vẽ lại vòng quay ngay khi đổi theme.
     window.GemsRadioRedrawWheel = function () { drawWheel(); };
 
     function whenYouTubeApiReady(callback) {
