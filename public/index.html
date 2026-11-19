@@ -1943,6 +1943,51 @@ body[data-theme="christmas_victorian"] #xmasSnowToggle:focus-visible {
   }
 }
 
+/* Phase 5 — Tet spring effects: transparent canvas and theme-only control. */
+body[data-theme="tet_vietnam"] #xmasSnowCanvas {
+  display: block; position: fixed; inset: 0; width: 100vw; height: 100vh;
+  z-index: 850; pointer-events: none; border-radius: 0 !important;
+  box-shadow: none !important; filter: none !important; margin: 0 !important;
+  background: transparent !important;
+}
+body[data-theme="tet_vietnam"] #xmasSnowToggle {
+  position: relative; z-index: 851; display: inline-flex;
+  align-items: center; justify-content: center; gap: 6px;
+  margin: 0 auto 8px; padding: 6px 12px; min-height: 30px;
+  border: 1px solid #E1C477; border-radius: 999px;
+  background: linear-gradient(135deg, #A9222D, #68111D); color: #F7EBD2;
+  font-size: 12px; font-weight: 700; line-height: 1.2; cursor: pointer;
+  box-shadow: 0 2px 9px rgba(35,4,10,.3), inset 0 0 0 1px rgba(255,225,160,.12);
+}
+body[data-theme="tet_vietnam"] #xmasSnowToggle[aria-pressed="false"] {
+  background: #4B3024; color: #D8C6A4; border-color: #8B7355;
+}
+body[data-theme="tet_vietnam"] #xmasSnowToggle:focus-visible {
+  outline: 2px solid #F0D99A; outline-offset: 3px;
+}
+body[data-theme="tet_vietnam"] .tet-spring-lantern {
+  position: absolute; top: 23px; z-index: 2; width: 34px; height: 48px;
+  display: grid; place-items: center; pointer-events: none; user-select: none;
+  transform-origin: 50% -12px; animation: tetLanternSway 4.8s ease-in-out infinite;
+  filter: drop-shadow(0 3px 4px rgba(30,5,5,.38));
+  font-size: 31px; line-height: 1;
+}
+body[data-theme="tet_vietnam"] .tet-spring-lantern-left { left: 7px; }
+body[data-theme="tet_vietnam"] .tet-spring-lantern-right { right: 7px; animation-delay: -2.4s; }
+@keyframes tetLanternSway {
+  0%, 100% { transform: rotate(-5deg); }
+  50% { transform: rotate(5deg); }
+}
+@media (max-width: 600px) {
+  body[data-theme="tet_vietnam"] #xmasSnowToggle { margin-bottom: 7px; padding: 5px 10px; min-height: 28px; }
+  body[data-theme="tet_vietnam"] .tet-spring-lantern { top: 26px; font-size: 24px; width: 27px; height: 38px; }
+  body[data-theme="tet_vietnam"] .tet-spring-lantern-left { left: 2px; }
+  body[data-theme="tet_vietnam"] .tet-spring-lantern-right { right: 2px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body[data-theme="tet_vietnam"] .tet-spring-lantern { animation: none !important; }
+}
+
 </style>
 
 <style id="theme-cyber-styles">
@@ -3658,6 +3703,8 @@ body[data-theme="tet_vietnam"] #playerCard #volumeSlider::-moz-range-thumb {
         <g transform="translate(377 3) scale(.75)"><ellipse cy="-5" rx="4.2" ry="8"/><ellipse transform="rotate(72)" cy="-5" rx="4.2" ry="8"/><ellipse transform="rotate(144)" cy="-5" rx="4.2" ry="8"/><ellipse transform="rotate(216)" cy="-5" rx="4.2" ry="8"/><ellipse transform="rotate(288)" cy="-5" rx="4.2" ry="8"/><circle r="3" fill="#A86A18"/></g>
       </g>
     </svg>
+    <span class="tet-spring-lantern tet-spring-lantern-left" aria-hidden="true">🏮</span>
+    <span class="tet-spring-lantern tet-spring-lantern-right" aria-hidden="true">🏮</span>
     <h1>🎵 GEMS Radio</h1>
     <button id="xmasSnowToggle" type="button" aria-pressed="true" aria-label="Tắt hiệu ứng tuyết rơi">❄ Tuyết rơi: Bật</button>
   </div>
@@ -7713,6 +7760,169 @@ body[data-theme="tet_vietnam"] #playerCard #volumeSlider::-moz-range-thumb {
   var observer = new MutationObserver(syncTheme);
   observer.observe(body, { attributes: true, attributeFilter: ['data-theme'] });
   setToggleUI();
+  syncTheme();
+})();
+</script>
+
+<script id="gems-tet-spring-effects">
+(function () {
+  'use strict';
+  var body = document.body;
+  var canvas = document.getElementById('xmasSnowCanvas');
+  var toggle = document.getElementById('xmasSnowToggle');
+  if (!body || !canvas || !toggle || !canvas.getContext) return;
+  var ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  var active = false;
+  var enabled = true;
+  var rafId = 0;
+  var width = 1, height = 1, dpr = 1, lastFrame = 0;
+  var petals = [], sparks = [];
+  var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
+  var mobileQuery = window.matchMedia && window.matchMedia('(max-width: 600px)');
+
+  function setToggleUI() {
+    toggle.textContent = enabled ? '🌸 Hiệu ứng mùa xuân: Bật' : '🌸 Hiệu ứng mùa xuân: Tắt';
+    toggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+    toggle.setAttribute('aria-label', enabled ? 'Tắt hiệu ứng mùa xuân' : 'Bật hiệu ứng mùa xuân');
+  }
+  function makeParticles() {
+    var mobile = mobileQuery ? mobileQuery.matches : width <= 600;
+    var petalCount = mobile ? 11 : Math.max(18, Math.min(34, Math.round(width / 34)));
+    var sparkCount = mobile ? 12 : Math.max(20, Math.min(42, Math.round(width / 27)));
+    petals = []; sparks = [];
+    for (var i = 0; i < petalCount; i++) {
+      petals.push({
+        x: Math.random() * width, y: Math.random() * height,
+        size: mobile ? 3 + Math.random() * 2 : 3.5 + Math.random() * 3.2,
+        speed: .22 + Math.random() * (mobile ? .35 : .48),
+        drift: (Math.random() - .5) * .42,
+        phase: Math.random() * Math.PI * 2,
+        spin: (Math.random() - .5) * .035,
+        angle: Math.random() * Math.PI * 2,
+        alpha: .55 + Math.random() * .35
+      });
+    }
+    for (var j = 0; j < sparkCount; j++) {
+      sparks.push({
+        x: Math.random() * width, y: Math.random() * height,
+        radius: .45 + Math.random() * (mobile ? .9 : 1.25),
+        phase: Math.random() * Math.PI * 2,
+        pulse: .006 + Math.random() * .012,
+        alpha: .22 + Math.random() * .5
+      });
+    }
+  }
+  function resizeCanvas() {
+    width = Math.max(1, window.innerWidth || document.documentElement.clientWidth || 1);
+    height = Math.max(1, window.innerHeight || document.documentElement.clientHeight || 1);
+    dpr = Math.min(window.devicePixelRatio || 1, 1.35);
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    makeParticles();
+    if (active && enabled && reducedMotion && reducedMotion.matches) drawStatic();
+  }
+  function drawPetal(p, alpha) {
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.angle);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#F2C94C';
+    ctx.shadowColor = 'rgba(255,213,91,.45)';
+    ctx.shadowBlur = 5;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, p.size * .62, p.size * 1.18, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+  function drawSparks(timestamp) {
+    sparks.forEach(function (s) {
+      var pulse = .5 + .5 * Math.sin(timestamp * s.pulse + s.phase);
+      var alpha = s.alpha * (.35 + pulse * .65);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#FFE6A0';
+      ctx.shadowColor = 'rgba(255,207,82,.85)';
+      ctx.shadowBlur = 4 + pulse * 4;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.radius * (.7 + pulse * .45), 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+  }
+  function clear() { ctx.clearRect(0, 0, width, height); }
+  function drawStatic() {
+    if (!active || !enabled) return;
+    clear();
+    petals.forEach(function (p) { drawPetal(p, p.alpha); });
+    drawSparks(0);
+  }
+  function frame(timestamp) {
+    if (!active || !enabled || (reducedMotion && reducedMotion.matches)) { rafId = 0; return; }
+    if (timestamp - lastFrame < 32) { rafId = requestAnimationFrame(frame); return; }
+    lastFrame = timestamp;
+    clear();
+    petals.forEach(function (p) {
+      p.y += p.speed;
+      p.x += p.drift + Math.sin(timestamp / 1900 + p.phase) * .16;
+      p.angle += p.spin;
+      if (p.y > height + 12) { p.y = -12; p.x = Math.random() * width; }
+      if (p.x < -12) p.x = width + 12;
+      if (p.x > width + 12) p.x = -12;
+      drawPetal(p, p.alpha);
+    });
+    drawSparks(timestamp);
+    rafId = requestAnimationFrame(frame);
+  }
+  function stopAnimation() {
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = 0;
+    clear();
+  }
+  function startAnimation() {
+    stopAnimation();
+    if (!active || !enabled) return;
+    if (reducedMotion && reducedMotion.matches) { drawStatic(); return; }
+    lastFrame = 0;
+    rafId = requestAnimationFrame(frame);
+  }
+  function syncTheme() {
+    var isTet = body.getAttribute('data-theme') === 'tet_vietnam';
+    if (isTet && !active) {
+      active = true;
+      enabled = true; // Mỗi lần quay lại theme Tết, hiệu ứng bật mặc định; không lưu DB.
+      setToggleUI();
+      resizeCanvas();
+      startAnimation();
+    } else if (!isTet && active) {
+      active = false;
+      enabled = true;
+      stopAnimation();
+    }
+  }
+  toggle.addEventListener('click', function () {
+    if (!active) return;
+    enabled = !enabled;
+    setToggleUI();
+    if (enabled) startAnimation(); else stopAnimation();
+  });
+  window.addEventListener('resize', function () {
+    if (!active) return;
+    resizeCanvas();
+    startAnimation();
+  }, { passive: true });
+  if (reducedMotion) {
+    var onMotionChange = function () { if (active && enabled) startAnimation(); };
+    if (typeof reducedMotion.addEventListener === 'function') reducedMotion.addEventListener('change', onMotionChange);
+    else if (typeof reducedMotion.addListener === 'function') reducedMotion.addListener(onMotionChange);
+  }
+  var observer = new MutationObserver(syncTheme);
+  observer.observe(body, { attributes: true, attributeFilter: ['data-theme'] });
   syncTheme();
 })();
 </script>
