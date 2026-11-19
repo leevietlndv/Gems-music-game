@@ -3420,6 +3420,158 @@ body[data-theme="tet_vietnam"] .wheel-container .pointer { z-index: 3; }
 }
 </style>
 
+<style id="theme-tet-spring-music-player">
+/* =========================================================
+   GEMS RADIO · TẾT CỔ TRUYỀN HOÀNG KIM · PHASE 4
+   Spring Music Player — CSS-only visual treatment.
+   Player DOM, playback state, timeline and audio logic are untouched.
+   ========================================================= */
+body[data-theme="tet_vietnam"] #playerCard {
+  border: 2px solid var(--gems-tet-gold) !important;
+  border-radius: 16px !important;
+  background: linear-gradient(145deg, #8F1725 0%, #74121F 58%, #5D101A 100%) !important;
+  box-shadow: inset 0 0 0 1px rgba(247,235,210,.08), 0 8px 24px rgba(35,4,10,.34) !important;
+}
+body[data-theme="tet_vietnam"] #playerCard:has(#btnPlaybackControl[aria-label="Tạm dừng"]) {
+  border-color: var(--gems-tet-gold-light) !important;
+  box-shadow: inset 0 0 0 1px rgba(247,235,210,.12), 0 0 0 1px rgba(201,163,78,.35), 0 8px 26px rgba(35,4,10,.38) !important;
+}
+body[data-theme="tet_vietnam"] #playerCard .card-title,
+body[data-theme="tet_vietnam"] #playerCard .player-label,
+body[data-theme="tet_vietnam"] #playerCard #playerTitleText {
+  color: var(--gems-tet-ivory) !important;
+}
+body[data-theme="tet_vietnam"] #playerCard .player-label {
+  color: var(--gems-tet-gold-light) !important;
+}
+body[data-theme="tet_vietnam"] #playerCard .winner-sender-row,
+body[data-theme="tet_vietnam"] #playerCard .winner-sender-label {
+  color: var(--gems-tet-ivory) !important;
+}
+body[data-theme="tet_vietnam"] #playerCard #winnerUser {
+  color: var(--gems-tet-gold-light) !important;
+}
+body[data-theme="tet_vietnam"] #playerCard .health-box {
+  background: linear-gradient(135deg, #64131D, #7B1825) !important;
+  border: 1px solid rgba(201,163,78,.48) !important;
+  color: var(--gems-tet-ivory) !important;
+}
+body[data-theme="tet_vietnam"] #playerCard .health-title { color: var(--gems-tet-ivory) !important; }
+body[data-theme="tet_vietnam"] #playerCard .vote-button.like {
+  background: linear-gradient(145deg, #C9A34E, #E1C477) !important;
+  color: #4B3024 !important;
+  border: 1px solid #F0D99A !important;
+  box-shadow: 0 2px 5px rgba(30,5,8,.22);
+}
+body[data-theme="tet_vietnam"] #playerCard .vote-button.dislike {
+  background: #51202A !important;
+  color: var(--gems-tet-ivory) !important;
+  border: 1px solid rgba(201,163,78,.48) !important;
+}
+body[data-theme="tet_vietnam"] #playerCard .player-wrapper {
+  overflow: hidden;
+  border: 1px solid rgba(201,163,78,.58);
+  border-radius: 10px;
+  background: #260A0E;
+  box-shadow: 0 3px 12px rgba(20,2,5,.24);
+}
+/* Recessed dark-red control wells with a fine antique-gold edge. */
+body[data-theme="tet_vietnam"] #playerCard .playback-timeline,
+body[data-theme="tet_vietnam"] #playerCard .audio-controls {
+  background: linear-gradient(180deg, #54121C, #431019) !important;
+  border: 1px solid rgba(201,163,78,.58) !important;
+  color: var(--gems-tet-ivory) !important;
+  box-shadow: inset 0 1px 4px rgba(0,0,0,.25);
+}
+body[data-theme="tet_vietnam"] #playerCard .playback-time-row,
+body[data-theme="tet_vietnam"] #playerCard #playbackCurrentTime,
+body[data-theme="tet_vietnam"] #playerCard #playbackDuration {
+  color: var(--gems-tet-ivory) !important;
+}
+body[data-theme="tet_vietnam"] #playerCard #playbackCurrentTime { color: var(--gems-tet-gold-light) !important; }
+/* Admin Play/Pause is the gold focal control. */
+body[data-theme="tet_vietnam"] #playerCard .btn-playback-control {
+  background: linear-gradient(145deg, #E1C477, #C9A34E) !important;
+  color: #4B3024 !important;
+  border: 1px solid #F0D99A !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 6px rgba(20,2,5,.32);
+}
+body[data-theme="tet_vietnam"] #playerCard .btn-playback-control:hover:not(:disabled) {
+  background: #F0D99A !important;
+}
+body[data-theme="tet_vietnam"] #playerCard .btn-playback-control:disabled { opacity: .46; }
+/* Gold progress rail and thumb, normalized for Chromium and Firefox. */
+body[data-theme="tet_vietnam"] #playerCard #playbackTimeline {
+  height: 18px;
+  background: transparent !important;
+  accent-color: var(--gems-tet-gold);
+  -webkit-appearance: none;
+  appearance: none;
+  vertical-align: middle;
+}
+body[data-theme="tet_vietnam"] #playerCard #playbackTimeline::-webkit-slider-runnable-track {
+  height: 5px; background: #8B7355; border: 0; border-radius: 999px;
+}
+body[data-theme="tet_vietnam"] #playerCard #playbackTimeline::-moz-range-track {
+  height: 5px; background: #8B7355; border: 0; border-radius: 999px;
+}
+body[data-theme="tet_vietnam"] #playerCard #playbackTimeline::-moz-range-progress {
+  height: 5px; background: var(--gems-tet-gold); border-radius: 999px;
+}
+body[data-theme="tet_vietnam"] #playerCard #playbackTimeline::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 16px; height: 16px; margin-top: -5.5px;
+  border: 1px solid #F0D99A; border-radius: 50%;
+  background: var(--gems-tet-gold);
+  box-shadow: 0 1px 4px rgba(0,0,0,.38);
+}
+body[data-theme="tet_vietnam"] #playerCard #playbackTimeline::-moz-range-thumb {
+  width: 16px; height: 16px; box-sizing: border-box;
+  border: 1px solid #F0D99A; border-radius: 50%;
+  background: var(--gems-tet-gold);
+  box-shadow: 0 1px 4px rgba(0,0,0,.38);
+}
+body[data-theme="tet_vietnam"] #playerCard #playbackTimeline:disabled { opacity: .45; cursor: not-allowed; }
+/* Keep the established blue clock sync button; secondary toggles stay subdued. */
+body[data-theme="tet_vietnam"] #playerCard .btn-playback-sync {
+  background: #1976D2 !important; color: #fff !important;
+  border: 1px solid #64A9E8 !important;
+}
+body[data-theme="tet_vietnam"] #playerCard .btn-audio-toggle,
+body[data-theme="tet_vietnam"] #playerCard .btn-auto-play {
+  background: #51202A !important; color: var(--gems-tet-gold-light) !important;
+  border: 1px solid rgba(201,163,78,.62) !important;
+}
+body[data-theme="tet_vietnam"] #playerCard .btn-audio-toggle.enabled {
+  background: #557044 !important; color: #FFF4D8 !important;
+  border-color: #A6BD83 !important;
+}
+body[data-theme="tet_vietnam"] #playerCard .am-luong {
+  background: #6C512B !important; border: 1px solid rgba(225,196,119,.58);
+}
+body[data-theme="tet_vietnam"] #playerCard #volumeValue { color: var(--gems-tet-ivory) !important; }
+body[data-theme="tet_vietnam"] #playerCard #volumeSlider {
+  background: linear-gradient(to right, #C9A34E 0%, #C9A34E 70%, #6B5550 70%, #6B5550 100%);
+  accent-color: var(--gems-tet-gold);
+}
+body[data-theme="tet_vietnam"] #playerCard #volumeSlider::-webkit-slider-thumb {
+  background: var(--gems-tet-gold); border: 1px solid #F0D99A;
+}
+body[data-theme="tet_vietnam"] #playerCard #volumeSlider::-moz-range-thumb {
+  background: var(--gems-tet-gold); border: 1px solid #F0D99A;
+}
+@media (max-width: 420px) {
+  body[data-theme="tet_vietnam"] #playerCard {
+    border-radius: 13px !important;
+    box-shadow: 0 4px 14px rgba(35,4,10,.32) !important;
+  }
+  body[data-theme="tet_vietnam"] #playerCard:has(#btnPlaybackControl[aria-label="Tạm dừng"]) {
+    box-shadow: 0 0 0 1px rgba(201,163,78,.32), 0 4px 14px rgba(35,4,10,.32) !important;
+  }
+}
+</style>
+
 </head>
 
 <body data-theme="cyber">
