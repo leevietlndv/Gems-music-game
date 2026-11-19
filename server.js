@@ -458,6 +458,7 @@ async function blockSongAndRemove(songId, reason = 'manual_delete') {
 
     // Chỉ cập nhật RAM sau khi transaction PostgreSQL đã commit thành công.
     songs = songs.filter(songItem => String(songItem.id) !== String(normalizedId));
+    syncAutoPlayModeWithSongCount();
 
     if (blockedSong) {
       const existingIndex = blockedSongs.findIndex(
@@ -961,12 +962,11 @@ async function refreshRealtimeAdminPermission(telegramId, knownRole = undefined)
   }
 
   // Admin bị revoke không thể tiếp tục giữ quyền điều khiển Auto Play.
-  // Không reset playback/song; chỉ tắt Auto Play controller.
+  // Tự chuyển controller sang Admin khác nếu danh sách còn từ 2 bài.
   if (revokedController) {
-    setAutoPlayState(0);
-    broadcastAutoPlayState();
+    syncAutoPlayModeWithSongCount();
     broadcastState();
-    console.log(`⏹ Auto Play tự tắt vì quyền Admin của ${id} đã bị thu hồi.`);
+    console.log(`🔄 Auto Play cập nhật controller sau khi quyền Admin của ${id} bị thu hồi.`);
   }
 
   if (changed) {
@@ -1314,6 +1314,7 @@ async function replaceCurrentSongDueToHealth() {
     await pool.query('DELETE FROM song_votes WHERE song_id = $1', [nextSong.id]);
 
     lastWinner = nextSong;
+    syncAutoPlayModeWithSongCount();
     startPlayback(nextSong.id, 0);
     currentHealth = 5;
     currentLikeCount = 0;
@@ -1399,6 +1400,7 @@ async function performSpin(initiatorSocketId = null, actionUser = null) {
   const selectedIndex = Math.floor(Math.random() * spinSongs.length);
   const winner = spinSongs[selectedIndex];
   lastWinner = winner;
+  syncAutoPlayModeWithSongCount();
   startPlayback(winner.id, 0, SPIN_ANIMATION_MS);
   currentHealth = 5;
   currentLikeCount = 0;
@@ -1499,8 +1501,7 @@ async function performSpin(initiatorSocketId = null, actionUser = null) {
     lastWinner = null;
     stopPlayback();
 
-    setAutoPlayState(2, autoPlayControllerSocketId);
-    broadcastAutoPlayState();
+    syncAutoPlayModeWithSongCount();
     broadcastState();
 
     ctx.reply('🧹 Đã xóa sạch danh sách bài hát!');
@@ -2307,8 +2308,8 @@ async function getYouTubeTitle(url) {
 // Lưu ý: static middleware (dòng dưới) sẽ phục vụ /shared/youtube.js cho client.
 
 // ==================== AUTO PLAY STATE ====================
-// 0 = Tắt | 1 = Tuần tự | 2 = Ngẫu nhiên
-let autoPlayMode = 2;
+// 0 = Phát 1 bài rồi dừng | 2 = Phát ngẫu nhiên
+let autoPlayMode = 0;
 let autoPlayControllerSocketId = null;
 
 function setAutoPlayState(mode, controllerSocketId = null) {
@@ -2323,6 +2324,23 @@ function broadcastAutoPlayState() {
     mode: autoPlayMode,
     controllerSocketId: autoPlayControllerSocketId
   });
+}
+
+// Chế độ phát được quyết định duy nhất bởi số bài trong danh sách.
+// Từ 2 bài trở lên: phát ngẫu nhiên; 0 hoặc 1 bài: phát một bài rồi dừng.
+function syncAutoPlayModeWithSongCount() {
+  if (songs.length >= 2) {
+    let controller = io.sockets.sockets.get(autoPlayControllerSocketId);
+    if (!controller || controller.authenticated !== true || controller.isAdmin !== true) {
+      controller = Array.from(io.sockets.sockets.values()).find(
+        candidate => candidate.authenticated === true && candidate.isAdmin === true
+      ) || null;
+    }
+    setAutoPlayState(2, controller?.id || null);
+  } else {
+    setAutoPlayState(0);
+  }
+  broadcastAutoPlayState();
 }
 
 function broadcastState() {
@@ -3050,6 +3068,7 @@ app.post('/api/submit', async (req, res) => {
 
       songs.push(insertResult.rows[0]);
       songs.sort((a, b) => Number(a.id) - Number(b.id));
+      syncAutoPlayModeWithSongCount();
       broadcastState();
 
       return { success: true, song: insertResult.rows[0] };
@@ -3085,71 +3104,16 @@ function canUseAdminSocketForTelegram(socketId, telegramId) {
 }
 
 app.post('/api/auto-play-mode', async (req, res) => {
-  const { mode, socketId } = req.body;
   const auth = await requireTelegramAdmin(req, res);
   if (!auth.ok) return;
 
-  const newMode = Number(mode);
-
-  if (![0, 1, 2].includes(newMode)) {
-    return res.status(400).json({
-      success: false,
-      message: 'Chế độ Auto Play không hợp lệ!'
-    });
-  }
-
-  if (newMode === 0) {
-    const result = await enqueueGameMutation(async () => {
-      setAutoPlayState(0);
-      broadcastAutoPlayState();
-      broadcastState();
-
-      console.log('⏹ Admin đã tắt Auto Play');
-
-      return {
-        success: true,
-        mode: 0,
-        controllerSocketId: null
-      };
-    });
-
-    return res.json(result);
-  }
-
-  if (!socketId || typeof socketId !== 'string') {
-    return res.status(400).json({
-      success: false,
-      message: 'Thiếu socketId của thiết bị điều khiển.'
-    });
-  }
-
-  if (!canUseAdminSocketForTelegram(socketId, auth.user.id)) {
-    return res.status(403).json({
-      success: false,
-      message: 'Thiết bị điều khiển không thuộc phiên Admin hiện tại.'
-    });
-  }
-
-  const result = await enqueueGameMutation(async () => {
-    setAutoPlayState(newMode, socketId);
-    broadcastAutoPlayState();
-    broadcastState();
-
-    console.log(
-      autoPlayMode === 1
-        ? `🔢 Admin bật Auto Play TUẦN TỰ | controller=${socketId}`
-        : `🔀 Admin bật Auto Play NGẪU NHIÊN | controller=${socketId}`
-    );
-
-    return {
-      success: true,
-      mode: autoPlayMode,
-      controllerSocketId: autoPlayControllerSocketId,
-      hasCurrentSong: !!lastWinner
-    };
+  // Chế độ không còn được điều khiển thủ công; số lượng bài hát quyết định.
+  return res.status(409).json({
+    success: false,
+    mode: autoPlayMode,
+    controllerSocketId: autoPlayControllerSocketId,
+    message: 'Chế độ phát được tự động xác định theo số lượng bài hát.'
   });
-
-  res.json(result);
 });
 
 // ==================== API: AUTO PLAY NEXT ====================
@@ -3162,7 +3126,7 @@ app.post('/api/auto-play-next', async (req, res) => {
     return res.json({
       success: false,
       stopAutoPlay: true,
-      message: 'Auto Play đang tắt.'
+      message: 'Danh sách hiện chỉ còn một bài hoặc đang trống; bài hiện tại sẽ phát xong rồi dừng.'
     });
   }
 
@@ -3204,9 +3168,8 @@ app.post('/api/auto-play-next', async (req, res) => {
     );
 
     if (availableSongs.length === 0) {
-      setAutoPlayState(0);
+      syncAutoPlayModeWithSongCount();
       stopPlayback();
-      broadcastAutoPlayState();
       broadcastState();
 
       console.log('⏹ Auto Play dừng: không còn bài tiếp theo.');
@@ -3220,13 +3183,8 @@ app.post('/api/auto-play-next', async (req, res) => {
 
     let nextSong;
 
-    if (autoPlayMode === 1) {
-      // Tuần tự: songs được giữ theo id ASC, nên lấy bài đầu tiên còn lại.
-      nextSong = availableSongs[0];
-    } else {
-      const randomIndex = Math.floor(Math.random() * availableSongs.length);
-      nextSong = availableSongs[randomIndex];
-    }
+    const randomIndex = Math.floor(Math.random() * availableSongs.length);
+    nextSong = availableSongs[randomIndex];
 
     if (lastWinner && String(lastWinner.id) !== String(nextSong.id)) {
       await pool.query('DELETE FROM songs WHERE id = $1', [lastWinner.id]);
@@ -3238,6 +3196,7 @@ app.post('/api/auto-play-next', async (req, res) => {
     await pool.query('DELETE FROM song_votes WHERE song_id = $1', [nextSong.id]);
 
     lastWinner = nextSong;
+    syncAutoPlayModeWithSongCount();
     startPlayback(nextSong.id, 0);
     currentHealth = 5;
     currentLikeCount = 0;
@@ -3258,11 +3217,7 @@ app.post('/api/auto-play-next', async (req, res) => {
 
     broadcastState();
 
-    console.log(
-      autoPlayMode === 1
-        ? `🔢 Auto tuần tự → #${nextSong.id}`
-        : `🔀 Auto ngẫu nhiên → #${nextSong.id}`
-    );
+    console.log(`🔀 Auto ngẫu nhiên → #${nextSong.id}`);
 
       return {
         success: true,
@@ -3346,6 +3301,7 @@ app.post('/api/play-song', async (req, res) => {
       if (lastWinner && String(lastWinner.id) !== String(freshSong.id)) {
         await pool.query('DELETE FROM songs WHERE id = $1', [lastWinner.id]);
         songs = songs.filter(s => String(s.id) !== String(lastWinner.id));
+        syncAutoPlayModeWithSongCount();
         console.log(`🗑️ Đã xóa bài đang phát #${lastWinner.id}`);
       }
 
@@ -3567,8 +3523,7 @@ app.post('/api/script-settings/start-session', async (req, res) => {
             currentLikeCount = 0;
             currentDislikeCount = 0;
             clearReplacementCountdown();
-            setAutoPlayState(0);
-            broadcastAutoPlayState();
+            syncAutoPlayModeWithSongCount();
 
             scriptSessionEndsAt = null;
             scriptSessionTimer = null;
@@ -3687,9 +3642,8 @@ app.post('/api/reset', async (req, res) => {
       currentDislikeCount = 0;
       clearReplacementCountdown();
 
-      // Reset cũng tắt Auto Play để không tự phát lại sau khi reset.
-      setAutoPlayState(2, autoPlayControllerSocketId);
-      broadcastAutoPlayState();
+      // Reset về trạng thái danh sách trống: không tự động chuyển bài.
+      syncAutoPlayModeWithSongCount();
       broadcastState();
 
       console.log('🧹 Đã xóa toàn bộ bài hát khỏi PostgreSQL');
@@ -4190,11 +4144,10 @@ io.on('connection', (socket) => {
     removeOnlineUser(socket.id, true);
 
     if (socket.id === autoPlayControllerSocketId) {
-      setAutoPlayState(0);
-      broadcastAutoPlayState();
+      syncAutoPlayModeWithSongCount();
       broadcastState();
 
-      console.log('⏹ Auto Play tự tắt vì Admin điều khiển đã thoát.');
+      console.log('🔄 Auto Play đã cập nhật controller sau khi Admin điều khiển thoát.');
     }
   });
 });
@@ -4206,6 +4159,7 @@ async function startServer() {
   try {
     await initDatabase();
     await loadSongsFromDatabase();
+    syncAutoPlayModeWithSongCount();
     await loadBlockedSongsFromDatabase();
 
     server.listen(PORT, () => {

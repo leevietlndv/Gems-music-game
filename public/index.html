@@ -4046,7 +4046,7 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       <button id="btnAudioToggle" class="btn-audio-toggle" type="button" aria-label="Bật nhạc" title="Bật nhạc">🔇</button>
       <input id="volumeSlider" type="range" min="0" max="100" value="70" aria-label="Âm lượng">
       <div class="am-luong"><span id="volumeValue">70</span></div>
-      <button id="btnAutoPlay" class="btn-auto-play admin-only" type="button" aria-label="Chế độ phát ngẫu nhiên" title="Chế độ phát ngẫu nhiên">🔀</button>
+      <button id="btnAutoPlay" class="btn-auto-play admin-only" type="button" aria-label="Phát 1 bài rồi dừng" title="Phát 1 bài rồi dừng" aria-disabled="true" tabindex="-1" style="pointer-events:none;">■</button>
     </div>
   </div>
 
@@ -4174,7 +4174,7 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
     // Import engine của Morphicons cho DOM thuần
     import { createMorph } from 'https://esm.sh/morphicons/dom';
     // Import dữ liệu icon nét (stroke-based) từ Lucide
-    import { Play, Pause, Menu, X, Volume2, Volume1, VolumeX, ListOrdered, Shuffle, Square, ChevronDown, ChevronUp, RefreshCw, Upload, Pencil, Heart, Check, Trash2 } from 'https://esm.sh/lucide';
+    import { Play, Pause, Menu, X, Volume2, Volume1, VolumeX, Shuffle, Square, ChevronDown, ChevronUp, RefreshCw, Upload, Pencil, Heart, Check, Trash2 } from 'https://esm.sh/lucide';
 
     const tg = window.Telegram?.WebApp;
     if (tg) {
@@ -4805,11 +4805,10 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
     }
 
     // ==================== AUTO PLAY ====================
-    // 0 = Tắt
-    // 1 = Tuần tự
-    // 2 = Ngẫu nhiên
+    // 0 = Phát 1 bài rồi dừng
+    // 2 = Phát ngẫu nhiên
 
-    let autoPlayMode = 2;
+    let autoPlayMode = 0;
     let autoPlayController = false;
     let autoPlayControllerSocketId = null;
 
@@ -7573,105 +7572,23 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
     function updateAutoPlayButton() {
       if (!btnAutoPlay) return;
 
-      if (autoPlayMode === 1) {
-        if (autoPlayMorph) autoPlayMorph.morphTo(ListOrdered, 'snappy');
-        btnAutoPlay.setAttribute('aria-label', 'Chế độ phát tuần tự');
-        btnAutoPlay.title = 'Chế độ phát tuần tự';
-        btnAutoPlay.style.background = '#2e7d32';
-      } else if (autoPlayMode === 2) {
+      // Chỉ hiển thị trạng thái tự động; người dùng không thể ghi đè chế độ.
+      btnAutoPlay.setAttribute('aria-disabled', 'true');
+      btnAutoPlay.tabIndex = -1;
+      btnAutoPlay.style.pointerEvents = 'none';
+
+      if (autoPlayMode === 2) {
         if (autoPlayMorph) autoPlayMorph.morphTo(Shuffle, 'snappy');
-        btnAutoPlay.setAttribute('aria-label', 'Chế độ phát ngẫu nhiên');
-        btnAutoPlay.title = 'Chế độ phát ngẫu nhiên';
+        btnAutoPlay.setAttribute('aria-label', 'Phát ngẫu nhiên');
+        btnAutoPlay.title = 'Phát ngẫu nhiên';
         btnAutoPlay.style.background = '#00aaff';
       } else {
         if (autoPlayMorph) autoPlayMorph.morphTo(Square, 'snappy');
-        btnAutoPlay.setAttribute('aria-label', 'Tắt tự động phát');
-        btnAutoPlay.title = 'Tắt tự động phát';
+        btnAutoPlay.setAttribute('aria-label', 'Phát 1 bài rồi dừng');
+        btnAutoPlay.title = 'Phát 1 bài rồi dừng';
         btnAutoPlay.style.background = '#37474f';
       }
     }
-
-    btnAutoPlay.addEventListener('click', async () => {
-      if (!window.isAdmin) {
-        alert('Bạn không có quyền Admin!');
-        return;
-      }
-
-      let nextMode;
-
-      if (autoPlayMode === 0) {
-        nextMode = 1;
-      } else if (autoPlayMode === 1) {
-        nextMode = 2;
-      } else {
-        nextMode = 0;
-      }
-
-      btnAutoPlay.disabled = true;
-
-      try {
-        const res = await fetch('/api/auto-play-mode', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            mode: nextMode,
-            initData: telegramInitData,
-            socketId: socket.id
-          })
-        });
-
-        const data = await res.json();
-
-        if (!data.success) {
-          alert(data.message || 'Không thể đổi chế độ Auto Play!');
-          return;
-        }
-
-        autoPlayMode = Number(data.mode) || 0;
-        autoPlayControllerSocketId = data.controllerSocketId || null;
-        autoPlayController = autoPlayControllerSocketId === socket.id;
-
-        updateAutoPlayButton();
-
-        console.log(
-          '🎵 Auto Play Mode:',
-          autoPlayMode,
-          '| controller:',
-          autoPlayControllerSocketId
-        );
-
-        // Nếu vừa bật Auto Play mà chưa có bài đang phát,
-        // yêu cầu server chọn bài đầu tiên ngay lập tức.
-        if (autoPlayMode !== 0 && !data.hasCurrentSong && autoPlayController) {
-          const nextRes = await fetch('/api/auto-play-next', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              initData: telegramInitData,
-              socketId: socket.id
-            })
-          });
-
-          const nextData = await nextRes.json();
-
-          if (!nextData.success && nextData.stopAutoPlay) {
-            autoPlayMode = 0;
-            autoPlayController = false;
-            autoPlayControllerSocketId = null;
-            updateAutoPlayButton();
-          }
-        }
-      } catch (error) {
-        console.error('❌ Lỗi đổi Auto Play:', error);
-        alert('Lỗi kết nối!');
-      } finally {
-        btnAutoPlay.disabled = false;
-      }
-    });
 
     updateAutoPlayButton();
 
