@@ -1968,7 +1968,7 @@ body[data-theme="tet_vietnam"] #xmasSnowToggle:focus-visible {
 body[data-theme="tet_vietnam"] .tet-spring-lantern {
   position: absolute; top: 23px; z-index: 2; width: 34px; height: 48px;
   display: grid; place-items: center; pointer-events: none; user-select: none;
-  transform-origin: 50% -12px; animation: tetLanternSway 4.8s ease-in-out infinite;
+  transform-origin: 50% -12px; animation: tetLanternSway 4.1s ease-in-out infinite;
   filter: drop-shadow(0 3px 4px rgba(30,5,5,.38));
   font-size: 31px; line-height: 1;
 }
@@ -3613,6 +3613,171 @@ body[data-theme="tet_vietnam"] #playerCard #volumeSlider::-moz-range-thumb {
   }
   body[data-theme="tet_vietnam"] #playerCard:has(#btnPlaybackControl[aria-label="Tạm dừng"]) {
     box-shadow: 0 0 0 1px rgba(201,163,78,.32), 0 4px 14px rgba(35,4,10,.32) !important;
+  }
+}
+</style>
+
+
+
+<style id="theme-tet-responsive-final-polish">
+/* =========================================================
+   GEMS RADIO · TẾT CỔ TRUYỀN HOÀNG KIM · PHASE 6
+   Responsive and final visual polish; strictly scoped to tet_vietnam.
+   No application logic, data flow, or existing theme styles changed.
+   ========================================================= */
+body[data-theme="tet_vietnam"] {
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: rgba(201,163,78,.16);
+}
+body[data-theme="tet_vietnam"] .header,
+body[data-theme="tet_vietnam"] .app-navbar,
+body[data-theme="tet_vietnam"] .card,
+body[data-theme="tet_vietnam"] .online-bar,
+body[data-theme="tet_vietnam"] .online-details,
+body[data-theme="tet_vietnam"] .script-settings {
+  min-width: 0;
+}
+body[data-theme="tet_vietnam"] .tet-spring-lantern {
+  will-change: transform;
+}
+body[data-theme="tet_vietnam"] #xmasSnowToggle {
+  min-height: 34px;
+  padding-inline: 14px;
+  touch-action: manipulation;
+}
+body[data-theme="tet_vietnam"] .app-navbar-dropdown {
+  max-width: calc(100vw - 24px);
+  z-index: 1002;
+}
+body[data-theme="tet_vietnam"] .wheel-container {
+  max-width: min(300px, calc(100vw - 64px));
+  width: min(300px, calc(100vw - 64px));
+  aspect-ratio: 1 / 1;
+}
+body[data-theme="tet_vietnam"] .wheel-container canvas {
+  display: block;
+  width: 100% !important;
+  height: auto !important;
+  aspect-ratio: 1 / 1;
+}
+body[data-theme="tet_vietnam"] #playerCard .player-wrapper {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+body[data-theme="tet_vietnam"] #playerCard .playback-timeline,
+body[data-theme="tet_vietnam"] #playerCard .audio-controls,
+body[data-theme="tet_vietnam"] #playerCard .winner-interaction-row {
+  min-width: 0;
+}
+body[data-theme="tet_vietnam"] #playerCard #playbackTimeline,
+body[data-theme="tet_vietnam"] #playerCard #volumeSlider {
+  touch-action: pan-y;
+}
+body[data-theme="tet_vietnam"] button,
+body[data-theme="tet_vietnam"] a.app-navbar-item {
+  touch-action: manipulation;
+}
+
+@media (max-width: 600px) {
+  body[data-theme="tet_vietnam"] {
+    padding: 12px 10px;
+  }
+  body[data-theme="tet_vietnam"] .header {
+    margin-bottom: 12px;
+    padding-top: 23px;
+  }
+  body[data-theme="tet_vietnam"] .header h1 {
+    padding-inline: 27px;
+    font-size: clamp(17px, 5vw, 21px);
+    line-height: 1.2;
+    gap: 6px;
+  }
+  body[data-theme="tet_vietnam"] .tet-header-apricot {
+    height: 70px;
+  }
+  body[data-theme="tet_vietnam"] .app-navbar {
+    margin-top: -2px;
+    margin-bottom: 13px;
+  }
+  body[data-theme="tet_vietnam"] .app-navbar-bar {
+    gap: 6px;
+    padding-inline: 10px;
+  }
+  body[data-theme="tet_vietnam"] .app-navbar-session-timer {
+    font-size: 15px;
+    letter-spacing: .01em;
+  }
+  body[data-theme="tet_vietnam"] .card {
+    padding: 13px;
+    border-radius: 11px;
+    margin-bottom: 13px;
+  }
+  body[data-theme="tet_vietnam"] .online-bar {
+    padding-inline: 11px;
+    margin-bottom: 13px;
+  }
+  body[data-theme="tet_vietnam"] #playerCard .audio-controls {
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 9px;
+  }
+  body[data-theme="tet_vietnam"] #playerCard #volumeSlider {
+    flex: 1 1 90px;
+    min-width: 75px;
+    max-width: 170px;
+  }
+  body[data-theme="tet_vietnam"] .tet-spring-lantern {
+    top: 25px;
+    width: 26px;
+    height: 36px;
+    font-size: 23px;
+  }
+  body[data-theme="tet_vietnam"] .tet-spring-lantern-left { left: 1px; }
+  body[data-theme="tet_vietnam"] .tet-spring-lantern-right { right: 1px; }
+  body[data-theme="tet_vietnam"] #xmasSnowToggle {
+    margin-bottom: 7px;
+    min-height: 32px;
+    padding: 5px 11px;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 380px) {
+  body[data-theme="tet_vietnam"] {
+    padding-inline: 8px;
+  }
+  body[data-theme="tet_vietnam"] .header h1 {
+    padding-inline: 24px;
+    font-size: 17px;
+  }
+  body[data-theme="tet_vietnam"] .card {
+    padding: 11px;
+  }
+  body[data-theme="tet_vietnam"] .wheel-container {
+    max-width: calc(100vw - 56px);
+    width: calc(100vw - 56px);
+  }
+  body[data-theme="tet_vietnam"] .wheel-container::before { inset: -4px; }
+  body[data-theme="tet_vietnam"] .wheel-container::after { inset: -7px; }
+  body[data-theme="tet_vietnam"] #playerCard .audio-controls {
+    column-gap: 7px;
+  }
+  body[data-theme="tet_vietnam"] #playerCard .btn-playback-sync,
+  body[data-theme="tet_vietnam"] #playerCard .btn-audio-toggle,
+  body[data-theme="tet_vietnam"] #playerCard .btn-auto-play {
+    flex: 0 0 34px;
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-theme="tet_vietnam"] .tet-spring-lantern {
+    animation: none !important;
+    will-change: auto;
   }
 }
 </style>
@@ -7796,8 +7961,8 @@ body[data-theme="tet_vietnam"] #playerCard #volumeSlider::-moz-range-thumb {
       petals.push({
         x: Math.random() * width, y: Math.random() * height,
         size: mobile ? 3 + Math.random() * 2 : 3.5 + Math.random() * 3.2,
-        speed: .22 + Math.random() * (mobile ? .35 : .48),
-        drift: (Math.random() - .5) * .42,
+        speed: .27 + Math.random() * (mobile ? .40 : .56),
+        drift: (Math.random() - .5) * .48,
         phase: Math.random() * Math.PI * 2,
         spin: (Math.random() - .5) * .035,
         angle: Math.random() * Math.PI * 2,
@@ -7809,7 +7974,7 @@ body[data-theme="tet_vietnam"] #playerCard #volumeSlider::-moz-range-thumb {
         x: Math.random() * width, y: Math.random() * height,
         radius: .45 + Math.random() * (mobile ? .9 : 1.25),
         phase: Math.random() * Math.PI * 2,
-        pulse: .006 + Math.random() * .012,
+        pulse: .008 + Math.random() * .014,
         alpha: .22 + Math.random() * .5
       });
     }
