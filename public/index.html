@@ -3782,6 +3782,24 @@ body[data-theme="tet_vietnam"] a.app-navbar-item {
 }
 </style>
 
+
+<style id="theme-seasonal-decoration-visibility-guard">
+/* Hotfix: each seasonal header ornament is visible only in its own theme.
+   Keep this guard late in the cascade so legacy/global SVG rules cannot leak. */
+body:not([data-theme="christmas"]) #xmasHeaderGarland,
+body:not([data-theme="christmas"]) .xmas-holly-mark {
+  display: none !important;
+}
+body:not([data-theme="christmas_victorian"]) .victorian-navbar-garland {
+  display: none !important;
+}
+body:not([data-theme="tet_vietnam"]) .tet-header-apricot,
+body:not([data-theme="tet_vietnam"]) .tet-navbar-apricot,
+body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
+  display: none !important;
+}
+</style>
+
 </head>
 
 <body data-theme="cyber">
