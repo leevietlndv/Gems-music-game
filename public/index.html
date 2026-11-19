@@ -3782,24 +3782,6 @@ body[data-theme="tet_vietnam"] a.app-navbar-item {
 }
 </style>
 
-
-<style id="theme-seasonal-decoration-visibility-guard">
-/* Hotfix: each seasonal header ornament is visible only in its own theme.
-   Keep this guard late in the cascade so legacy/global SVG rules cannot leak. */
-body:not([data-theme="christmas"]) #xmasHeaderGarland,
-body:not([data-theme="christmas"]) .xmas-holly-mark {
-  display: none !important;
-}
-body:not([data-theme="christmas_victorian"]) .victorian-navbar-garland {
-  display: none !important;
-}
-body:not([data-theme="tet_vietnam"]) .tet-header-apricot,
-body:not([data-theme="tet_vietnam"]) .tet-navbar-apricot,
-body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
-  display: none !important;
-}
-</style>
-
 </head>
 
 <body data-theme="cyber">
@@ -6165,6 +6147,91 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       unblockSong(button.dataset.id);
     });
 
+    function drawDongSonDrumOverlay() {
+      // Chỉ vẽ hoa văn trên mặt canvas khi theme Tết đang được chọn.
+      if (document.body?.dataset?.theme !== 'tet_vietnam') return;
+
+      ctx.save();
+      ctx.translate(150, 150);
+      ctx.globalAlpha = 0.42;
+      ctx.strokeStyle = '#F1D17A';
+      ctx.fillStyle = '#F1D17A';
+      ctx.lineCap = 'round';
+
+      // Các vòng đồng tâm lấy cảm hứng từ mặt trống đồng Đông Sơn.
+      [108, 116, 124].forEach((radius, index) => {
+        ctx.beginPath();
+        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+        ctx.lineWidth = index === 1 ? 1.5 : 1;
+        ctx.stroke();
+      });
+
+      // Nhịp tia/vạch hình học chạy quanh vành trống.
+      for (let i = 0; i < 48; i++) {
+        const angle = (Math.PI * 2 * i) / 48;
+        const inner = i % 4 === 0 ? 111 : 114;
+        const outer = i % 4 === 0 ? 121 : 119;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner);
+        ctx.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer);
+        ctx.lineWidth = i % 4 === 0 ? 1.8 : 0.9;
+        ctx.stroke();
+      }
+
+      // Bốn chim Lạc cách điệu, đặt trong dải hoa văn giữa.
+      for (let i = 0; i < 4; i++) {
+        ctx.save();
+        ctx.rotate((Math.PI * 2 * i) / 4 + Math.PI / 4);
+        ctx.translate(0, -88);
+        ctx.scale(0.78, 0.78);
+        ctx.beginPath();
+        ctx.moveTo(-17, 0);
+        ctx.quadraticCurveTo(-7, -5, 0, -17);
+        ctx.quadraticCurveTo(4, -7, 17, -5);
+        ctx.quadraticCurveTo(8, 1, 0, 3);
+        ctx.quadraticCurveTo(-8, 8, -17, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(-2, -4);
+        ctx.quadraticCurveTo(-13, -18, -20, -16);
+        ctx.quadraticCurveTo(-12, -7, -2, -4);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(15, -5);
+        ctx.lineTo(22, -8);
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Mặt trời nhiều tia ở tâm trống đồng.
+      ctx.save();
+      ctx.globalAlpha = 0.58;
+      ctx.beginPath();
+      ctx.arc(0, 0, 23, 0, Math.PI * 2);
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      for (let i = 0; i < 16; i++) {
+        const angle = (Math.PI * 2 * i) / 16;
+        ctx.save();
+        ctx.rotate(angle);
+        ctx.beginPath();
+        ctx.moveTo(0, -25);
+        ctx.lineTo(-3.2, -32);
+        ctx.lineTo(0, -39);
+        ctx.lineTo(3.2, -32);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.beginPath();
+      ctx.arc(0, 0, 13, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      ctx.restore();
+    }
+
     function drawWheel(wheelSongs = songs) {
       const sourceSongs = Array.isArray(wheelSongs) ? wheelSongs : songs;
       const numSlices = sourceSongs.length;
@@ -6175,6 +6242,7 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
         ctx.arc(150, 150, 140, 0, 2 * Math.PI);
         ctx.fillStyle = '#2b384e';
         ctx.fill();
+        drawDongSonDrumOverlay();
         ctx.fillStyle = '#888';
         ctx.font = '14px Arial';
         ctx.textAlign = 'center';
@@ -6183,6 +6251,7 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       }
 
       const sliceAngle = (2 * Math.PI) / numSlices;
+      // Vẽ các lát màu trước để hoa văn nằm trực tiếp trên mặt vòng quay.
       for (let i = 0; i < numSlices; i++) {
         const start = currentAngle + i * sliceAngle;
         const end = start + sliceAngle;
@@ -6196,7 +6265,13 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
         ctx.strokeStyle = '#1c2333';
         ctx.lineWidth = 2;
         ctx.stroke();
+      }
 
+      // Hoa văn được phủ nhẹ lên các lát màu; chữ người chơi luôn vẽ phía trên.
+      drawDongSonDrumOverlay();
+
+      for (let i = 0; i < numSlices; i++) {
+        const start = currentAngle + i * sliceAngle;
         ctx.save();
         ctx.translate(150, 150);
         ctx.rotate(start + sliceAngle / 2);
@@ -6206,12 +6281,15 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
         let label = sourceSongs[i].user || `Bài ${i + 1}`;
         if (label.length > 16) label = label.substring(0, 14) + '...';
 
-        let fontSize = 12;
+        const fontSize = 12;
         ctx.font = `bold ${fontSize}px Arial`;
         ctx.fillText(label, 134, fontSize / 3);
         ctx.restore();
       }
     }
+
+    // Theme preview engine gọi bridge này để cập nhật hoa văn ngay khi đổi theme.
+    window.GemsRadioRedrawWheel = function () { drawWheel(); };
 
     function whenYouTubeApiReady(callback) {
       if (youtubeApiReady) {
@@ -8192,6 +8270,9 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
   function applyTheme(theme, updateStatus) {
     var safeTheme = normalizeTheme(theme);
     body.setAttribute('data-theme', safeTheme);
+    if (typeof window.GemsRadioRedrawWheel === 'function') {
+      window.GemsRadioRedrawWheel();
+    }
     previewTheme = safeTheme;
     previewChanged = previewTheme !== savedTheme;
     updateControls();
