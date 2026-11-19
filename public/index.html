@@ -3145,6 +3145,198 @@ body[data-theme="christmas_victorian"] #playerCard .btn-audio-toggle {
 }
 </style>
 
+<style id="theme-tet-golden-color-system">
+/* =========================================================
+   GEMS RADIO · TẾT CỔ TRUYỀN HOÀNG KIM · PHASE 2
+   Golden Tet color system only. CSS strictly scoped to tet_vietnam.
+   No decorative assets, animation, DOM, JS, or server changes.
+   ========================================================= */
+body[data-theme="tet_vietnam"] {
+  color-scheme: dark;
+  --gems-tet-red: #8F1725;
+  --gems-tet-red-light: #B83A35;
+  --gems-tet-red-deep: #68111D;
+  --gems-tet-gold: #C9A34E;
+  --gems-tet-gold-light: #E1C477;
+  --gems-tet-ivory: #F7EBD2;
+  --gems-tet-wood: #4B3024;
+  --gems-tet-green: #557044;
+  --gems-tet-muted: #D8C5A3;
+  --gems-tet-surface: #761522;
+  --gems-tet-surface-raised: #64121D;
+  --gems-tet-surface-soft: #54202A;
+  --gems-tet-border: rgba(201, 163, 78, .72);
+  --gems-tet-border-soft: rgba(201, 163, 78, .38);
+  background: var(--gems-tet-red) !important;
+  color: var(--gems-tet-ivory) !important;
+}
+
+/* Page identity and primary surfaces. */
+body[data-theme="tet_vietnam"] .header,
+body[data-theme="tet_vietnam"] .header * { color: var(--gems-tet-ivory); }
+body[data-theme="tet_vietnam"] .header h1 {
+  color: var(--gems-tet-gold-light) !important;
+  text-shadow: 0 1px 8px rgba(0,0,0,.28);
+}
+body[data-theme="tet_vietnam"] .card,
+body[data-theme="tet_vietnam"] .online-details,
+body[data-theme="tet_vietnam"] .script-settings-details,
+body[data-theme="tet_vietnam"] .blacklist-details,
+body[data-theme="tet_vietnam"] .playlist-picker-card {
+  background: var(--gems-tet-surface) !important;
+  color: var(--gems-tet-ivory) !important;
+  border: 1px solid var(--gems-tet-border) !important;
+  box-shadow: 0 5px 18px rgba(45, 5, 12, .28);
+}
+body[data-theme="tet_vietnam"] .app-navbar-bar,
+body[data-theme="tet_vietnam"] .online-bar,
+body[data-theme="tet_vietnam"] .script-settings-bar,
+body[data-theme="tet_vietnam"] #blacklistBar {
+  background: var(--gems-tet-red-deep) !important;
+  color: var(--gems-tet-ivory) !important;
+  border: 1px solid var(--gems-tet-gold) !important;
+  box-shadow: 0 3px 12px rgba(45, 5, 12, .3);
+}
+
+/* Main labels and readable secondary text. */
+body[data-theme="tet_vietnam"] .app-navbar-title,
+body[data-theme="tet_vietnam"] .card-title,
+body[data-theme="tet_vietnam"] #onlineUserCount,
+body[data-theme="tet_vietnam"] .online-detail-title,
+body[data-theme="tet_vietnam"] .player-label,
+body[data-theme="tet_vietnam"] .health-title,
+body[data-theme="tet_vietnam"] .online-summary,
+body[data-theme="tet_vietnam"] .blacklist-summary,
+body[data-theme="tet_vietnam"] .script-settings-summary,
+body[data-theme="tet_vietnam"] .script-settings-field label,
+body[data-theme="tet_vietnam"] .blacklist-title,
+body[data-theme="tet_vietnam"] .song-title,
+body[data-theme="tet_vietnam"] .playback-time-row,
+body[data-theme="tet_vietnam"] .health-status-countdown,
+body[data-theme="tet_vietnam"] #playerTitleText,
+body[data-theme="tet_vietnam"] .winner-sender-row,
+body[data-theme="tet_vietnam"] .winner-sender-label,
+body[data-theme="tet_vietnam"] #winnerUser,
+body[data-theme="tet_vietnam"] #playbackCurrentTime,
+body[data-theme="tet_vietnam"] #playbackDuration {
+  color: var(--gems-tet-ivory) !important;
+}
+body[data-theme="tet_vietnam"] .app-navbar-section-label,
+body[data-theme="tet_vietnam"] .script-settings-unit,
+body[data-theme="tet_vietnam"] .online-empty,
+body[data-theme="tet_vietnam"] .blacklist-empty,
+body[data-theme="tet_vietnam"] .playback-time-duration,
+body[data-theme="tet_vietnam"] .action-label,
+body[data-theme="tet_vietnam"] .song-sender,
+body[data-theme="tet_vietnam"] .blacklist-user-reason {
+  color: var(--gems-tet-muted) !important;
+}
+
+/* Navigation and secondary controls. */
+body[data-theme="tet_vietnam"] .app-navbar-toggle,
+body[data-theme="tet_vietnam"] .script-settings-edit,
+body[data-theme="tet_vietnam"] .online-details-toggle,
+body[data-theme="tet_vietnam"] .blacklist-details-toggle,
+body[data-theme="tet_vietnam"] .btn-reset-icon,
+body[data-theme="tet_vietnam"] .btn-playback-control,
+body[data-theme="tet_vietnam"] .btn-toggle,
+body[data-theme="tet_vietnam"] .btn-auto-play,
+body[data-theme="tet_vietnam"] .btn-audio-toggle {
+  background: var(--gems-tet-surface-soft) !important;
+  color: var(--gems-tet-gold-light) !important;
+  border-color: var(--gems-tet-border) !important;
+}
+body[data-theme="tet_vietnam"] .app-navbar-toggle:hover,
+body[data-theme="tet_vietnam"] .script-settings-edit:hover,
+body[data-theme="tet_vietnam"] .online-details-toggle:hover,
+body[data-theme="tet_vietnam"] .blacklist-details-toggle:hover,
+body[data-theme="tet_vietnam"] .btn-reset-icon:hover,
+body[data-theme="tet_vietnam"] .btn-playback-control:hover:not(:disabled) {
+  background: var(--gems-tet-red-light) !important;
+}
+body[data-theme="tet_vietnam"] .app-navbar-dropdown,
+body[data-theme="tet_vietnam"] .gems-theme-dialog {
+  background: var(--gems-tet-surface-raised) !important;
+  color: var(--gems-tet-ivory) !important;
+  border-color: var(--gems-tet-border) !important;
+  box-shadow: 0 12px 30px rgba(35, 4, 10, .42);
+}
+body[data-theme="tet_vietnam"] .app-navbar-item { color: var(--gems-tet-ivory) !important; }
+body[data-theme="tet_vietnam"] .app-navbar-item:hover { background: var(--gems-tet-red-light) !important; }
+body[data-theme="tet_vietnam"] .app-navbar-divider { background: var(--gems-tet-border-soft) !important; }
+body[data-theme="tet_vietnam"] .app-navbar-session-timer,
+body[data-theme="tet_vietnam"] .form-countdown { color: var(--gems-tet-gold-light) !important; }
+
+/* Song lists, blacklist, and player supporting surfaces. */
+body[data-theme="tet_vietnam"] .song-item,
+body[data-theme="tet_vietnam"] .blacklist-item,
+body[data-theme="tet_vietnam"] .health-box,
+body[data-theme="tet_vietnam"] .playback-timeline,
+body[data-theme="tet_vietnam"] .audio-controls {
+  background: var(--gems-tet-surface-raised) !important;
+  color: var(--gems-tet-ivory) !important;
+  border-color: var(--gems-tet-border-soft) !important;
+}
+body[data-theme="tet_vietnam"] .song-item.is-playing { border-color: var(--gems-tet-green) !important; }
+body[data-theme="tet_vietnam"] .song-index,
+body[data-theme="tet_vietnam"] .song-sender-label,
+body[data-theme="tet_vietnam"] .blacklist-summary strong,
+body[data-theme="tet_vietnam"] .blacklist-detail-title,
+body[data-theme="tet_vietnam"] .playback-time-current { color: var(--gems-tet-gold-light) !important; }
+body[data-theme="tet_vietnam"] .song-thumb { background: var(--gems-tet-surface-soft) !important; }
+body[data-theme="tet_vietnam"] .song-thumb-play,
+body[data-theme="tet_vietnam"] .btn-submit,
+body[data-theme="tet_vietnam"] .playlist-picker-create button,
+body[data-theme="tet_vietnam"] .script-settings-confirm,
+body[data-theme="tet_vietnam"] .btn-unblock-song,
+body[data-theme="tet_vietnam"] .vote-button.like {
+  background: var(--gems-tet-red-light) !important;
+  color: var(--gems-tet-ivory) !important;
+  border-color: var(--gems-tet-gold) !important;
+}
+body[data-theme="tet_vietnam"] .script-settings-reset,
+body[data-theme="tet_vietnam"] .btn-playback-sync {
+  background: var(--gems-tet-gold) !important;
+  color: var(--gems-tet-wood) !important;
+  border-color: var(--gems-tet-gold-light) !important;
+}
+body[data-theme="tet_vietnam"] .song-action-btn { color: var(--gems-tet-gold-light) !important; }
+
+/* Spring-red player palette; layout and playback logic remain untouched. */
+body[data-theme="tet_vietnam"] #playerCard {
+  background: var(--gems-tet-red-deep) !important;
+  color: var(--gems-tet-ivory) !important;
+  border-color: var(--gems-tet-gold) !important;
+}
+body[data-theme="tet_vietnam"] #playerCard .btn-playback-control {
+  background: var(--gems-tet-gold) !important;
+  color: var(--gems-tet-wood) !important;
+  border-color: var(--gems-tet-gold-light) !important;
+}
+body[data-theme="tet_vietnam"] #playerCard #playbackTimeline { accent-color: var(--gems-tet-gold); }
+
+/* Inputs and editable fields. */
+body[data-theme="tet_vietnam"] .script-settings-input,
+body[data-theme="tet_vietnam"] input[type="text"],
+body[data-theme="tet_vietnam"] .playlist-picker-create input {
+  background: var(--gems-tet-red-deep) !important;
+  color: var(--gems-tet-ivory) !important;
+  border: 1px solid var(--gems-tet-border-soft) !important;
+}
+body[data-theme="tet_vietnam"] .script-settings-input::placeholder,
+body[data-theme="tet_vietnam"] input[type="text"]::placeholder,
+body[data-theme="tet_vietnam"] .playlist-picker-create input::placeholder {
+  color: var(--gems-tet-muted) !important;
+  opacity: .82;
+}
+body[data-theme="tet_vietnam"] input:focus-visible,
+body[data-theme="tet_vietnam"] button:focus-visible,
+body[data-theme="tet_vietnam"] select:focus-visible,
+body[data-theme="tet_vietnam"] textarea:focus-visible {
+  outline-color: var(--gems-tet-gold-light);
+}
+</style>
+
 </head>
 
 <body data-theme="cyber">
@@ -7089,6 +7281,11 @@ body[data-theme="christmas_victorian"] #playerCard .btn-audio-toggle {
           <span class="gems-theme-option-copy"><strong>Victorian Christmas</strong><small>Giáng sinh cổ điển phong cách Dark Victorian</small></span>
           <span class="gems-theme-option-state" data-theme-state>—</span>
         </button>
+        <button class="gems-theme-option" type="button" data-theme-preview="tet_vietnam" aria-pressed="false">
+          <span class="gems-theme-swatch" style="background:linear-gradient(135deg,#8F1725 50%,#C9A34E 50%)"></span>
+          <span class="gems-theme-option-copy"><strong>Tết Cổ Truyền Hoàng Kim</strong><small>Giao diện Tết Việt đỏ son và vàng kim</small></span>
+          <span class="gems-theme-option-state" data-theme-state>—</span>
+        </button>
       </div>
       <div class="gems-theme-dialog-actions">
         <button id="gemsThemeSave" type="button" disabled>Lưu</button>
@@ -7282,7 +7479,7 @@ body[data-theme="christmas_victorian"] #playerCard .btn-audio-toggle {
   if (!body || !overlay || !openButton || !closeButton || !rollbackButton || !saveButton || !status || !options.length) return;
 
   function normalizeTheme(value) {
-    return value === 'default' || value === 'cyber' || value === 'christmas' || value === 'christmas_victorian' ? value : 'cyber';
+    return value === 'default' || value === 'cyber' || value === 'christmas' || value === 'christmas_victorian' || value === 'tet_vietnam' ? value : 'cyber';
   }
 
   // Giữ nguyên fallback Cyber HUD của Phase 3D.
@@ -7299,6 +7496,7 @@ body[data-theme="christmas_victorian"] #playerCard .btn-audio-toggle {
     if (theme === 'cyber') return 'Cyber HUD';
     if (theme === 'christmas') return 'Christmas Classic';
     if (theme === 'christmas_victorian') return 'Victorian Christmas';
+    if (theme === 'tet_vietnam') return 'Tết Cổ Truyền Hoàng Kim';
     return 'Default';
   }
 
@@ -7330,7 +7528,7 @@ body[data-theme="christmas_victorian"] #playerCard .btn-audio-toggle {
   // Không ghi đè một preview chưa lưu đang được người dùng chủ động xem.
   window.addEventListener('gems-radio-user-theme-updated', function (event) {
     var payload = event && event.detail ? event.detail : {};
-    if (payload.themeId !== 'default' && payload.themeId !== 'cyber' && payload.themeId !== 'christmas' && payload.themeId !== 'christmas_victorian') return;
+    if (payload.themeId !== 'default' && payload.themeId !== 'cyber' && payload.themeId !== 'christmas' && payload.themeId !== 'christmas_victorian' && payload.themeId !== 'tet_vietnam') return;
 
     savedTheme = normalizeTheme(payload.themeId);
     if (isOpen && previewChanged) {
