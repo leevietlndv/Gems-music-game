@@ -3337,6 +3337,89 @@ body[data-theme="tet_vietnam"] textarea:focus-visible {
 }
 </style>
 
+<style id="theme-tet-traditional-decorations">
+/* =========================================================
+   GEMS RADIO · TẾT CỔ TRUYỀN HOÀNG KIM · PHASE 3
+   Traditional apricot and Dong Son inspired ornaments.
+   All selectors are isolated to tet_vietnam.
+   ========================================================= */
+body[data-theme="tet_vietnam"] .header { position: relative; isolation: isolate; padding-top: 24px; }
+body[data-theme="tet_vietnam"] .tet-header-apricot {
+  display: block; position: absolute; z-index: -1; top: -5px; left: 0;
+  width: 100%; height: 76px; overflow: visible; pointer-events: none;
+  filter: drop-shadow(0 2px 3px rgba(35, 8, 5, .28));
+}
+body[data-theme="tet_vietnam"] .tet-navbar-apricot {
+  display: block; position: absolute; z-index: 2; top: -8px; left: 0;
+  width: 100%; height: 34px; overflow: visible; pointer-events: none;
+  filter: drop-shadow(0 1px 2px rgba(25, 5, 3, .35));
+}
+body[data-theme="tet_vietnam"] .app-navbar { isolation: isolate; }
+body[data-theme="tet_vietnam"] .app-navbar-bar { position: relative; z-index: 1; }
+/* Small blossom medallions at opposite card corners; they never intercept taps. */
+body[data-theme="tet_vietnam"] .card,
+body[data-theme="tet_vietnam"] .online-details,
+body[data-theme="tet_vietnam"] .script-settings-details,
+body[data-theme="tet_vietnam"] .blacklist-details,
+body[data-theme="tet_vietnam"] .playlist-picker-card { position: relative; isolation: isolate; }
+body[data-theme="tet_vietnam"] .card::before,
+body[data-theme="tet_vietnam"] .card::after,
+body[data-theme="tet_vietnam"] .online-details::before,
+body[data-theme="tet_vietnam"] .blacklist-details::after {
+  content: ""; position: absolute; width: 25px; height: 25px; z-index: 0;
+  pointer-events: none; opacity: .72;
+  background:
+    radial-gradient(ellipse at 50% 8%, #F5D36A 0 16%, transparent 18%),
+    radial-gradient(ellipse at 92% 50%, #E7B944 0 16%, transparent 18%),
+    radial-gradient(ellipse at 50% 92%, #F5D36A 0 16%, transparent 18%),
+    radial-gradient(ellipse at 8% 50%, #E7B944 0 16%, transparent 18%),
+    radial-gradient(circle at 50% 50%, #A86A18 0 15%, transparent 17%);
+}
+body[data-theme="tet_vietnam"] .card::before,
+body[data-theme="tet_vietnam"] .online-details::before { top: 5px; left: 5px; }
+body[data-theme="tet_vietnam"] .card::after,
+body[data-theme="tet_vietnam"] .blacklist-details::after { right: 5px; bottom: 5px; }
+/* Dong Son drum-inspired ceremonial ring, outside the existing wheel canvas. */
+body[data-theme="tet_vietnam"] .wheel-container {
+  isolation: isolate; z-index: 0; border-radius: 50%;
+}
+body[data-theme="tet_vietnam"] .wheel-container::before {
+  content: ""; position: absolute; inset: -5px; z-index: -1;
+  border: 2px solid var(--gems-tet-gold);
+  border-radius: 50%; pointer-events: none;
+  background: repeating-conic-gradient(from 0deg, rgba(225,196,119,.9) 0deg 1.5deg, transparent 1.5deg 12deg);
+  -webkit-mask: radial-gradient(circle, transparent 0 78%, #000 79% 100%);
+  mask: radial-gradient(circle, transparent 0 78%, #000 79% 100%);
+  filter: drop-shadow(0 0 5px rgba(201,163,78,.45));
+}
+body[data-theme="tet_vietnam"] .wheel-container::after {
+  content: ""; position: absolute; inset: -10px; z-index: -2;
+  border: 1px solid rgba(225,196,119,.78); border-radius: 50%;
+  box-shadow: inset 0 0 0 4px rgba(201,163,78,.10), 0 0 0 3px rgba(75,48,36,.38);
+  pointer-events: none;
+}
+body[data-theme="tet_vietnam"] .wheel-container canvas {
+  position: relative; z-index: 1; border: 2px solid var(--gems-tet-gold);
+  box-shadow: 0 0 0 3px rgba(75,48,36,.7), 0 0 14px rgba(35,5,8,.48);
+}
+body[data-theme="tet_vietnam"] .wheel-container .pointer { z-index: 3; }
+@media (max-width: 380px) {
+  body[data-theme="tet_vietnam"] .header { padding-top: 19px; }
+  body[data-theme="tet_vietnam"] .tet-header-apricot { top: -7px; height: 67px; }
+  body[data-theme="tet_vietnam"] .tet-navbar-apricot { top: -6px; height: 27px; }
+  body[data-theme="tet_vietnam"] .card::before,
+  body[data-theme="tet_vietnam"] .card::after,
+  body[data-theme="tet_vietnam"] .online-details::before,
+  body[data-theme="tet_vietnam"] .blacklist-details::after { width: 19px; height: 19px; opacity: .55; }
+  body[data-theme="tet_vietnam"] .wheel-container::before { inset: -4px; }
+  body[data-theme="tet_vietnam"] .wheel-container::after { inset: -8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body[data-theme="tet_vietnam"] .tet-header-apricot,
+  body[data-theme="tet_vietnam"] .tet-navbar-apricot { filter: none; }
+}
+</style>
+
 </head>
 
 <body data-theme="cyber">
@@ -3411,6 +3494,18 @@ body[data-theme="tet_vietnam"] textarea:focus-visible {
         <circle cx="0" cy="41" r="2" fill="#8B1E2D" />
       </g>
     </svg>
+    <svg class="tet-header-apricot" viewBox="0 0 480 76" role="presentation" aria-hidden="true" focusable="false">
+      <defs>
+        <radialGradient id="tetMaiPetal" cx="35%" cy="28%" r="75%"><stop offset="0" stop-color="#FFF3B0"/><stop offset=".58" stop-color="#F2C94C"/><stop offset="1" stop-color="#C98A22"/></radialGradient>
+      </defs>
+      <path d="M5 68 C72 52 95 28 150 31 C204 34 232 10 282 8 M115 43 C132 20 133 12 133 3 M202 30 C224 47 245 50 269 48 M282 8 C321 22 343 19 377 3" fill="none" stroke="#79502A" stroke-width="2.8" stroke-linecap="round"/>
+      <g fill="#9A6A32" stroke="#6D4827" stroke-width=".8"><path d="M85 48 Q67 23 48 31 Q58 51 85 48Z"/><path d="M174 32 Q165 9 146 10 Q150 31 174 32Z"/><path d="M245 24 Q258 4 278 9 Q270 29 245 24Z"/><path d="M328 18 Q345 1 364 7 Q352 25 328 18Z"/></g>
+      <g fill="url(#tetMaiPetal)" stroke="#B77A1D" stroke-width=".8">
+        <g transform="translate(133 8)"><ellipse cy="-5" rx="4.2" ry="8"/><ellipse transform="rotate(72)" cy="-5" rx="4.2" ry="8"/><ellipse transform="rotate(144)" cy="-5" rx="4.2" ry="8"/><ellipse transform="rotate(216)" cy="-5" rx="4.2" ry="8"/><ellipse transform="rotate(288)" cy="-5" rx="4.2" ry="8"/><circle r="3" fill="#A86A18"/></g>
+        <g transform="translate(282 8) scale(.9)"><ellipse cy="-5" rx="4.2" ry="8"/><ellipse transform="rotate(72)" cy="-5" rx="4.2" ry="8"/><ellipse transform="rotate(144)" cy="-5" rx="4.2" ry="8"/><ellipse transform="rotate(216)" cy="-5" rx="4.2" ry="8"/><ellipse transform="rotate(288)" cy="-5" rx="4.2" ry="8"/><circle r="3" fill="#A86A18"/></g>
+        <g transform="translate(377 3) scale(.75)"><ellipse cy="-5" rx="4.2" ry="8"/><ellipse transform="rotate(72)" cy="-5" rx="4.2" ry="8"/><ellipse transform="rotate(144)" cy="-5" rx="4.2" ry="8"/><ellipse transform="rotate(216)" cy="-5" rx="4.2" ry="8"/><ellipse transform="rotate(288)" cy="-5" rx="4.2" ry="8"/><circle r="3" fill="#A86A18"/></g>
+      </g>
+    </svg>
     <h1>🎵 GEMS Radio</h1>
     <button id="xmasSnowToggle" type="button" aria-pressed="true" aria-label="Tắt hiệu ứng tuyết rơi">❄ Tuyết rơi: Bật</button>
   </div>
@@ -3436,6 +3531,11 @@ body[data-theme="tet_vietnam"] textarea:focus-visible {
         <path d="M236 13 Q240 9 244 13 M231 29 Q240 32 249 29"/>
       </g>
       <circle cx="240" cy="31" r="1.8" fill="#722B35" stroke="#C5A15A" stroke-width=".7"/>
+    </svg>
+    <svg class="tet-navbar-apricot" viewBox="0 0 480 34" role="presentation" aria-hidden="true" focusable="false">
+      <path d="M3 31 Q38 20 54 4 M425 31 Q448 17 477 4" fill="none" stroke="#80532B" stroke-width="2.3" stroke-linecap="round"/>
+      <g fill="#A67537"><path d="M20 24 Q7 8 2 13 Q6 27 20 24Z"/><path d="M37 15 Q30 0 22 2 Q24 15 37 15Z"/><path d="M449 20 Q462 4 470 9 Q464 23 449 20Z"/><path d="M435 13 Q443 -1 452 2 Q448 15 435 13Z"/></g>
+      <g fill="#F2C94C" stroke="#B77A1D" stroke-width=".6"><g transform="translate(22 5)"><circle r="2.2"/><ellipse cy="-4" rx="2.3" ry="4"/><ellipse transform="rotate(72)" cy="-4" rx="2.3" ry="4"/><ellipse transform="rotate(144)" cy="-4" rx="2.3" ry="4"/><ellipse transform="rotate(216)" cy="-4" rx="2.3" ry="4"/><ellipse transform="rotate(288)" cy="-4" rx="2.3" ry="4"/></g><g transform="translate(458 5)"><circle r="2.2"/><ellipse cy="-4" rx="2.3" ry="4"/><ellipse transform="rotate(72)" cy="-4" rx="2.3" ry="4"/><ellipse transform="rotate(144)" cy="-4" rx="2.3" ry="4"/><ellipse transform="rotate(216)" cy="-4" rx="2.3" ry="4"/><ellipse transform="rotate(288)" cy="-4" rx="2.3" ry="4"/></g></g>
     </svg>
     <div class="app-navbar-bar">
       <label class="form-switch-wrap" title="Bật/tắt form gửi bài hát">
