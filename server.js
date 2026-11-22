@@ -109,22 +109,6 @@ async function initDatabase() {
     ON songs (video_id)
   `);
 
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS song_votes (
-      song_id INTEGER NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
-      telegram_id TEXT NOT NULL,
-      vote SMALLINT NOT NULL CHECK (vote IN (-1, 1)),
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY (song_id, telegram_id)
-    )
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS song_votes_meta (
-      key TEXT PRIMARY KEY,
-      version INTEGER NOT NULL
-    )
-  `);
 
   // Blacklist v1: lưu riêng các bài đã bị chặn để không làm thay đổi
   // cấu trúc/ý nghĩa của bảng songs hiện tại. video_id là định danh duy nhất
@@ -271,31 +255,6 @@ async function initDatabase() {
     ON playlist_songs (playlist_id, position, id)
   `);
 
-  // Phiên bản vote mới: LIKE = +1, DISLIKE = -1.
-  // Bản health-v1 cũ dùng ngược dấu, nên chỉ đảo dấu đúng một lần.
-  // Chạy trong transaction để không bao giờ đảo dấu 2 lần nếu server
-  // crash giữa chừng (UPDATE xong nhưng chưa ghi meta).
-  await pool.query('BEGIN');
-  try {
-    const voteVersion = await pool.query(
-      `SELECT version FROM song_votes_meta WHERE key = 'vote_semantics' FOR UPDATE`
-    );
-
-    if (voteVersion.rowCount === 0) {
-      await pool.query('UPDATE song_votes SET vote = -vote');
-      await pool.query(`
-        INSERT INTO song_votes_meta (key, version)
-        VALUES ('vote_semantics', 2)
-      `);
-      console.log('🔄 Đã chuyển vote sang quy ước mới: Like +1 | Dislike -1');
-    }
-
-    await pool.query('COMMIT');
-  } catch (error) {
-    await pool.query('ROLLBACK');
-    throw error;
-  }
-
   console.log('🗄️ PostgreSQL: Database ready');
 }
 
@@ -339,7 +298,7 @@ async function loadBlockedSongsFromDatabase() {
 
 /**
  * Chuyển một bài hát từ danh sách songs sang blacklist trong cùng một transaction.
- * Dùng chung cho Admin Delete và tự động thay bài khi Health = 0.
+ * Dùng cho thao tác Admin Delete.
  */
 async function blockSongAndRemove(songId, reason = 'manual_delete') {
   const normalizedId = Number.parseInt(songId, 10);
@@ -350,7 +309,7 @@ async function blockSongAndRemove(songId, reason = 'manual_delete') {
     throw error;
   }
 
-  if (!['manual_delete', 'health_zero'].includes(reason)) {
+  if (reason !== 'manual_delete') {
     const error = new Error('Lý do blacklist không hợp lệ');
     error.code = 'INVALID_BLOCK_REASON';
     throw error;
@@ -441,9 +400,6 @@ async function blockSongAndRemove(songId, reason = 'manual_delete') {
 
       blockedSong = existingResult.rows[0];
     }
-
-    // Giữ nguyên hành vi hiện tại: vote của bài bị xóa cũng phải được dọn.
-    await client.query('DELETE FROM song_votes WHERE song_id = $1', [normalizedId]);
 
     const deleteResult = await client.query(
       'DELETE FROM songs WHERE id = $1 RETURNING id',
@@ -829,12 +785,6 @@ let songs = [];
 let blockedSongs = [];
 let lastWinner = null;
 let lastAction = null;
-let currentHealth = 5;
-let currentLikeCount = 0;
-let currentDislikeCount = 0;
-let replacementCountdown = null;
-let replacementTimer = null;
-let replacementInProgress = false;
 
 // ==================== ONLINE USERS / CONNECTIONS ====================
 // Đếm user Telegram duy nhất, đồng thời theo dõi số socket đang kết nối.
@@ -1180,197 +1130,6 @@ function pausePlayback() {
   });
 }
 
-function clampHealth(value) {
-  return Math.max(0, Math.min(5, Number(value) || 0));
-}
-
-async function getSongVoteStats(songId) {
-  const result = await pool.query(`
-    SELECT
-      COUNT(*) FILTER (WHERE vote = 1) AS likes,
-      COUNT(*) FILTER (WHERE vote = -1) AS dislikes,
-      COALESCE(SUM(vote), 0) AS score
-    FROM song_votes
-    WHERE song_id = $1
-  `, [songId]);
-
-  const row = result.rows[0] || {};
-  const likes = Number(row.likes) || 0;
-  const dislikes = Number(row.dislikes) || 0;
-  const score = Number(row.score) || 0;
-
-  return {
-    likes,
-    dislikes,
-    score,
-    health: clampHealth(5 + score)
-  };
-}
-
-async function refreshCurrentSongHealth() {
-  if (!lastWinner) {
-    currentHealth = 5;
-    currentLikeCount = 0;
-    currentDislikeCount = 0;
-    return { likes: 0, dislikes: 0, score: 0, health: 5 };
-  }
-
-  const stats = await getSongVoteStats(lastWinner.id);
-  currentHealth = stats.health;
-  currentLikeCount = stats.likes;
-  currentDislikeCount = stats.dislikes;
-  return stats;
-}
-
-async function getUserVote(songId, telegramId) {
-  const result = await pool.query(`
-    SELECT vote FROM song_votes
-    WHERE song_id = $1 AND telegram_id = $2
-  `, [songId, String(telegramId)]);
-  return result.rowCount ? Number(result.rows[0].vote) : 0;
-}
-
-async function broadcastHealthOnly() {
-  io.emit('songHealth', {
-    songId: lastWinner?.id || null,
-    health: currentHealth,
-    likes: currentLikeCount,
-    dislikes: currentDislikeCount,
-    replacementCountdown
-    // Lưu ý: KHÔNG gửi userVote ở đây — broadcast đến tất cả user,
-    // mỗi user có vote riêng. Vote của người bấm được trả về qua HTTP
-    // response của /api/song-vote; userVote riêng lẻ chỉ được emit
-    // qua socket cá nhân trong handler 'authenticate'.
-  });
-}
-
-function clearReplacementCountdown() {
-  if (replacementTimer) {
-    clearInterval(replacementTimer);
-    replacementTimer = null;
-  }
-  replacementCountdown = null;
-}
-
-function broadcastReplacementCountdown() {
-  io.emit('replacementCountdown', {
-    songId: lastWinner?.id || null,
-    countdown: replacementCountdown
-  });
-}
-
-async function replaceCurrentSongDueToHealth() {
-  if (replacementInProgress || !lastWinner || currentHealth !== 0) return false;
-
-  replacementInProgress = true;
-  const previousSong = lastWinner;
-  const previousTitle = previousSong.title || previousSong.url || 'bài hát trước đó';
-
-  try {
-    // Phase 4B: Health = 0 => đưa bài cũ vào blacklist và xóa khỏi songs
-    // trong cùng transaction PostgreSQL. Không dùng DELETE trực tiếp ở đây
-    // để tránh trường hợp bài biến mất nhưng blacklist không được ghi.
-    const blockResult = await blockSongAndRemove(previousSong.id, 'health_zero');
-
-    if (!blockResult) {
-      console.warn(`⚠️ Không tìm thấy bài #${previousSong.id} khi tự động blacklist do Health = 0`);
-      lastWinner = null;
-      stopPlayback();
-      currentHealth = 5;
-      currentLikeCount = 0;
-      currentDislikeCount = 0;
-      clearReplacementCountdown();
-      broadcastState();
-      return false;
-    }
-
-    clearReplacementCountdown();
-
-    // blockSongAndRemove() đã loại previousSong khỏi mảng songs sau COMMIT.
-    // Vì vậy danh sách dưới đây chỉ còn các bài có thể được thay thế.
-    const availableSongs = songs.filter(
-      song => String(song.id) !== String(previousSong.id)
-    );
-
-    if (availableSongs.length === 0) {
-      lastWinner = null;
-      stopPlayback();
-      currentHealth = 5;
-      currentLikeCount = 0;
-      currentDislikeCount = 0;
-      lastAction = { type: 'replace', title: previousTitle };
-
-      broadcastState();
-
-      console.log(
-        `❤️ Health = 0 → blacklist #${previousSong.id}; không còn bài hát để thay thế.`
-      );
-      return true;
-    }
-
-    const nextSong = availableSongs[Math.floor(Math.random() * availableSongs.length)];
-
-    // Reset vote cũ của bài kế tiếp để Health luôn bắt đầu từ 5.
-    await pool.query('DELETE FROM song_votes WHERE song_id = $1', [nextSong.id]);
-
-    lastWinner = nextSong;
-    syncAutoPlayModeWithSongCount();
-    startPlayback(nextSong.id, 0);
-    currentHealth = 5;
-    currentLikeCount = 0;
-    currentDislikeCount = 0;
-    lastAction = { type: 'replace', title: previousTitle };
-
-    io.emit('songPlayed', {
-      song: nextSong,
-      initiatorSocketId: null,
-      action: lastAction,
-      health: 5,
-      likes: 0,
-      dislikes: 0,
-      replacementCountdown: null,
-      playback: getPlaybackState()
-    });
-    broadcastState();
-
-    console.log(
-      `❤️ Health = 0 → blacklist #${previousSong.id} (${blockResult.blockedSong?.blockedReason || 'health_zero'}) → thay bằng #${nextSong.id}: ${nextSong.title || nextSong.url}`
-    );
-    return true;
-  } catch (error) {
-    console.error('❌ Lỗi tự động blacklist/thay bài do Health = 0:', error);
-    return false;
-  } finally {
-    replacementInProgress = false;
-  }
-}
-
-function startReplacementCountdown() {
-  if (replacementTimer || !lastWinner || currentHealth !== 0) return;
-
-  replacementCountdown = 10;
-  broadcastReplacementCountdown();
-
-  replacementTimer = setInterval(async () => {
-    if (!lastWinner || currentHealth !== 0) {
-      clearReplacementCountdown();
-      broadcastReplacementCountdown();
-      return;
-    }
-
-    replacementCountdown -= 1;
-
-    if (replacementCountdown <= 0) {
-      clearReplacementCountdown();
-      const run = enqueueGameMutation(() => replaceCurrentSongDueToHealth());
-      await run;
-      return;
-    }
-
-    broadcastReplacementCountdown();
-  }, 1000);
-}
-
 async function performSpin(initiatorSocketId = null, actionUser = null) {
   if (lastWinner) {
   await pool.query(
@@ -1382,10 +1141,6 @@ async function performSpin(initiatorSocketId = null, actionUser = null) {
 
     lastWinner = null;
     lastAction = null;
-    currentHealth = 5;
-    currentLikeCount = 0;
-    currentDislikeCount = 0;
-    clearReplacementCountdown();
   }
 
   if (songs.length === 0) {
@@ -1402,10 +1157,6 @@ async function performSpin(initiatorSocketId = null, actionUser = null) {
   lastWinner = winner;
   syncAutoPlayModeWithSongCount();
   startPlayback(winner.id, 0, SPIN_ANIMATION_MS);
-  currentHealth = 5;
-  currentLikeCount = 0;
-  currentDislikeCount = 0;
-  clearReplacementCountdown();
   lastAction = actionUser ? { type: 'spin', user: actionUser } : null;
 
   io.emit('triggerSpin', {
@@ -2349,10 +2100,6 @@ function broadcastState() {
     songs,
     lastWinner,
     lastAction,
-    health: currentHealth,
-    likes: currentLikeCount,
-    dislikes: currentDislikeCount,
-    replacementCountdown,
     autoPlayMode,
     controllerSocketId: autoPlayControllerSocketId,
     blockedSongs,
@@ -3016,7 +2763,7 @@ app.post('/api/submit', async (req, res) => {
       if (blockedResult.rowCount > 0) {
         const blockedSong = blockedResult.rows[0];
         const reasonText = blockedSong.blockedReason === 'health_zero'
-          ? 'Sức khỏe của bài hát đã về 0.'
+          ? 'Bài hát này thuộc dữ liệu blacklist lịch sử.'
           : 'Bài hát đã bị Admin chặn.';
 
         console.log(
@@ -3192,26 +2939,15 @@ app.post('/api/auto-play-next', async (req, res) => {
       console.log(`🗑️ Auto Play xóa bài cũ #${lastWinner.id}`);
     }
 
-    // Reset vote cũ đọng của bài kế tiếp để health luôn bắt đầu từ 5.
-    await pool.query('DELETE FROM song_votes WHERE song_id = $1', [nextSong.id]);
-
     lastWinner = nextSong;
     syncAutoPlayModeWithSongCount();
     startPlayback(nextSong.id, 0);
-    currentHealth = 5;
-    currentLikeCount = 0;
-    currentDislikeCount = 0;
     lastAction = null;
-    clearReplacementCountdown();
 
     io.emit('songPlayed', {
       song: nextSong,
       initiatorSocketId: autoPlayControllerSocketId,
       action: null,
-      health: 5,
-      likes: 0,
-      dislikes: 0,
-      replacementCountdown: null,
       playback: getPlaybackState()
     });
 
@@ -3305,16 +3041,9 @@ app.post('/api/play-song', async (req, res) => {
         console.log(`🗑️ Đã xóa bài đang phát #${lastWinner.id}`);
       }
 
-      // Reset vote cũ đọng để health của bài này luôn bắt đầu từ 5.
-      await pool.query('DELETE FROM song_votes WHERE song_id = $1', [freshSong.id]);
-
       lastWinner = freshSong;
       startPlayback(freshSong.id, 0);
-      currentHealth = 5;
-      currentLikeCount = 0;
-      currentDislikeCount = 0;
-      clearReplacementCountdown();
-
+  
       const userName =
         [auth.user.first_name, auth.user.last_name]
           .filter(Boolean)
@@ -3327,11 +3056,7 @@ app.post('/api/play-song', async (req, res) => {
         song: freshSong,
         initiatorSocketId: isSocketOwnedByTelegramUser(socketId, auth.user.id) ? socketId : null,
         action: lastAction,
-        health: 5,
-        likes: 0,
-        dislikes: 0,
-        replacementCountdown: null,
-        playback: getPlaybackState()
+                playback: getPlaybackState()
       });
 
       broadcastState();
@@ -3353,94 +3078,6 @@ app.post('/api/play-song', async (req, res) => {
       message: 'Không thể phát bài hát!'
     });
   }
-});
-
-// ==================== API: SONG HEALTH / LIKE / DISLIKE ====================
-app.post('/api/song-vote', async (req, res) => {
-  const { vote } = req.body || {};
-  const auth = validateTelegramInitData(req.body?.initData || '');
-
-  if (!auth.valid) {
-    return res.status(401).json({
-      success: false,
-      message: `Xác thực Telegram thất bại: ${auth.message}`
-    });
-  }
-
-  const requestedVote = Number(vote);
-  if (![1, -1].includes(requestedVote)) {
-    return res.status(400).json({
-      success: false,
-      message: 'Loại vote không hợp lệ!'
-    });
-  }
-
-  const runVote = async () => {
-    if (!lastWinner) {
-      return {
-        success: false,
-        status: 400,
-        message: 'Hiện chưa có bài hát đang phát.'
-      };
-    }
-
-    const songId = lastWinner.id;
-    const telegramId = String(auth.user.id);
-    const previousVote = await getUserVote(songId, telegramId);
-    let newVote = requestedVote;
-
-    // LIKE = +1 | DISLIKE = -1.
-    // Mỗi Telegram user chỉ có một vote cho bài hiện tại.
-    // Bấm lại cùng nút = bỏ vote; bấm nút đối diện = đổi vote.
-    if (previousVote === requestedVote) {
-      await pool.query(
-        'DELETE FROM song_votes WHERE song_id = $1 AND telegram_id = $2',
-        [songId, telegramId]
-      );
-      newVote = 0;
-    } else {
-      await pool.query(`
-        INSERT INTO song_votes (song_id, telegram_id, vote)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (song_id, telegram_id)
-        DO UPDATE SET vote = EXCLUDED.vote
-      `, [songId, telegramId, requestedVote]);
-    }
-
-    const stats = await refreshCurrentSongHealth();
-
-    // Máu trở lại trên 0 → hủy đếm ngược thay bài.
-    if (currentHealth > 0) {
-      if (replacementTimer) {
-        clearReplacementCountdown();
-        broadcastReplacementCountdown();
-      }
-    }
-
-    // Máu chạm 0 → bắt đầu đếm ngược 10 giây.
-    if (currentHealth === 0) {
-      startReplacementCountdown();
-    }
-
-    await broadcastHealthOnly();
-    broadcastState();
-
-    return {
-      success: true,
-      replaced: false,
-      health: currentHealth,
-      likes: currentLikeCount,
-      dislikes: currentDislikeCount,
-      replacementCountdown,
-      userVote: newVote
-    };
-  };
-
-  const run = enqueueGameMutation(runVote);
-  const result = await run;
-
-  if (result.status) return res.status(result.status).json(result);
-  return res.json(result);
 });
 
 // ==================== API: SPIN ====================
@@ -3519,11 +3156,7 @@ app.post('/api/script-settings/start-session', async (req, res) => {
             lastWinner = null;
             stopPlayback();
             lastAction = null;
-            currentHealth = 5;
-            currentLikeCount = 0;
-            currentDislikeCount = 0;
-            clearReplacementCountdown();
-            syncAutoPlayModeWithSongCount();
+                    syncAutoPlayModeWithSongCount();
 
             scriptSessionEndsAt = null;
             scriptSessionTimer = null;
@@ -3637,11 +3270,7 @@ app.post('/api/reset', async (req, res) => {
       lastWinner = null;
       stopPlayback();
       lastAction = null;
-      currentHealth = 5;
-      currentLikeCount = 0;
-      currentDislikeCount = 0;
-      clearReplacementCountdown();
-
+  
       // Reset về trạng thái danh sách trống: không tự động chuyển bài.
       syncAutoPlayModeWithSongCount();
       broadcastState();
@@ -3691,11 +3320,7 @@ app.post('/api/delete-song', async (req, res) => {
         lastWinner = null;
         stopPlayback();
         lastAction = null;
-        currentHealth = 5;
-        currentLikeCount = 0;
-        currentDislikeCount = 0;
-        clearReplacementCountdown();
-      }
+          }
 
       broadcastState();
 
@@ -3817,7 +3442,6 @@ function sendInitialState(socket) {
     songs,
     lastWinner,
     lastAction,
-    health: currentHealth,
     autoPlayMode,
     controllerSocketId: autoPlayControllerSocketId,
     blockedSongs,
@@ -3960,25 +3584,6 @@ io.on('connection', (socket) => {
     // Gửi state hiện tại cho socket vừa xác thực.
     sendInitialState(socket);
 
-    (async () => {
-      if (!lastWinner) {
-        socket.emit('songHealth', { songId: null, health: 5, likes: 0, dislikes: 0, replacementCountdown: null, userVote: 0 });
-        return;
-      }
-      try {
-        const userVote = await getUserVote(lastWinner.id, telegramId);
-        socket.emit('songHealth', {
-          songId: lastWinner.id,
-          health: currentHealth,
-          likes: currentLikeCount,
-          dislikes: currentDislikeCount,
-          replacementCountdown,
-          userVote
-        });
-      } catch (error) {
-        console.error('❌ Lỗi lấy vote hiện tại:', error);
-      }
-    })();
   });
 
   // ==================== PHASE 6C: FRESH PLAYBACK SYNC ====================
