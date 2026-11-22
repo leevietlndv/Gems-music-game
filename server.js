@@ -3801,7 +3801,6 @@ server.on('error', (error) => {
 });
 
 module.exports = {
-  clampHealth,
   detectDeviceType,
   isAdmin,
   validateTelegramInitData,
