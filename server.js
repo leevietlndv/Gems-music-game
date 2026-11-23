@@ -278,6 +278,30 @@ async function initDatabase() {
     ON community_chat_messages (created_at, id)
   `);
 
+  // Community Chat interaction foundation: immutable reply snapshot, edit state,
+  // shared emphasis state, and private per-account read tracking.
+  await pool.query(`ALTER TABLE community_chat_messages
+    ADD COLUMN IF NOT EXISTS reply_to_message_id BIGINT,
+    ADD COLUMN IF NOT EXISTS reply_to_sender_name TEXT,
+    ADD COLUMN IF NOT EXISTS reply_to_message TEXT,
+    ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS is_emphasized BOOLEAN NOT NULL DEFAULT FALSE
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS community_chat_message_reads (
+      message_id BIGINT NOT NULL REFERENCES community_chat_messages(id) ON DELETE CASCADE,
+      telegram_id TEXT NOT NULL,
+      seen_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (message_id, telegram_id)
+    )
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_community_chat_message_reads_user
+    ON community_chat_message_reads (telegram_id, seen_at)
+  `);
+
   console.log('🗄️ PostgreSQL: Database ready');
 }
 
@@ -1438,22 +1462,36 @@ app.get('/api/community-chat/messages', async (req, res) => {
   }
 
   try {
+    const viewerId = String(auth.user.id);
     const result = await pool.query(`
       SELECT
-        id,
-        telegram_id AS "telegramId",
-        sender_name AS "senderName",
-        message,
-        created_at AS "createdAt"
-      FROM community_chat_messages
-      WHERE expires_at > CURRENT_TIMESTAMP
-      ORDER BY created_at ASC, id ASC
-    `);
-    // Telegram ID là dữ liệu định danh riêng tư: chỉ dùng nội bộ để xác định
-    // tin nhắn của chính người đang xem, tuyệt đối không trả ID cho các user khác.
-    const messages = result.rows.map(({ telegramId: ownerId, ...message }) => ({
+        m.id,
+        m.telegram_id AS "telegramId",
+        m.sender_name AS "senderName",
+        m.message,
+        m.created_at AS "createdAt",
+        m.edited_at AS "editedAt",
+        m.is_emphasized AS "isEmphasized",
+        m.reply_to_message_id AS "replyToMessageId",
+        m.reply_to_sender_name AS "replyToSenderName",
+        m.reply_to_message AS "replyToMessage",
+        EXISTS (
+          SELECT 1 FROM community_chat_message_reads r
+          WHERE r.message_id = m.id AND r.telegram_id <> $1
+        ) AS "hasBeenRead"
+      FROM community_chat_messages m
+      WHERE m.expires_at > CURRENT_TIMESTAMP
+      ORDER BY m.created_at ASC, m.id ASC
+    `, [viewerId]);
+    // Telegram ID chỉ dùng nội bộ để tính quyền sở hữu, không trả ra client.
+    const messages = result.rows.map(({ telegramId: ownerId, replyToMessageId, replyToSenderName, replyToMessage, ...message }) => ({
       ...message,
-      isOwn: String(ownerId) === String(auth.user.id)
+      isOwn: String(ownerId) === viewerId,
+      replyTo: replyToMessageId ? {
+        id: String(replyToMessageId),
+        senderName: replyToSenderName || 'Tin nhắn đã hết hạn',
+        message: replyToMessage || ''
+      } : null
     }));
     return res.json({ success: true, messages });
   } catch (error) {
@@ -1486,41 +1524,158 @@ app.post('/api/community-chat/messages', communityChatSendLimiter, async (req, r
 
   const telegramId = String(auth.user.id);
   const senderName = getTelegramDisplayName(auth.user);
+  const replyToMessageId = req.body?.replyToMessageId ? String(req.body.replyToMessageId) : null;
+  if (replyToMessageId && !/^\d{1,18}$/.test(replyToMessageId)) {
+    return res.status(400).json({ success: false, message: 'Tin nhắn được trích dẫn không hợp lệ.' });
+  }
 
   try {
+    let replySnapshot = { senderName: null, message: null };
+    if (replyToMessageId) {
+      const parent = await pool.query(`
+        SELECT sender_name AS "senderName", message
+        FROM community_chat_messages
+        WHERE id = $1 AND expires_at > CURRENT_TIMESTAMP
+      `, [replyToMessageId]);
+      if (!parent.rowCount) {
+        return res.status(400).json({ success: false, message: 'Tin nhắn được trích dẫn không còn tồn tại.' });
+      }
+      replySnapshot = parent.rows[0];
+    }
+
     const result = await pool.query(`
       INSERT INTO community_chat_messages (
-        telegram_id, sender_name, message, expires_at
+        telegram_id, sender_name, message, expires_at,
+        reply_to_message_id, reply_to_sender_name, reply_to_message
       )
-      VALUES ($1, $2, $3, CURRENT_TIMESTAMP + ($4 * INTERVAL '1 hour'))
+      VALUES ($1, $2, $3, CURRENT_TIMESTAMP + ($4 * INTERVAL '1 hour'), $5, $6, $7)
       RETURNING
         id,
         telegram_id AS "telegramId",
         sender_name AS "senderName",
         message,
         created_at AS "createdAt",
-        expires_at AS "expiresAt"
-    `, [telegramId, senderName, message, COMMUNITY_CHAT_RETENTION_HOURS]);
+        expires_at AS "expiresAt",
+        edited_at AS "editedAt",
+        is_emphasized AS "isEmphasized",
+        reply_to_message_id AS "replyToMessageId",
+        reply_to_sender_name AS "replyToSenderName",
+        reply_to_message AS "replyToMessage"
+    `, [telegramId, senderName, message, COMMUNITY_CHAT_RETENTION_HOURS, replyToMessageId, replySnapshot.senderName, replySnapshot.message]);
 
     const savedMessage = result.rows[0];
-    // Không phát Telegram ID ra phòng chat chung. Các thiết bị của người gửi
-    // nhận isOwn=true qua room riêng myplaylist:<telegramId>; người khác chỉ
-    // nhận payload công khai không chứa định danh tài khoản.
-    const { telegramId: ownerId, ...publicMessage } = savedMessage;
+    const { telegramId: ownerId, replyToMessageId: parentId, replyToSenderName, replyToMessage, ...publicMessage } = savedMessage;
+    const payload = {
+      ...publicMessage,
+      replyTo: parentId ? { id: String(parentId), senderName: replyToSenderName, message: replyToMessage } : null,
+      hasBeenRead: false
+    };
     io.to(COMMUNITY_CHAT_ROOM)
       .except(`myplaylist:${telegramId}`)
-      .emit('communityChatMessage', publicMessage);
-    io.to(`myplaylist:${telegramId}`).emit('communityChatMessage', {
-      ...publicMessage,
-      isOwn: true
-    });
+      .emit('communityChatMessage', payload);
+    io.to(`myplaylist:${telegramId}`).emit('communityChatMessage', { ...payload, isOwn: true });
     return res.status(201).json({
       success: true,
-      message: { ...publicMessage, isOwn: String(ownerId) === telegramId }
+      message: { ...payload, isOwn: String(ownerId) === telegramId }
     });
   } catch (error) {
     console.error('❌ Community Chat send error:', error);
     return res.status(500).json({ success: false, message: 'Không thể gửi tin nhắn.' });
+  }
+});
+
+// Chỉ chủ sở hữu của tin nhắn mới được phép chỉnh sửa nội dung.
+app.put('/api/community-chat/messages/:id', async (req, res) => {
+  const auth = validateTelegramInitData(req.body?.initData || '');
+  if (!auth.valid) return res.status(401).json({ success: false, message: 'Xác thực Telegram thất bại.' });
+  const messageId = String(req.params.id || '');
+  const message = String(req.body?.message ?? '').trim();
+  if (!/^\d{1,18}$/.test(messageId)) return res.status(400).json({ success: false, message: 'ID tin nhắn không hợp lệ.' });
+  if (!message) return res.status(400).json({ success: false, message: 'Tin nhắn không được để trống.' });
+  const characterCount = countCommunityChatCharacters(message);
+  if (characterCount > 100) return res.status(400).json({ success: false, message: 'Tin nhắn tối đa 100 ký tự.', characterCount });
+
+  const telegramId = String(auth.user.id);
+  try {
+    const result = await pool.query(`
+      UPDATE community_chat_messages
+      SET message = $3, edited_at = CURRENT_TIMESTAMP
+      WHERE id = $1 AND telegram_id = $2 AND expires_at > CURRENT_TIMESTAMP
+      RETURNING id, sender_name AS "senderName", message, edited_at AS "editedAt", is_emphasized AS "isEmphasized"
+    `, [messageId, telegramId, message]);
+    if (!result.rowCount) return res.status(404).json({ success: false, message: 'Không tìm thấy tin nhắn hoặc bạn không có quyền chỉnh sửa.' });
+    const updated = result.rows[0];
+    io.to(COMMUNITY_CHAT_ROOM).emit('communityChatMessageEdited', updated);
+    return res.json({ success: true, message: { ...updated, isOwn: true } });
+  } catch (error) {
+    console.error('❌ Community Chat edit error:', error);
+    return res.status(500).json({ success: false, message: 'Không thể chỉnh sửa tin nhắn.' });
+  }
+});
+
+// Mọi thành viên đã xác thực đều có thể bật/tắt nhấn mạnh cho bất kỳ tin nhắn nào.
+app.put('/api/community-chat/messages/:id/emphasis', async (req, res) => {
+  const auth = validateTelegramInitData(req.body?.initData || '');
+  if (!auth.valid) return res.status(401).json({ success: false, message: 'Xác thực Telegram thất bại.' });
+  const messageId = String(req.params.id || '');
+  if (!/^\d{1,18}$/.test(messageId) || typeof req.body?.isEmphasized !== 'boolean') {
+    return res.status(400).json({ success: false, message: 'Dữ liệu nhấn mạnh không hợp lệ.' });
+  }
+  try {
+    const result = await pool.query(`
+      UPDATE community_chat_messages
+      SET is_emphasized = $2
+      WHERE id = $1 AND expires_at > CURRENT_TIMESTAMP
+      RETURNING id, is_emphasized AS "isEmphasized"
+    `, [messageId, req.body.isEmphasized]);
+    if (!result.rowCount) return res.status(404).json({ success: false, message: 'Tin nhắn không còn tồn tại.' });
+    const updated = result.rows[0];
+    io.to(COMMUNITY_CHAT_ROOM).emit('communityChatMessageEmphasis', updated);
+    return res.json({ success: true, message: updated });
+  } catch (error) {
+    console.error('❌ Community Chat emphasis error:', error);
+    return res.status(500).json({ success: false, message: 'Không thể cập nhật trạng thái nhấn mạnh.' });
+  }
+});
+
+// Đánh dấu hàng loạt tin nhắn đã xem; danh tính luôn lấy từ initData.
+app.post('/api/community-chat/messages/read', async (req, res) => {
+  const auth = validateTelegramInitData(req.body?.initData || '');
+  if (!auth.valid) return res.status(401).json({ success: false, message: 'Xác thực Telegram thất bại.' });
+  const ids = Array.isArray(req.body?.messageIds) ? req.body.messageIds.slice(0, 100).map(String) : [];
+  if (!ids.length || ids.some(id => !/^\d{1,18}$/.test(id))) {
+    return res.status(400).json({ success: false, message: 'Danh sách tin nhắn không hợp lệ.' });
+  }
+  const telegramId = String(auth.user.id);
+  try {
+    const result = await pool.query(`
+      INSERT INTO community_chat_message_reads (message_id, telegram_id)
+      SELECT m.id, $2
+      FROM community_chat_messages m
+      WHERE m.id = ANY($1::bigint[])
+        AND m.telegram_id <> $2
+        AND m.expires_at > CURRENT_TIMESTAMP
+      ON CONFLICT (message_id, telegram_id) DO NOTHING
+      RETURNING message_id AS "messageId"
+    `, [ids, telegramId]);
+
+    if (result.rowCount) {
+      const ownerRows = await pool.query(`
+        SELECT DISTINCT m.telegram_id AS "ownerId", m.id AS "messageId"
+        FROM community_chat_messages m
+        WHERE m.id = ANY($1::bigint[])
+          AND EXISTS (SELECT 1 FROM community_chat_message_reads r WHERE r.message_id = m.id AND r.telegram_id = $2)
+      `, [result.rows.map(row => row.messageId), telegramId]);
+      for (const row of ownerRows.rows) {
+        io.to(`myplaylist:${row.ownerId}`).emit('communityChatReadReceipt', {
+          messageId: String(row.messageId), hasBeenRead: true
+        });
+      }
+    }
+    return res.json({ success: true, marked: result.rowCount });
+  } catch (error) {
+    console.error('❌ Community Chat read receipt error:', error);
+    return res.status(500).json({ success: false, message: 'Không thể cập nhật trạng thái đã xem.' });
   }
 });
 
