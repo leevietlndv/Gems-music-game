@@ -1575,11 +1575,14 @@
       height: 210px;
       overflow-y: auto;
       overscroll-behavior: contain;
-      padding: 8px;
+      /* Extra bottom breathing room prevents the final enlarged bubble from
+         being visually clipped against the scroll viewport edge. */
+      padding: 8px 8px 14px;
       border-radius: 9px;
-      background: rgba(0,0,0,.12);
-      border: 1px solid rgba(128,128,128,.22);
+      background: var(--gems-chat-panel-bg, rgba(0,0,0,.12));
+      border: 1px solid var(--gems-chat-panel-border, rgba(128,128,128,.22));
       scrollbar-width: thin;
+      scroll-padding-block: 10px;
     }
     .community-chat-empty {
       margin: auto;
@@ -1594,13 +1597,16 @@
       min-width: 90px;
       padding: 7px 9px;
       border-radius: 10px 10px 10px 3px;
-      background: rgba(128,128,128,.16);
+      background: var(--gems-chat-bubble-other, rgba(128,128,128,.16));
+      color: var(--gems-chat-bubble-text, inherit);
       overflow-wrap: anywhere;
+      scroll-margin-block: 10px;
     }
     .community-chat-message.is-own {
       align-self: flex-end;
       border-radius: 10px 10px 3px 10px;
-      background: rgba(46,125,50,.18);
+      background: var(--gems-chat-bubble-own, rgba(46,125,50,.18));
+      color: var(--gems-chat-bubble-own-text, inherit);
     }
     .community-chat-message.is-emphasized .community-chat-message-text {
       font-size: 18px;
@@ -1706,7 +1712,7 @@
       line-height: 22px;
       outline: none;
     }
-    .community-chat-input:focus { border-color: #4caf50; }
+    .community-chat-input:focus { border-color: var(--gems-chat-accent, #4caf50); }
     .community-chat-emoji-btn,
     .community-chat-send-btn {
       flex: 0 0 40px;
@@ -1728,7 +1734,13 @@
       cursor: pointer;
     }
     .community-chat-emoji-btn { background: rgba(128,128,128,.18); color: inherit; }
-    .community-chat-send-btn { background: #2e7d32; color: #fff; font-size: 15px; font-weight: 800; }
+    .community-chat-send-btn {
+      background: var(--gems-chat-accent, #2e7d32);
+      color: var(--gems-chat-accent-contrast, #fff);
+      font-size: 15px;
+      font-weight: 800;
+      box-shadow: 0 2px 7px var(--gems-chat-accent-shadow, rgba(46,125,50,.22));
+    }
     .community-chat-send-btn:disabled { opacity: .45; cursor: not-allowed; }
     .community-chat-footer {
       display: flex;
@@ -1771,6 +1783,51 @@
     body[data-theme="christmas"] { --gems-chat-picker-bg: #fffaf0; --gems-chat-picker-text: #3d3026; }
     body[data-theme="christmas_victorian"] { --gems-chat-picker-bg: #351820; --gems-chat-picker-text: #f3e5c5; }
     body[data-theme="tet_vietnam"] { --gems-chat-picker-bg: #4b1019; --gems-chat-picker-text: #f5e7c2; }
+    /* Community Chat palette follows the active GEMS Radio theme. */
+    body[data-theme="cyber"] {
+      --gems-chat-panel-bg: rgba(4, 13, 27, .78);
+      --gems-chat-panel-border: rgba(0, 229, 255, .34);
+      --gems-chat-bubble-other: rgba(0, 229, 255, .10);
+      --gems-chat-bubble-own: rgba(168, 85, 247, .20);
+      --gems-chat-bubble-text: #d9faff;
+      --gems-chat-bubble-own-text: #f3e8ff;
+      --gems-chat-accent: #00bcd4;
+      --gems-chat-accent-contrast: #071521;
+      --gems-chat-accent-shadow: rgba(0, 229, 255, .22);
+    }
+    body[data-theme="christmas"] {
+      --gems-chat-panel-bg: rgba(241, 231, 216, .72);
+      --gems-chat-panel-border: #e5d8c5;
+      --gems-chat-bubble-other: #fffdf8;
+      --gems-chat-bubble-own: #e5f0e7;
+      --gems-chat-bubble-text: #332b24;
+      --gems-chat-bubble-own-text: #145c3b;
+      --gems-chat-accent: #176b45;
+      --gems-chat-accent-contrast: #fffdf8;
+      --gems-chat-accent-shadow: rgba(23, 107, 69, .2);
+    }
+    body[data-theme="christmas_victorian"] {
+      --gems-chat-panel-bg: rgba(33, 27, 27, .88);
+      --gems-chat-panel-border: rgba(197, 161, 90, .48);
+      --gems-chat-bubble-other: #342a28;
+      --gems-chat-bubble-own: rgba(114, 43, 53, .72);
+      --gems-chat-bubble-text: #e9ddc8;
+      --gems-chat-bubble-own-text: #f3e5c5;
+      --gems-chat-accent: #722b35;
+      --gems-chat-accent-contrast: #f3e5c5;
+      --gems-chat-accent-shadow: rgba(197, 161, 90, .22);
+    }
+    body[data-theme="tet_vietnam"] {
+      --gems-chat-panel-bg: rgba(84, 32, 42, .82);
+      --gems-chat-panel-border: rgba(201, 163, 78, .56);
+      --gems-chat-bubble-other: #64121d;
+      --gems-chat-bubble-own: rgba(201, 163, 78, .22);
+      --gems-chat-bubble-text: #f7ebd2;
+      --gems-chat-bubble-own-text: #fff1c9;
+      --gems-chat-accent: #c9a34e;
+      --gems-chat-accent-contrast: #4b1019;
+      --gems-chat-accent-shadow: rgba(201, 163, 78, .24);
+    }
     @media (max-width: 600px) {
       .community-chat-card { padding: 11px; }
       .community-chat-messages { height: 190px; }
@@ -5469,6 +5526,26 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       });
     }
 
+    function revealCommunityChatMessage(bubble) {
+      if (!bubble || !communityChatMessagesEl) return;
+      requestAnimationFrame(() => {
+        const container = communityChatMessagesEl;
+        const containerRect = container.getBoundingClientRect();
+        const bubbleRect = bubble.getBoundingClientRect();
+        const visibleTop = containerRect.top + 6;
+        const visibleBottom = containerRect.bottom - 6;
+        if (bubbleRect.height > container.clientHeight - 12) {
+          // For unusually long messages, show the beginning; the user can
+          // scroll within the history pane to read the remainder.
+          container.scrollTop += bubbleRect.top - visibleTop;
+        } else if (bubbleRect.bottom > visibleBottom) {
+          container.scrollTop += bubbleRect.bottom - visibleBottom;
+        } else if (bubbleRect.top < visibleTop) {
+          container.scrollTop -= visibleTop - bubbleRect.top;
+        }
+      });
+    }
+
     function revealCommunityChatActions(bubble) {
       if (!bubble || !communityChatMessagesEl) return;
       requestAnimationFrame(() => {
@@ -5504,7 +5581,14 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
           throw new Error(data?.message || 'Không thể cập nhật trạng thái nhấn mạnh.');
         }
         const current = communityChatMessages.get(messageId) || message;
-        upsertCommunityChatMessage({ ...current, isEmphasized: data.message.isEmphasized === true }, false);
+        const isEmphasized = data.message.isEmphasized === true;
+        upsertCommunityChatMessage({ ...current, isEmphasized }, false);
+        if (isEmphasized) {
+          requestAnimationFrame(() => {
+            const bubble = communityChatMessagesEl?.querySelector(`.community-chat-message[data-message-id="${CSS.escape(messageId)}"]`);
+            revealCommunityChatMessage(bubble);
+          });
+        }
       } catch (error) {
         console.error('❌ Community Chat emphasis error:', error);
         setCommunityChatStatus(error.message || 'Không thể cập nhật trạng thái nhấn mạnh.', true);
@@ -5691,7 +5775,14 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       if (!updated || updated.id == null) return;
       const current = communityChatMessages.get(String(updated.id));
       if (!current) return;
-      upsertCommunityChatMessage({ ...current, isEmphasized: updated.isEmphasized === true }, false);
+      const isEmphasized = updated.isEmphasized === true;
+      upsertCommunityChatMessage({ ...current, isEmphasized }, false);
+      if (isEmphasized) {
+        requestAnimationFrame(() => {
+          const bubble = communityChatMessagesEl?.querySelector(`.community-chat-message[data-message-id="${CSS.escape(String(updated.id))}"]`);
+          revealCommunityChatMessage(bubble);
+        });
+      }
     });
     updateCommunityChatCounter();
 
