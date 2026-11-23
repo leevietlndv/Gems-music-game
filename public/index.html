@@ -5161,10 +5161,9 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
         communityChatMessagesEl.appendChild(empty);
         return;
       }
-      const myTelegramId = String(tg?.initDataUnsafe?.user?.id || userData?.id || '');
       entries.forEach((item) => {
         const bubble = document.createElement('div');
-        bubble.className = 'community-chat-message' + (myTelegramId && String(item.telegramId) === myTelegramId ? ' is-own' : '');
+        bubble.className = 'community-chat-message' + (item.isOwn === true ? ' is-own' : '');
         const meta = document.createElement('div');
         meta.className = 'community-chat-message-meta';
         const sender = document.createElement('span');

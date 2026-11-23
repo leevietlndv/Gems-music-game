@@ -1449,7 +1449,13 @@ app.get('/api/community-chat/messages', async (req, res) => {
       WHERE expires_at > CURRENT_TIMESTAMP
       ORDER BY created_at ASC, id ASC
     `);
-    return res.json({ success: true, messages: result.rows });
+    // Telegram ID là dữ liệu định danh riêng tư: chỉ dùng nội bộ để xác định
+    // tin nhắn của chính người đang xem, tuyệt đối không trả ID cho các user khác.
+    const messages = result.rows.map(({ telegramId: ownerId, ...message }) => ({
+      ...message,
+      isOwn: String(ownerId) === String(auth.user.id)
+    }));
+    return res.json({ success: true, messages });
   } catch (error) {
     console.error('❌ Community Chat load error:', error);
     return res.status(500).json({ success: false, message: 'Không thể tải tin nhắn chat.' });
@@ -1497,9 +1503,21 @@ app.post('/api/community-chat/messages', communityChatSendLimiter, async (req, r
     `, [telegramId, senderName, message, COMMUNITY_CHAT_RETENTION_HOURS]);
 
     const savedMessage = result.rows[0];
-    // Chỉ phát tin đã ghi DB thành công; mọi người trong cùng phòng nhận chung.
-    io.to(COMMUNITY_CHAT_ROOM).emit('communityChatMessage', savedMessage);
-    return res.status(201).json({ success: true, message: savedMessage });
+    // Không phát Telegram ID ra phòng chat chung. Các thiết bị của người gửi
+    // nhận isOwn=true qua room riêng myplaylist:<telegramId>; người khác chỉ
+    // nhận payload công khai không chứa định danh tài khoản.
+    const { telegramId: ownerId, ...publicMessage } = savedMessage;
+    io.to(COMMUNITY_CHAT_ROOM)
+      .except(`myplaylist:${telegramId}`)
+      .emit('communityChatMessage', publicMessage);
+    io.to(`myplaylist:${telegramId}`).emit('communityChatMessage', {
+      ...publicMessage,
+      isOwn: true
+    });
+    return res.status(201).json({
+      success: true,
+      message: { ...publicMessage, isOwn: String(ownerId) === telegramId }
+    });
   } catch (error) {
     console.error('❌ Community Chat send error:', error);
     return res.status(500).json({ success: false, message: 'Không thể gửi tin nhắn.' });
