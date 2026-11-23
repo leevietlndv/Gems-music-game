@@ -3025,19 +3025,99 @@ app.post('/api/auto-play-mode', async (req, res) => {
   });
 });
 
-// ==================== API: AUTO PLAY NEXT ====================
-app.post('/api/auto-play-next', async (req, res) => {
-  const { socketId, expectedSongId } = req.body;
-  const auth = await requireTelegramAdmin(req, res);
-  if (!auth.ok) return;
-
+// Chọn và phát bài ngẫu nhiên tiếp theo. Hàm này chỉ được gọi bên trong
+// enqueueGameMutation để mọi thay đổi playback/list được tuần tự hóa.
+async function advanceRandomPlaybackInQueue(expectedSongId, expectedVersion, initiatorSocketId) {
   if (autoPlayMode === 0) {
-    return res.json({
+    return {
       success: false,
       stopAutoPlay: true,
-      message: 'Danh sách hiện chỉ còn một bài hoặc đang trống; bài hiện tại sẽ phát xong rồi dừng.'
-    });
+      message: 'Danh sách hiện không còn đủ bài để phát ngẫu nhiên.'
+    };
   }
+
+  const currentId = playbackState.songId != null
+    ? String(playbackState.songId)
+    : (lastWinner?.id != null ? String(lastWinner.id) : null);
+
+  if (currentId == null ||
+      (lastWinner?.id != null && String(lastWinner.id) !== currentId) ||
+      (expectedSongId != null && currentId !== String(expectedSongId)) ||
+      (expectedVersion != null && Number(playbackState.version) !== Number(expectedVersion))) {
+    return {
+      success: false,
+      stale: true,
+      message: 'Bỏ qua tín hiệu kết thúc cũ vì bài đang phát đã thay đổi.'
+    };
+  }
+
+  if (playbackState.status === 'paused') {
+    return {
+      success: false,
+      paused: true,
+      message: 'Auto Play tạm dừng vì playback đang ở trạng thái PAUSED.'
+    };
+  }
+
+  if (playbackState.status !== 'playing') {
+    return {
+      success: false,
+      stale: true,
+      message: 'Playback hiện tại không ở trạng thái đang phát.'
+    };
+  }
+
+  const availableSongs = songs.filter(song => String(song.id) !== currentId);
+  if (availableSongs.length === 0) {
+    syncAutoPlayModeWithSongCount();
+    const stopped = stopPlayback();
+    io.emit('playbackState', stopped);
+    broadcastState();
+    console.log('⏹ Auto Play dừng: không còn bài tiếp theo.');
+    return {
+      success: false,
+      stopAutoPlay: true,
+      message: 'Không còn bài hát tiếp theo.'
+    };
+  }
+
+  const randomIndex = Math.floor(Math.random() * availableSongs.length);
+  const nextSong = availableSongs[randomIndex];
+
+  if (lastWinner && String(lastWinner.id) !== String(nextSong.id)) {
+    await pool.query('DELETE FROM songs WHERE id = $1', [lastWinner.id]);
+    songs = songs.filter(song => String(song.id) !== currentId);
+    console.log(`🗑️ Auto Play xóa bài cũ #${currentId}`);
+  }
+
+  lastWinner = nextSong;
+  syncAutoPlayModeWithSongCount();
+  startPlayback(nextSong.id, 0);
+  lastAction = null;
+
+  io.emit('songPlayed', {
+    song: nextSong,
+    initiatorSocketId: initiatorSocketId || null,
+    action: null,
+    playback: getPlaybackState()
+  });
+  broadcastState();
+
+  console.log(`🔀 Auto ngẫu nhiên → #${nextSong.id}`);
+  return {
+    success: true,
+    song: nextSong,
+    mode: autoPlayMode
+  };
+}
+
+// ==================== API: AUTO PLAY NEXT ====================
+// Giữ endpoint tương thích với các client cũ; client mới chuyển bài trực tiếp
+// từ sự kiện playbackEnded đã được server xác thực.
+app.post('/api/auto-play-next', async (req, res) => {
+  const { socketId, expectedSongId, expectedVersion } = req.body;
+  const auth = await requireTelegramAdmin(req, res);
+  if (!auth.ok) return;
 
   if (!socketId || socketId !== autoPlayControllerSocketId ||
       !canUseAdminSocketForTelegram(socketId, auth.user.id)) {
@@ -3048,82 +3128,9 @@ app.post('/api/auto-play-next', async (req, res) => {
   }
 
   try {
-    const result = await enqueueGameMutation(async () => {
-      const currentId = lastWinner?.id != null
-      ? String(lastWinner.id)
-      : null;
-
-    // Bảo vệ khỏi race-condition: nếu một lệnh Auto Play cũ vừa gửi
-    // sau khi Admin/user đã bấm Play hoặc Spin, không được phép ghi đè
-    // bài mới. Client phải xác nhận đúng bài vừa kết thúc.
-    if (expectedSongId != null && currentId !== String(expectedSongId)) {
-      return {
-        success: false,
-        stale: true,
-        message: 'Bỏ qua Auto Play cũ vì bài đang phát đã thay đổi.'
-      };
-    }
-
-    if (playbackState.status === 'paused') {
-      return {
-        success: false,
-        paused: true,
-        message: 'Auto Play tạm dừng vì playback đang ở trạng thái PAUSED.'
-      };
-    }
-
-    const availableSongs = songs.filter(song =>
-      !currentId || String(song.id) !== currentId
+    const result = await enqueueGameMutation(() =>
+      advanceRandomPlaybackInQueue(expectedSongId, expectedVersion, socketId)
     );
-
-    if (availableSongs.length === 0) {
-      syncAutoPlayModeWithSongCount();
-      stopPlayback();
-      broadcastState();
-
-      console.log('⏹ Auto Play dừng: không còn bài tiếp theo.');
-
-      return {
-        success: false,
-        stopAutoPlay: true,
-        message: 'Không còn bài hát tiếp theo.'
-      };
-    }
-
-    let nextSong;
-
-    const randomIndex = Math.floor(Math.random() * availableSongs.length);
-    nextSong = availableSongs[randomIndex];
-
-    if (lastWinner && String(lastWinner.id) !== String(nextSong.id)) {
-      await pool.query('DELETE FROM songs WHERE id = $1', [lastWinner.id]);
-      songs = songs.filter(song => String(song.id) !== String(lastWinner.id));
-      console.log(`🗑️ Auto Play xóa bài cũ #${lastWinner.id}`);
-    }
-
-    lastWinner = nextSong;
-    syncAutoPlayModeWithSongCount();
-    startPlayback(nextSong.id, 0);
-    lastAction = null;
-
-    io.emit('songPlayed', {
-      song: nextSong,
-      initiatorSocketId: autoPlayControllerSocketId,
-      action: null,
-      playback: getPlaybackState()
-    });
-
-    broadcastState();
-
-    console.log(`🔀 Auto ngẫu nhiên → #${nextSong.id}`);
-
-      return {
-        success: true,
-        song: nextSong,
-        mode: autoPlayMode
-      };
-    });
-
     res.json(result);
   } catch (error) {
     console.error('❌ Lỗi Auto Play Next:', error);
@@ -3885,15 +3892,15 @@ io.on('connection', (socket) => {
     });
   });
 
-  // YouTube đã phát hết bài. Chỉ chấp nhận tín hiệu khớp với playback
-  // hiện tại để một client cũ/reload không thể dừng bài mới. Khi Auto Play
-  // đang có controller, controller sẽ gọi /api/auto-play-next để chuyển bài;
-  // không stop ở đây để tránh tạo trạng thái trung gian không cần thiết.
+  // YouTube đã phát hết bài. Server tự quyết định chuyển bài ngẫu nhiên,
+  // không phụ thuộc vào một API request thứ hai từ đúng trình duyệt controller.
+  // Chỉ socket Telegram đã xác thực mới được báo kết thúc; ở chế độ random,
+  // yêu cầu phải đến từ Admin/Owner. Song ID + playback version chống tín hiệu cũ.
   socket.on('playbackEnded', (payload = {}) => {
     const songId = payload.songId;
     const version = Number(payload.version);
 
-    if (songId == null || !Number.isFinite(version)) return;
+    if (socket.authenticated !== true || songId == null || !Number.isFinite(version)) return;
 
     enqueueGameMutation(async () => {
       if (playbackState.songId == null) return;
@@ -3901,9 +3908,16 @@ io.on('connection', (socket) => {
       if (Number(playbackState.version) !== version) return;
       if (playbackState.status !== 'playing') return;
 
-      // Auto Play có controller đang hoạt động: giữ state hiện tại cho
-      // request chuyển bài của controller, tránh race với Auto Play.
-      if (autoPlayMode !== 0 && autoPlayControllerSocketId) {
+      if (autoPlayMode !== 0) {
+        if (!isAuthenticatedSocketAdmin(socket)) {
+          console.warn(`⛔ Bỏ qua playbackEnded Auto Play từ user thường: socket=${socket.id}`);
+          return;
+        }
+
+        const result = await advanceRandomPlaybackInQueue(songId, version, socket.id);
+        if (result.success) {
+          console.log(`▶️ Server tự chuyển bài ngẫu nhiên từ socket ${socket.id}`);
+        }
         return;
       }
 

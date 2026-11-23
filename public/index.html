@@ -1627,8 +1627,8 @@
     .community-chat-input {
       flex: 1 1 auto;
       min-width: 0;
-      height: 39px;
-      min-height: 39px;
+      height: 40px;
+      min-height: 40px;
       max-height: 82px;
       resize: none;
       box-sizing: border-box;
@@ -1639,18 +1639,28 @@
       color: inherit;
       font: inherit;
       font-size: 13px;
-      line-height: 21px;
+      line-height: 22px;
       outline: none;
     }
     .community-chat-input:focus { border-color: #4caf50; }
     .community-chat-emoji-btn,
     .community-chat-send-btn {
       flex: 0 0 40px;
+      width: 40px;
+      height: 40px;
       min-width: 40px;
-      min-height: 39px;
+      min-height: 40px;
+      max-height: 82px;
+      align-self: stretch;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      padding: 0;
       border: 0;
       border-radius: 8px;
       font-size: 18px;
+      line-height: 1;
       cursor: pointer;
     }
     .community-chat-emoji-btn { background: rgba(128,128,128,.18); color: inherit; }
@@ -4970,12 +4980,10 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
     // 2 = Phát ngẫu nhiên
 
     let autoPlayMode = 0;
-    let autoPlayController = false;
     let autoPlayControllerSocketId = null;
 
     // Chống gọi bài tiếp theo 2 lần khi YouTube
     // gửi nhiều trạng thái ENDED.
-    let autoPlayNextBusy = false;
 
     const colors = ['#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9800', '#ff5722'];
 
@@ -5433,8 +5441,6 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
 
       // Đồng bộ lại quyền Controller sau khi trạng thái Admin được xác thực.
       // Điều này tránh trường hợp event autoPlayMode đến trước adminStatus.
-      autoPlayController = window.isAdmin &&
-        autoPlayControllerSocketId === socket.id;
       updateAutoPlayButton();
 
       wheelContainer?.classList.toggle('spin-enabled', window.isAdmin === true);
@@ -5464,9 +5470,6 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       if (typeof data.autoPlayMode !== 'undefined') {
         autoPlayMode = Number(data.autoPlayMode) || 0;
         autoPlayControllerSocketId = data.controllerSocketId || null;
-        autoPlayController = window.isAdmin === true &&
-          autoPlayControllerSocketId === socket.id;
-        autoPlayNextBusy = false;
         if (btnAutoPlay) btnAutoPlay.disabled = false;
         updateAutoPlayButton();
       }
@@ -5649,9 +5652,6 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
 
       autoPlayMode = Number(data.mode) || 0;
       autoPlayControllerSocketId = data.controllerSocketId || null;
-      autoPlayController = window.isAdmin === true &&
-        autoPlayControllerSocketId === socket.id;
-      autoPlayNextBusy = false;
       if (btnAutoPlay) btnAutoPlay.disabled = false;
 
       updateAutoPlayButton();
@@ -7691,7 +7691,7 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
           }
         }
 
-        handleAutoPlayEnded(endedSongId);
+        // Server tự xử lý chuyển bài ngẫu nhiên qua playbackEnded.
       }
     }
 
@@ -7714,66 +7714,6 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
         updatePlaybackTimelineUi();
       }
     });
-
-    async function handleAutoPlayEnded(endedSongId) {
-      // Chỉ đúng Admin đang giữ quyền điều khiển Auto Play mới được chuyển bài.
-      if (!window.isAdmin || !autoPlayController) {
-        return;
-      }
-
-      if (autoPlayMode === 0 || endedSongId == null) {
-        return;
-      }
-
-      if (autoPlayNextBusy) {
-        console.log('⏳ Auto Play đang xử lý bài tiếp theo...');
-        return;
-      }
-
-      // Lấy ID trực tiếp từ playback state đã kết thúc. Trước đây hàm gọi
-      // Hàm lấy ID bài thắng cũ không tồn tại, khiến luồng chuyển bài lỗi trước try/finally.
-      const endedSongIdString = String(endedSongId);
-      autoPlayNextBusy = true;
-      iosAutoPlayDiagnostic.record('auto_play_next_request', { endedSongId: endedSongIdString });
-
-      try {
-        const res = await fetch('/api/auto-play-next', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            initData: telegramInitData,
-            socketId: socket.id,
-            expectedSongId: endedSongIdString
-          })
-        });
-
-        const data = await res.json();
-
-        if (!data.success) {
-          console.log('⏹ Auto Play dừng:', data.message);
-
-          if (data.stopAutoPlay) {
-            autoPlayMode = 0;
-            autoPlayController = false;
-            autoPlayControllerSocketId = null;
-            updateAutoPlayButton();
-          }
-
-          return;
-        }
-
-        iosAutoPlayDiagnostic.record('auto_play_next_success', {
-          nextSongId: data.song?.id ?? null
-        });
-        console.log('▶️ Auto Play chuyển bài:', data.song);
-      } catch (error) {
-        console.error('❌ Lỗi Auto Play:', error);
-      } finally {
-        autoPlayNextBusy = false;
-      }
-    }
 
     function isYouTubeUrl(inputUrl) {
       return YouTubeUtils.isValidYouTubeUrl(inputUrl);
