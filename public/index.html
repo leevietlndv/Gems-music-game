@@ -1543,6 +1543,165 @@
       cursor: not-allowed;
     }
 
+    /* ==================== COMMUNITY CHAT PHASE 3 ==================== */
+    .community-chat-card {
+      width: 100%;
+      max-width: 480px;
+      margin: 0 auto 14px;
+      padding: 13px;
+    }
+    .community-chat-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 9px;
+    }
+    .community-chat-title {
+      font-size: 15px;
+      font-weight: 800;
+      line-height: 1.25;
+    }
+    .community-chat-retention {
+      flex: 0 0 auto;
+      font-size: 10px;
+      opacity: .72;
+      white-space: nowrap;
+    }
+    .community-chat-messages {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      height: 210px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: 8px;
+      border-radius: 9px;
+      background: rgba(0,0,0,.12);
+      border: 1px solid rgba(128,128,128,.22);
+      scrollbar-width: thin;
+    }
+    .community-chat-empty {
+      margin: auto;
+      padding: 12px 8px;
+      text-align: center;
+      font-size: 12px;
+      opacity: .68;
+    }
+    .community-chat-message {
+      align-self: flex-start;
+      max-width: 88%;
+      min-width: 90px;
+      padding: 7px 9px;
+      border-radius: 10px 10px 10px 3px;
+      background: rgba(128,128,128,.16);
+      overflow-wrap: anywhere;
+    }
+    .community-chat-message.is-own {
+      align-self: flex-end;
+      border-radius: 10px 10px 3px 10px;
+      background: rgba(46,125,50,.18);
+    }
+    .community-chat-message-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 3px;
+      font-size: 10px;
+      opacity: .72;
+    }
+    .community-chat-sender { font-weight: 800; }
+    .community-chat-time { margin-left: auto; white-space: nowrap; }
+    .community-chat-message-text {
+      font-size: 13px;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .community-chat-compose { position: relative; margin-top: 9px; }
+    .community-chat-input-row {
+      display: flex;
+      align-items: stretch;
+      gap: 6px;
+    }
+    .community-chat-input {
+      flex: 1 1 auto;
+      min-width: 0;
+      min-height: 39px;
+      max-height: 82px;
+      resize: none;
+      padding: 9px 10px;
+      border: 1px solid rgba(128,128,128,.38);
+      border-radius: 8px;
+      background: rgba(128,128,128,.10);
+      color: inherit;
+      font: inherit;
+      font-size: 13px;
+      line-height: 1.35;
+      outline: none;
+    }
+    .community-chat-input:focus { border-color: #4caf50; }
+    .community-chat-emoji-btn,
+    .community-chat-send-btn {
+      flex: 0 0 40px;
+      min-width: 40px;
+      min-height: 39px;
+      border: 0;
+      border-radius: 8px;
+      font-size: 18px;
+      cursor: pointer;
+    }
+    .community-chat-emoji-btn { background: rgba(128,128,128,.18); color: inherit; }
+    .community-chat-send-btn { background: #2e7d32; color: #fff; font-size: 15px; font-weight: 800; }
+    .community-chat-send-btn:disabled { opacity: .45; cursor: not-allowed; }
+    .community-chat-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      min-height: 17px;
+      margin-top: 4px;
+      font-size: 10px;
+      opacity: .72;
+    }
+    .community-chat-status { min-width: 0; overflow-wrap: anywhere; }
+    .community-chat-counter { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+    .community-chat-emoji-picker {
+      position: absolute;
+      z-index: 30;
+      right: 45px;
+      bottom: 47px;
+      display: grid;
+      grid-template-columns: repeat(6, 36px);
+      gap: 3px;
+      padding: 7px;
+      border: 1px solid rgba(128,128,128,.35);
+      border-radius: 10px;
+      background: var(--gems-chat-picker-bg, #fff);
+      color: var(--gems-chat-picker-text, #222);
+      box-shadow: 0 5px 18px rgba(0,0,0,.22);
+    }
+    .community-chat-emoji-picker[hidden] { display: none; }
+    .community-chat-emoji-picker button {
+      width: 36px;
+      height: 34px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      font-size: 20px;
+      cursor: pointer;
+    }
+    .community-chat-emoji-picker button:active { background: rgba(128,128,128,.2); }
+    body[data-theme="christmas"] { --gems-chat-picker-bg: #fffaf0; --gems-chat-picker-text: #3d3026; }
+    body[data-theme="christmas_victorian"] { --gems-chat-picker-bg: #351820; --gems-chat-picker-text: #f3e5c5; }
+    body[data-theme="tet_vietnam"] { --gems-chat-picker-bg: #4b1019; --gems-chat-picker-text: #f5e7c2; }
+    @media (max-width: 600px) {
+      .community-chat-card { padding: 11px; }
+      .community-chat-messages { height: 190px; }
+      .community-chat-emoji-picker { grid-template-columns: repeat(6, 34px); right: 44px; }
+      .community-chat-emoji-picker button { width: 34px; }
+    }
+
     /* ==================== PLAYBACK TIMELINE ==================== */
     .playback-timeline {
       margin-top: 10px;
@@ -3989,6 +4148,33 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
     </div>
   </div>
 
+  <section id="communityChatCard" class="card community-chat-card" aria-label="Community Chat">
+    <div class="community-chat-heading">
+      <div class="community-chat-title">💬 Community Chat</div>
+      <div class="community-chat-retention">Tin nhắn lưu 6 giờ</div>
+    </div>
+    <div id="communityChatMessages" class="community-chat-messages" role="log" aria-live="polite" aria-relevant="additions">
+      <div class="community-chat-empty">Đang chờ kết nối Telegram...</div>
+    </div>
+    <div class="community-chat-compose">
+      <div id="communityChatEmojiPicker" class="community-chat-emoji-picker" hidden aria-label="Chọn emoji">
+        <button type="button" data-emoji="😀">😀</button><button type="button" data-emoji="😃">😃</button><button type="button" data-emoji="😂">😂</button><button type="button" data-emoji="🥰">🥰</button><button type="button" data-emoji="😍">😍</button><button type="button" data-emoji="😘">😘</button>
+        <button type="button" data-emoji="😊">😊</button><button type="button" data-emoji="😉">😉</button><button type="button" data-emoji="😎">😎</button><button type="button" data-emoji="😭">😭</button><button type="button" data-emoji="😅">😅</button><button type="button" data-emoji="🤔">🤔</button>
+        <button type="button" data-emoji="👍">👍</button><button type="button" data-emoji="👎">👎</button><button type="button" data-emoji="👏">👏</button><button type="button" data-emoji="🙌">🙌</button><button type="button" data-emoji="❤️">❤️</button><button type="button" data-emoji="💖">💖</button>
+        <button type="button" data-emoji="🔥">🔥</button><button type="button" data-emoji="🎵">🎵</button><button type="button" data-emoji="🎶">🎶</button><button type="button" data-emoji="🎉">🎉</button><button type="button" data-emoji="✨">✨</button><button type="button" data-emoji="🌸">🌸</button>
+      </div>
+      <div class="community-chat-input-row">
+        <textarea id="communityChatInput" class="community-chat-input" rows="1" maxlength="240" placeholder="Nhập tin nhắn..." aria-label="Tin nhắn Community Chat"></textarea>
+        <button id="communityChatEmojiBtn" class="community-chat-emoji-btn" type="button" aria-label="Chọn emoji" title="Chọn emoji">😊</button>
+        <button id="communityChatSendBtn" class="community-chat-send-btn" type="button" aria-label="Gửi tin nhắn" title="Gửi">➤</button>
+      </div>
+      <div class="community-chat-footer">
+        <span id="communityChatStatus" class="community-chat-status" aria-live="polite">Đang xác thực Telegram...</span>
+        <span id="communityChatCounter" class="community-chat-counter">0/60</span>
+      </div>
+    </div>
+  </section>
+
   <div class="card" id="playerCard" style="display: none; border: 2px solid #ffca28;">
     <div class="card-title" id="playerTitle">
       <span class="player-label"></span>
@@ -4638,6 +4824,14 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
     const blacklistToggleIcon = document.getElementById('blacklistToggleIcon');
     const blacklistDetails = document.getElementById('blacklistDetails');
     const blacklistListEl = document.getElementById('blacklistList');
+    const communityChatMessagesEl = document.getElementById('communityChatMessages');
+    const communityChatInputEl = document.getElementById('communityChatInput');
+    const communityChatSendBtn = document.getElementById('communityChatSendBtn');
+    const communityChatEmojiBtn = document.getElementById('communityChatEmojiBtn');
+    const communityChatEmojiPicker = document.getElementById('communityChatEmojiPicker');
+    const communityChatStatusEl = document.getElementById('communityChatStatus');
+    const communityChatCounterEl = document.getElementById('communityChatCounter');
+
 
     // Set lưu trữ ID các bài hát đã được thêm vào playlist trong phiên hiện tại
     const addedToPlaylistSet = new Set();
@@ -4926,6 +5120,204 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       }
     }
 
+    // ==================== COMMUNITY CHAT PHASE 3 ====================
+    // Dùng socket đã xác thực sẵn của Mini App; không tạo kết nối/socket riêng.
+    const communityChatMessages = new Map();
+    let communityChatSending = false;
+    let communityChatLoaded = false;
+    const COMMUNITY_CHAT_MAX_CHARS = 60;
+
+    function countChatGraphemes(value) {
+      const text = String(value || '');
+      if (typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function') {
+        return Array.from(new Intl.Segmenter('vi', { granularity: 'grapheme' }).segment(text)).length;
+      }
+      return Array.from(text).length;
+    }
+
+    function setCommunityChatStatus(message, isError = false) {
+      if (!communityChatStatusEl) return;
+      communityChatStatusEl.textContent = message;
+      communityChatStatusEl.style.color = isError ? '#d32f2f' : '';
+    }
+
+    function formatCommunityChatTime(value) {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '';
+      return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function renderCommunityChatMessages(shouldScroll = true) {
+      if (!communityChatMessagesEl) return;
+      const entries = Array.from(communityChatMessages.values()).sort((a, b) => {
+        const diff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        return diff || String(a.id).localeCompare(String(b.id), undefined, { numeric: true });
+      });
+      communityChatMessagesEl.replaceChildren();
+      if (!entries.length) {
+        const empty = document.createElement('div');
+        empty.className = 'community-chat-empty';
+        empty.textContent = 'Chưa có tin nhắn. Hãy bắt đầu cuộc trò chuyện!';
+        communityChatMessagesEl.appendChild(empty);
+        return;
+      }
+      const myTelegramId = String(tg?.initDataUnsafe?.user?.id || userData?.id || '');
+      entries.forEach((item) => {
+        const bubble = document.createElement('div');
+        bubble.className = 'community-chat-message' + (myTelegramId && String(item.telegramId) === myTelegramId ? ' is-own' : '');
+        const meta = document.createElement('div');
+        meta.className = 'community-chat-message-meta';
+        const sender = document.createElement('span');
+        sender.className = 'community-chat-sender';
+        sender.textContent = item.senderName || 'Người dùng';
+        const time = document.createElement('time');
+        time.className = 'community-chat-time';
+        time.textContent = formatCommunityChatTime(item.createdAt);
+        meta.append(sender, time);
+        const body = document.createElement('div');
+        body.className = 'community-chat-message-text';
+        body.textContent = item.message || '';
+        bubble.append(meta, body);
+        communityChatMessagesEl.appendChild(bubble);
+      });
+      if (shouldScroll) communityChatMessagesEl.scrollTop = communityChatMessagesEl.scrollHeight;
+    }
+
+    function upsertCommunityChatMessage(message, shouldScroll = true) {
+      if (!message || message.id == null) return;
+      communityChatMessages.set(String(message.id), message);
+      renderCommunityChatMessages(shouldScroll);
+    }
+
+    async function loadCommunityChatMessages() {
+      if (!socketAuthenticated || !telegramInitData || !communityChatMessagesEl) return;
+      try {
+        setCommunityChatStatus('Đang tải tin nhắn...');
+        const response = await fetch('/api/community-chat/messages?initData=' + encodeURIComponent(telegramInitData), {
+          method: 'GET',
+          cache: 'no-store'
+        });
+        const data = await response.json();
+        if (!response.ok || data?.success !== true || !Array.isArray(data.messages)) {
+          throw new Error(data?.message || 'Không thể tải lịch sử chat.');
+        }
+        // Merge thay vì clear để không làm mất sự kiện realtime vừa tới
+        // trong lúc request lịch sử đang chờ phản hồi.
+        data.messages.forEach((message) => communityChatMessages.set(String(message.id), message));
+        communityChatLoaded = true;
+        renderCommunityChatMessages(true);
+        setCommunityChatStatus('Đã kết nối phòng chat chung');
+      } catch (error) {
+        console.error('❌ Community Chat load error:', error);
+        setCommunityChatStatus(error.message || 'Không thể tải tin nhắn.', true);
+      }
+    }
+
+    async function sendCommunityChatMessage() {
+      if (communityChatSending) return;
+      if (!socketAuthenticated || !telegramInitData) {
+        setCommunityChatStatus('Vui lòng chờ Telegram xác thực.', true);
+        return;
+      }
+      const message = String(communityChatInputEl?.value || '').trim();
+      const characterCount = countChatGraphemes(message);
+      if (!message) {
+        setCommunityChatStatus('Bạn chưa nhập tin nhắn.', true);
+        communityChatInputEl?.focus();
+        return;
+      }
+      if (characterCount > COMMUNITY_CHAT_MAX_CHARS) {
+        setCommunityChatStatus('Tin nhắn tối đa 60 ký tự.', true);
+        return;
+      }
+      communityChatSending = true;
+      communityChatSendBtn.disabled = true;
+      setCommunityChatStatus('Đang gửi...');
+      try {
+        const response = await fetch('/api/community-chat/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ initData: telegramInitData, message })
+        });
+        const data = await response.json();
+        if (!response.ok || data?.success !== true || !data.message) {
+          throw new Error(data?.message || 'Không thể gửi tin nhắn.');
+        }
+        upsertCommunityChatMessage(data.message, true);
+        communityChatInputEl.value = '';
+        updateCommunityChatCounter();
+        setCommunityChatStatus('Đã gửi tin nhắn');
+      } catch (error) {
+        console.error('❌ Community Chat send error:', error);
+        setCommunityChatStatus(error.message || 'Gửi tin nhắn thất bại.', true);
+      } finally {
+        communityChatSending = false;
+        communityChatSendBtn.disabled = false;
+        updateCommunityChatCounter();
+      }
+    }
+
+    function updateCommunityChatCounter() {
+      if (!communityChatInputEl || !communityChatCounterEl) return;
+      const count = countChatGraphemes(communityChatInputEl.value);
+      communityChatCounterEl.textContent = `${count}/${COMMUNITY_CHAT_MAX_CHARS}`;
+      communityChatCounterEl.style.color = count > COMMUNITY_CHAT_MAX_CHARS ? '#d32f2f' : '';
+      if (communityChatSendBtn) {
+        communityChatSendBtn.disabled = communityChatSending || !socketAuthenticated || !telegramInitData ||
+          !String(communityChatInputEl.value || '').trim() || count > COMMUNITY_CHAT_MAX_CHARS;
+      }
+    }
+
+    communityChatInputEl?.addEventListener('input', updateCommunityChatCounter);
+    communityChatInputEl?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendCommunityChatMessage();
+      }
+    });
+    communityChatSendBtn?.addEventListener('click', sendCommunityChatMessage);
+    communityChatEmojiBtn?.addEventListener('click', () => {
+      if (!communityChatEmojiPicker) return;
+      communityChatEmojiPicker.hidden = !communityChatEmojiPicker.hidden;
+    });
+    communityChatEmojiPicker?.addEventListener('click', (event) => {
+      const button = event.target.closest('button[data-emoji]');
+      if (!button || !communityChatInputEl) return;
+      const emoji = button.dataset.emoji || '';
+      const start = communityChatInputEl.selectionStart ?? communityChatInputEl.value.length;
+      const end = communityChatInputEl.selectionEnd ?? start;
+      communityChatInputEl.setRangeText(emoji, start, end, 'end');
+      communityChatInputEl.focus();
+      communityChatEmojiPicker.hidden = true;
+      updateCommunityChatCounter();
+    });
+    document.addEventListener('click', (event) => {
+      if (communityChatEmojiPicker && !communityChatEmojiPicker.hidden &&
+          !communityChatEmojiPicker.contains(event.target) && event.target !== communityChatEmojiBtn) {
+        communityChatEmojiPicker.hidden = true;
+      }
+    });
+
+    socket.on('communityChatMessage', (message) => {
+      // Sự kiện chỉ được server phát cho socket đã xác thực trong phòng chung.
+      upsertCommunityChatMessage(message, true);
+    });
+    updateCommunityChatCounter();
+
+    // Loại bỏ tin nhắn khỏi UI sau 6 giờ; việc xóa vật lý do Backend Phase 2 đảm nhiệm.
+    setInterval(() => {
+      const cutoff = Date.now() - 6 * 60 * 60 * 1000;
+      let changed = false;
+      for (const [id, message] of communityChatMessages.entries()) {
+        const createdAt = new Date(message.createdAt).getTime();
+        if (Number.isFinite(createdAt) && createdAt <= cutoff) {
+          communityChatMessages.delete(id);
+          changed = true;
+        }
+      }
+      if (changed) renderCommunityChatMessages(false);
+    }, 30 * 1000);
+
     function authenticateSocket() {
       if (!socket.connected || socketAuthenticated) return;
 
@@ -4990,9 +5382,11 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       console.log('👮 ADMIN STATUS:', data);
 
       socketAuthenticated = data?.authenticated === true;
+      updateCommunityChatCounter();
       if (socketAuthenticated) {
         clearAuthTimer();
         setConnectionStatus('🟢 Đã kết nối');
+        if (!communityChatLoaded) loadCommunityChatMessages();
       } else if (!socket.connected) {
         setConnectionStatus('❌ Mất kết nối', 'offline');
       } else {
