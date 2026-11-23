@@ -3616,9 +3616,20 @@ io.on('connection', (socket) => {
   socket.authenticated = false;
   socket.isAdmin = false;
   socket.adminRole = null;
-  // Chuyển tiếp tín hiệu thêm playlist giữa các thiết bị của user
-  socket.on('playlistSongAdded', (data) => {
-    io.emit('playlistSongAdded', data);
+  // Chuyển tiếp tín hiệu thêm playlist giữa các thiết bị của cùng Telegram user.
+  // Không nhận userId từ client: chỉ socket đã xác thực mới được phát và
+  // danh tính luôn lấy từ Telegram initData đã được server xác minh.
+  socket.on('playlistSongAdded', (data = {}) => {
+    if (socket.authenticated !== true || !socket.telegramId) return;
+
+    const videoId = String(data.videoId || '').trim();
+    // YouTube video ID chuẩn gồm đúng 11 ký tự [A-Za-z0-9_-].
+    if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) return;
+
+    io.emit('playlistSongAdded', {
+      videoId,
+      userId: socket.telegramId
+    });
   });
 
   // Không emit state cho socket CHƯA xác thực initData — chỉ sau khi
