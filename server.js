@@ -1476,10 +1476,10 @@ app.post('/api/community-chat/messages', communityChatSendLimiter, async (req, r
   if (!message) {
     return res.status(400).json({ success: false, message: 'Tin nhắn không được để trống.' });
   }
-  if (characterCount > 60) {
+  if (characterCount > 100) {
     return res.status(400).json({
       success: false,
-      message: 'Tin nhắn tối đa 60 ký tự.',
+      message: 'Tin nhắn tối đa 100 ký tự.',
       characterCount
     });
   }

@@ -1627,17 +1627,19 @@
     .community-chat-input {
       flex: 1 1 auto;
       min-width: 0;
+      height: 39px;
       min-height: 39px;
       max-height: 82px;
       resize: none;
-      padding: 9px 10px;
+      box-sizing: border-box;
+      padding: 8px 10px;
       border: 1px solid rgba(128,128,128,.38);
       border-radius: 8px;
       background: rgba(128,128,128,.10);
       color: inherit;
       font: inherit;
       font-size: 13px;
-      line-height: 1.35;
+      line-height: 21px;
       outline: none;
     }
     .community-chat-input:focus { border-color: #4caf50; }
@@ -4164,13 +4166,13 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
         <button type="button" data-emoji="🔥">🔥</button><button type="button" data-emoji="🎵">🎵</button><button type="button" data-emoji="🎶">🎶</button><button type="button" data-emoji="🎉">🎉</button><button type="button" data-emoji="✨">✨</button><button type="button" data-emoji="🌸">🌸</button>
       </div>
       <div class="community-chat-input-row">
-        <textarea id="communityChatInput" class="community-chat-input" rows="1" maxlength="240" placeholder="Nhập tin nhắn..." aria-label="Tin nhắn Community Chat"></textarea>
+        <textarea id="communityChatInput" class="community-chat-input" rows="1" maxlength="1200" placeholder="Nhập tin nhắn..." aria-label="Tin nhắn Community Chat"></textarea>
         <button id="communityChatEmojiBtn" class="community-chat-emoji-btn" type="button" aria-label="Chọn emoji" title="Chọn emoji">😊</button>
         <button id="communityChatSendBtn" class="community-chat-send-btn" type="button" aria-label="Gửi tin nhắn" title="Gửi">➤</button>
       </div>
       <div class="community-chat-footer">
         <span id="communityChatStatus" class="community-chat-status" aria-live="polite">Đang xác thực Telegram...</span>
-        <span id="communityChatCounter" class="community-chat-counter">0/60</span>
+        <span id="communityChatCounter" class="community-chat-counter">0/100</span>
       </div>
     </div>
   </section>
@@ -5125,7 +5127,7 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
     const communityChatMessages = new Map();
     let communityChatSending = false;
     let communityChatLoaded = false;
-    const COMMUNITY_CHAT_MAX_CHARS = 60;
+    const COMMUNITY_CHAT_MAX_CHARS = 100;
 
     function countChatGraphemes(value) {
       const text = String(value || '');
@@ -5226,7 +5228,7 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
         return;
       }
       if (characterCount > COMMUNITY_CHAT_MAX_CHARS) {
-        setCommunityChatStatus('Tin nhắn tối đa 60 ký tự.', true);
+        setCommunityChatStatus('Tin nhắn tối đa 100 ký tự.', true);
         return;
       }
       communityChatSending = true;
@@ -5278,22 +5280,29 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
     communityChatEmojiBtn?.addEventListener('click', () => {
       if (!communityChatEmojiPicker) return;
       communityChatEmojiPicker.hidden = !communityChatEmojiPicker.hidden;
+      communityChatEmojiBtn.setAttribute('aria-expanded', String(!communityChatEmojiPicker.hidden));
     });
     communityChatEmojiPicker?.addEventListener('click', (event) => {
-      const button = event.target.closest('button[data-emoji]');
+      const target = event.target instanceof Element ? event.target : null;
+      const button = target?.closest('button[data-emoji]');
       if (!button || !communityChatInputEl) return;
+      event.preventDefault();
+      event.stopPropagation();
       const emoji = button.dataset.emoji || '';
       const start = communityChatInputEl.selectionStart ?? communityChatInputEl.value.length;
       const end = communityChatInputEl.selectionEnd ?? start;
       communityChatInputEl.setRangeText(emoji, start, end, 'end');
-      communityChatInputEl.focus();
+      // Đóng picker ngay khi chọn, rồi mới focus lại ô nhập.
       communityChatEmojiPicker.hidden = true;
+      communityChatEmojiBtn?.setAttribute('aria-expanded', 'false');
       updateCommunityChatCounter();
+      communityChatInputEl.focus();
     });
     document.addEventListener('click', (event) => {
       if (communityChatEmojiPicker && !communityChatEmojiPicker.hidden &&
           !communityChatEmojiPicker.contains(event.target) && event.target !== communityChatEmojiBtn) {
         communityChatEmojiPicker.hidden = true;
+        communityChatEmojiBtn?.setAttribute('aria-expanded', 'false');
       }
     });
 
@@ -7669,10 +7678,11 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
         // Báo server ngay khi YouTube kết thúc. Server sẽ xác nhận đúng
         // songId + playback version rồi chuyển authoritative state sang
         // STOPPED (khi Auto Play không xử lý bài kế tiếp).
-        if (currentPlayback?.songId != null && currentPlayback?.status === 'playing') {
+        const endedSongId = currentPlayback?.songId ?? null;
+        if (endedSongId != null && currentPlayback?.status === 'playing') {
           try {
             socket.emit('playbackEnded', {
-              songId: currentPlayback.songId,
+              songId: endedSongId,
               version: currentPlayback.version,
               position: Number(youtubeApiPlayer.getCurrentTime?.() || 0)
             });
@@ -7681,7 +7691,7 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
           }
         }
 
-        handleAutoPlayEnded();
+        handleAutoPlayEnded(endedSongId);
       }
     }
 
@@ -7705,13 +7715,13 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       }
     });
 
-    async function handleAutoPlayEnded() {
+    async function handleAutoPlayEnded(endedSongId) {
       // Chỉ đúng Admin đang giữ quyền điều khiển Auto Play mới được chuyển bài.
       if (!window.isAdmin || !autoPlayController) {
         return;
       }
 
-      if (autoPlayMode === 0) {
+      if (autoPlayMode === 0 || endedSongId == null) {
         return;
       }
 
@@ -7720,9 +7730,11 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
         return;
       }
 
+      // Lấy ID trực tiếp từ playback state đã kết thúc. Trước đây hàm gọi
+      // Hàm lấy ID bài thắng cũ không tồn tại, khiến luồng chuyển bài lỗi trước try/finally.
+      const endedSongIdString = String(endedSongId);
       autoPlayNextBusy = true;
-      const endedSongId = lastWinnerId();
-      iosAutoPlayDiagnostic.record('auto_play_next_request', { endedSongId });
+      iosAutoPlayDiagnostic.record('auto_play_next_request', { endedSongId: endedSongIdString });
 
       try {
         const res = await fetch('/api/auto-play-next', {
@@ -7733,7 +7745,7 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
           body: JSON.stringify({
             initData: telegramInitData,
             socketId: socket.id,
-            expectedSongId: endedSongId
+            expectedSongId: endedSongIdString
           })
         });
 
