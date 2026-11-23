@@ -1452,6 +1452,10 @@ const communityChatSendLimiter = rateLimit({
   message: { success: false, message: 'Bạn gửi tin nhắn quá nhanh. Vui lòng thử lại sau.' }
 });
 
+// Cursor pagination: tải 30 tin nhắn mới nhất; beforeId lấy mốc ID của tin cũ nhất
+// ở trang hiện tại. ID BIGSERIAL tạo thứ tự ổn định, không bị lệch bởi tin nhắn mới.
+const COMMUNITY_CHAT_PAGE_SIZE = 30;
+
 app.get('/api/community-chat/messages', async (req, res) => {
   const auth = validateTelegramInitData(req.query?.initData || '');
   if (!auth.valid) {
@@ -1461,30 +1465,49 @@ app.get('/api/community-chat/messages', async (req, res) => {
     });
   }
 
+  const beforeId = req.query?.beforeId == null || req.query.beforeId === ''
+    ? null
+    : String(req.query.beforeId);
+  if (beforeId !== null && !/^\d{1,18}$/.test(beforeId)) {
+    return res.status(400).json({ success: false, message: 'Mốc tải tin nhắn cũ không hợp lệ.' });
+  }
+
   try {
     const viewerId = String(auth.user.id);
+    // Lấy dư một dòng để xác định còn trang cũ hơn hay không.
+    // Truy vấn DESC lấy đúng trang gần cursor nhất; kết quả được đảo ASC để UI hiển thị.
     const result = await pool.query(`
-      SELECT
-        m.id,
-        m.telegram_id AS "telegramId",
-        m.sender_name AS "senderName",
-        m.message,
-        m.created_at AS "createdAt",
-        m.edited_at AS "editedAt",
-        m.is_emphasized AS "isEmphasized",
-        m.reply_to_message_id AS "replyToMessageId",
-        m.reply_to_sender_name AS "replyToSenderName",
-        m.reply_to_message AS "replyToMessage",
-        EXISTS (
-          SELECT 1 FROM community_chat_message_reads r
-          WHERE r.message_id = m.id AND r.telegram_id <> $1
-        ) AS "hasBeenRead"
-      FROM community_chat_messages m
-      WHERE m.expires_at > CURRENT_TIMESTAMP
-      ORDER BY m.created_at ASC, m.id ASC
-    `, [viewerId]);
+      SELECT * FROM (
+        SELECT
+          m.id,
+          m.telegram_id AS "telegramId",
+          m.sender_name AS "senderName",
+          m.message,
+          m.created_at AS "createdAt",
+          m.edited_at AS "editedAt",
+          m.is_emphasized AS "isEmphasized",
+          m.reply_to_message_id AS "replyToMessageId",
+          m.reply_to_sender_name AS "replyToSenderName",
+          m.reply_to_message AS "replyToMessage",
+          EXISTS (
+            SELECT 1 FROM community_chat_message_reads r
+            WHERE r.message_id = m.id AND r.telegram_id <> $1
+          ) AS "hasBeenRead"
+        FROM community_chat_messages m
+        WHERE m.expires_at > CURRENT_TIMESTAMP
+          AND ($2::bigint IS NULL OR m.id < $2::bigint)
+        ORDER BY m.id DESC
+        LIMIT $3
+      ) page
+      ORDER BY page.id ASC
+    `, [viewerId, beforeId, COMMUNITY_CHAT_PAGE_SIZE + 1]);
+
+    const hasMore = result.rows.length > COMMUNITY_CHAT_PAGE_SIZE;
+    const pageRows = hasMore
+      ? result.rows.slice(result.rows.length - COMMUNITY_CHAT_PAGE_SIZE)
+      : result.rows;
     // Telegram ID chỉ dùng nội bộ để tính quyền sở hữu, không trả ra client.
-    const messages = result.rows.map(({ telegramId: ownerId, replyToMessageId, replyToSenderName, replyToMessage, ...message }) => ({
+    const messages = pageRows.map(({ telegramId: ownerId, replyToMessageId, replyToSenderName, replyToMessage, ...message }) => ({
       ...message,
       isOwn: String(ownerId) === viewerId,
       replyTo: replyToMessageId ? {
@@ -1493,7 +1516,16 @@ app.get('/api/community-chat/messages', async (req, res) => {
         message: replyToMessage || ''
       } : null
     }));
-    return res.json({ success: true, messages });
+    const nextCursor = messages.length
+      ? { beforeId: String(messages[0].id) }
+      : null;
+    return res.json({
+      success: true,
+      messages,
+      hasMore,
+      nextCursor,
+      pageSize: COMMUNITY_CHAT_PAGE_SIZE
+    });
   } catch (error) {
     console.error('❌ Community Chat load error:', error);
     return res.status(500).json({ success: false, message: 'Không thể tải tin nhắn chat.' });
