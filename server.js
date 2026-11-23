@@ -255,6 +255,29 @@ async function initDatabase() {
     ON playlist_songs (playlist_id, position, id)
   `);
 
+  // Community Chat Phase 2: một phòng chat chung, lưu lịch sử trong PostgreSQL.
+  // expires_at được tính từ thời điểm gửi; API không trả về tin đã hết hạn.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS community_chat_messages (
+      id BIGSERIAL PRIMARY KEY,
+      telegram_id TEXT NOT NULL,
+      sender_name TEXT NOT NULL,
+      message TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      expires_at TIMESTAMPTZ NOT NULL
+    )
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_community_chat_messages_expiry
+    ON community_chat_messages (expires_at)
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_community_chat_messages_created
+    ON community_chat_messages (created_at, id)
+  `);
+
   console.log('🗄️ PostgreSQL: Database ready');
 }
 
@@ -1361,6 +1384,127 @@ const userLimiter = rateLimit({
   message: { success: false, message: 'Bạn đã gửi quá nhiều yêu cầu, vui lòng thử lại sau.' }
 });
 app.use('/api/', userLimiter);
+
+// ==================== COMMUNITY CHAT PHASE 2 ====================
+const COMMUNITY_CHAT_ROOM = 'community-chat';
+const COMMUNITY_CHAT_RETENTION_HOURS = 6;
+const COMMUNITY_CHAT_CLEANUP_INTERVAL_MS = 10 * 1000;
+
+// Đếm ký tự hiển thị (grapheme), để emoji ghép như 👨‍👩‍👧‍👦 không bị tính
+// thành nhiều ký tự. Fallback Array.from cho runtime không có Intl.Segmenter.
+function countCommunityChatCharacters(value) {
+  const text = String(value ?? '');
+  if (typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function') {
+    const segmenter = new Intl.Segmenter('vi', { granularity: 'grapheme' });
+    return Array.from(segmenter.segment(text)).length;
+  }
+  return Array.from(text).length;
+}
+
+function getTelegramDisplayName(user) {
+  const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim();
+  return fullName || (user?.username ? `@${user.username}` : 'Telegram user');
+}
+
+async function cleanupExpiredCommunityChatMessages() {
+  const result = await pool.query(`
+    DELETE FROM community_chat_messages
+    WHERE expires_at <= CURRENT_TIMESTAMP
+  `);
+  if (result.rowCount > 0) {
+    console.log(`🧹 Community Chat: đã xóa vật lý ${result.rowCount} tin nhắn hết hạn`);
+  }
+  return result.rowCount;
+}
+
+// Chặn spam riêng cho chat: tối đa 5 tin / 10 giây / Telegram user.
+const communityChatSendLimiter = rateLimit({
+  windowMs: 10 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) =>
+    getTelegramUserIdFromRequest(req) || ipKeyGenerator(req.ip),
+  message: { success: false, message: 'Bạn gửi tin nhắn quá nhanh. Vui lòng thử lại sau.' }
+});
+
+app.get('/api/community-chat/messages', async (req, res) => {
+  const auth = validateTelegramInitData(req.query?.initData || '');
+  if (!auth.valid) {
+    return res.status(401).json({
+      success: false,
+      message: `Xác thực Telegram thất bại: ${auth.message}`
+    });
+  }
+
+  try {
+    const result = await pool.query(`
+      SELECT
+        id,
+        telegram_id AS "telegramId",
+        sender_name AS "senderName",
+        message,
+        created_at AS "createdAt"
+      FROM community_chat_messages
+      WHERE expires_at > CURRENT_TIMESTAMP
+      ORDER BY created_at ASC, id ASC
+    `);
+    return res.json({ success: true, messages: result.rows });
+  } catch (error) {
+    console.error('❌ Community Chat load error:', error);
+    return res.status(500).json({ success: false, message: 'Không thể tải tin nhắn chat.' });
+  }
+});
+
+app.post('/api/community-chat/messages', communityChatSendLimiter, async (req, res) => {
+  const auth = validateTelegramInitData(req.body?.initData || '');
+  if (!auth.valid) {
+    return res.status(401).json({
+      success: false,
+      message: `Xác thực Telegram thất bại: ${auth.message}`
+    });
+  }
+
+  const message = String(req.body?.message ?? '').trim();
+  const characterCount = countCommunityChatCharacters(message);
+  if (!message) {
+    return res.status(400).json({ success: false, message: 'Tin nhắn không được để trống.' });
+  }
+  if (characterCount > 60) {
+    return res.status(400).json({
+      success: false,
+      message: 'Tin nhắn tối đa 60 ký tự.',
+      characterCount
+    });
+  }
+
+  const telegramId = String(auth.user.id);
+  const senderName = getTelegramDisplayName(auth.user);
+
+  try {
+    const result = await pool.query(`
+      INSERT INTO community_chat_messages (
+        telegram_id, sender_name, message, expires_at
+      )
+      VALUES ($1, $2, $3, CURRENT_TIMESTAMP + ($4 * INTERVAL '1 hour'))
+      RETURNING
+        id,
+        telegram_id AS "telegramId",
+        sender_name AS "senderName",
+        message,
+        created_at AS "createdAt",
+        expires_at AS "expiresAt"
+    `, [telegramId, senderName, message, COMMUNITY_CHAT_RETENTION_HOURS]);
+
+    const savedMessage = result.rows[0];
+    // Chỉ phát tin đã ghi DB thành công; mọi người trong cùng phòng nhận chung.
+    io.to(COMMUNITY_CHAT_ROOM).emit('communityChatMessage', savedMessage);
+    return res.status(201).json({ success: true, message: savedMessage });
+  } catch (error) {
+    console.error('❌ Community Chat send error:', error);
+    return res.status(500).json({ success: false, message: 'Không thể gửi tin nhắn.' });
+  }
+});
 
 // ==================== THEME SYSTEM PHASE 3C ====================
 // Telegram ID luôn được lấy từ initData đã xác minh, không nhận ID từ client.
@@ -3492,7 +3636,7 @@ io.on('connection', (socket) => {
     }
     // Phase 3D: không để socket giữ room Theme của tài khoản cũ khi re-authenticate.
     for (const room of Array.from(socket.rooms)) {
-      if (room.startsWith('theme:')) socket.leave(room);
+      if (room.startsWith('theme:') || room === COMMUNITY_CHAT_ROOM) socket.leave(room);
     }
     socket.authenticated = false;
     socket.isAdmin = false;
@@ -3533,6 +3677,9 @@ io.on('connection', (socket) => {
     // Phase 3D: room riêng để đồng bộ Theme tới mọi thiết bị của cùng Telegram ID.
     // Chỉ tham gia sau khi initData đã được server xác thực.
     socket.join(`theme:${telegramId}`);
+
+    // Community Chat: mọi Telegram user đã xác thực tham gia cùng một phòng.
+    socket.join(COMMUNITY_CHAT_ROOM);
 
     // Room riêng cho My Playlist của chính Telegram user này.
     // telegramId lấy từ initData đã được server xác thực.
@@ -3763,6 +3910,14 @@ const PORT = process.env.PORT || 3000;
 async function startServer() {
   try {
     await initDatabase();
+    await cleanupExpiredCommunityChatMessages();
+    const communityChatCleanupTimer = setInterval(() => {
+      cleanupExpiredCommunityChatMessages().catch(error => {
+        console.error('❌ Community Chat cleanup error:', error);
+      });
+    }, COMMUNITY_CHAT_CLEANUP_INTERVAL_MS);
+    communityChatCleanupTimer.unref();
+
     await loadSongsFromDatabase();
     syncAutoPlayModeWithSongCount();
     await loadBlockedSongsFromDatabase();
@@ -3804,6 +3959,7 @@ module.exports = {
   detectDeviceType,
   isAdmin,
   validateTelegramInitData,
+  countCommunityChatCharacters,
   addOnlineUser,
   removeOnlineUser,
   getOnlineSummary,
