@@ -5228,7 +5228,7 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
     }
 
-    function createCommunityChatLucideIcon(iconDefinition) {
+    function createCommunityChatLucideIcon(iconDefinition, action) {
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       svg.setAttribute('viewBox', '0 0 24 24');
       svg.setAttribute('width', '15');
@@ -5238,7 +5238,25 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       svg.setAttribute('stroke-width', '2');
       svg.setAttribute('stroke-linecap', 'round');
       svg.setAttribute('stroke-linejoin', 'round');
-      (iconDefinition?.iconNode || []).forEach(([tag, attrs]) => {
+
+      // Một số bản build của package `lucide` export icon dưới dạng component,
+      // không cung cấp `iconNode`. Dùng SVG path Lucide tương ứng làm fallback
+      // để nút Reply/Edit không bị trống icon trên các môi trường đó.
+      const fallbackNodes = {
+        reply: [
+          ['path', { d: 'm22 2-7 20-4-9-9-4Z' }],
+          ['path', { d: 'M22 2 11 13' }]
+        ],
+        edit: [
+          ['path', { d: 'M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.17a2 2 0 0 0-.5.83l-1.3 4.3a.5.5 0 0 0 .62.62l4.3-1.3a2 2 0 0 0 .83-.5z' }],
+          ['path', { d: 'm15 5 4 4' }]
+        ]
+      };
+      const iconNodes = Array.isArray(iconDefinition?.iconNode) && iconDefinition.iconNode.length
+        ? iconDefinition.iconNode
+        : (fallbackNodes[action] || []);
+
+      iconNodes.forEach(([tag, attrs]) => {
         const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
         Object.entries(attrs || {}).forEach(([key, value]) => node.setAttribute(key, String(value)));
         svg.appendChild(node);
@@ -5254,7 +5272,7 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       button.dataset.messageId = String(messageId);
       button.setAttribute('aria-label', label);
       button.title = label;
-      button.appendChild(createCommunityChatLucideIcon(iconDefinition));
+      button.appendChild(createCommunityChatLucideIcon(iconDefinition, action));
       return button;
     }
 
