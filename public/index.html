@@ -1616,6 +1616,7 @@
       opacity: .72;
     }
     .community-chat-sender { font-weight: 800; }
+    .community-chat-read-icon { width: 13px; height: 13px; flex: 0 0 auto; color: #4caf50; opacity: .9; }
     .community-chat-time { margin-left: auto; white-space: nowrap; }
     .community-chat-edited-label { font-size: 9px; opacity: .62; }
     .community-chat-message-text {
@@ -5212,6 +5213,9 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
     let communityChatLoaded = false;
     let communityChatReplyTo = null;
     let communityChatEditingId = null;
+    let communityChatReadObserver = null;
+    const communityChatReadQueue = new Set();
+    let communityChatReadFlushTimer = null;
     const COMMUNITY_CHAT_MAX_CHARS = 100;
 
     function countChatGraphemes(value) {
@@ -5260,6 +5264,9 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
         enlarge: [
           ['circle', { cx: '11', cy: '11', r: '8' }],
           ['path', { d: 'm21 21-4.35-4.35' }]
+        ],
+        read: [
+          ['path', { d: 'M20 6 9 17l-5-5' }]
         ]
       };
       const iconNodes = Array.isArray(iconDefinition?.iconNode) && iconDefinition.iconNode.length
@@ -5286,7 +5293,7 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       return button;
     }
 
-    function renderCommunityChatMessages(shouldScroll = true) {
+    function renderCommunityChatMessages(shouldScroll = true, forceBottom = false) {
       if (!communityChatMessagesEl) return;
       const previousScrollTop = communityChatMessagesEl.scrollTop;
       const wasNearBottom = communityChatMessagesEl.scrollHeight - communityChatMessagesEl.clientHeight - previousScrollTop < 45;
@@ -5316,6 +5323,13 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
         time.className = 'community-chat-time';
         time.textContent = formatCommunityChatTime(item.createdAt);
         meta.append(sender, time);
+        if (item.isOwn === true && item.hasBeenRead === true) {
+          const readIcon = createCommunityChatLucideIcon(Check, 'read');
+          readIcon.classList.add('community-chat-read-icon');
+          readIcon.setAttribute('aria-label', 'Đã xem');
+          readIcon.setAttribute('title', 'Đã xem');
+          meta.appendChild(readIcon);
+        }
         bubble.appendChild(meta);
 
         if (item.replyTo) {
@@ -5351,8 +5365,9 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
         bubble.appendChild(actions);
         communityChatMessagesEl.appendChild(bubble);
       });
-      if (shouldScroll && wasNearBottom) communityChatMessagesEl.scrollTop = communityChatMessagesEl.scrollHeight;
+      if (forceBottom || (shouldScroll && wasNearBottom)) communityChatMessagesEl.scrollTop = communityChatMessagesEl.scrollHeight;
       else communityChatMessagesEl.scrollTop = previousScrollTop;
+      observeCommunityChatMessages();
     }
 
     function setCommunityChatComposeMode(mode, message = null) {
@@ -5398,10 +5413,75 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       }
     }
 
-    function upsertCommunityChatMessage(message, shouldScroll = true) {
+    function upsertCommunityChatMessage(message, shouldScroll = true, forceBottom = false) {
       if (!message || message.id == null) return;
       communityChatMessages.set(String(message.id), message);
-      renderCommunityChatMessages(shouldScroll);
+      renderCommunityChatMessages(shouldScroll, forceBottom);
+    }
+
+    function queueCommunityChatRead(messageId) {
+      if (!messageId || !telegramInitData) return;
+      communityChatReadQueue.add(String(messageId));
+      if (communityChatReadFlushTimer) return;
+      communityChatReadFlushTimer = setTimeout(flushCommunityChatReadQueue, 350);
+    }
+
+    async function flushCommunityChatReadQueue() {
+      communityChatReadFlushTimer = null;
+      const messageIds = Array.from(communityChatReadQueue).slice(0, 100);
+      messageIds.forEach(id => communityChatReadQueue.delete(id));
+      if (!messageIds.length || !telegramInitData || !socketAuthenticated) return;
+      try {
+        const response = await fetch('/api/community-chat/messages/read', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ initData: telegramInitData, messageIds })
+        });
+        const data = await response.json();
+        if (!response.ok || data?.success !== true) throw new Error(data?.message || 'Read receipt failed');
+      } catch (error) {
+        console.warn('Community Chat read receipt:', error);
+      }
+      if (communityChatReadQueue.size && !communityChatReadFlushTimer) {
+        communityChatReadFlushTimer = setTimeout(flushCommunityChatReadQueue, 350);
+      }
+    }
+
+    function observeCommunityChatMessages() {
+      if (!communityChatMessagesEl || typeof IntersectionObserver !== 'function') return;
+      if (!communityChatReadObserver) {
+        communityChatReadObserver = new IntersectionObserver((entries) => {
+          entries.forEach(entry => {
+            if (!entry.isIntersecting || entry.intersectionRatio < 0.6) return;
+            const id = entry.target?.dataset?.messageId;
+            const message = id ? communityChatMessages.get(String(id)) : null;
+            if (message && message.isOwn !== true && message.hasBeenRead !== true) {
+              message.hasBeenRead = true;
+              queueCommunityChatRead(id);
+            }
+            communityChatReadObserver.unobserve(entry.target);
+          });
+        }, { root: communityChatMessagesEl, threshold: [0.6] });
+      }
+      communityChatMessagesEl.querySelectorAll('.community-chat-message[data-message-id]').forEach(node => {
+        const message = communityChatMessages.get(String(node.dataset.messageId));
+        if (message && message.isOwn !== true && message.hasBeenRead !== true) communityChatReadObserver.observe(node);
+      });
+    }
+
+    function revealCommunityChatActions(bubble) {
+      if (!bubble || !communityChatMessagesEl) return;
+      requestAnimationFrame(() => {
+        const containerRect = communityChatMessagesEl.getBoundingClientRect();
+        const actions = bubble.querySelector('.community-chat-message-actions');
+        if (!actions) return;
+        const actionsRect = actions.getBoundingClientRect();
+        if (actionsRect.bottom > containerRect.bottom - 4) {
+          communityChatMessagesEl.scrollTop += actionsRect.bottom - containerRect.bottom + 12;
+        } else if (actionsRect.top < containerRect.top + 4) {
+          communityChatMessagesEl.scrollTop -= containerRect.top - actionsRect.top + 12;
+        }
+      });
     }
 
     async function toggleCommunityChatEmphasis(message) {
@@ -5500,7 +5580,7 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
           upsertCommunityChatMessage({ ...current, ...data.message, isOwn: true }, false);
           setCommunityChatStatus('Đã cập nhật tin nhắn');
         } else {
-          upsertCommunityChatMessage(data.message, true);
+          upsertCommunityChatMessage(data.message, true, true);
           setCommunityChatStatus('Đã gửi tin nhắn');
         }
         communityChatInputEl.value = '';
@@ -5541,6 +5621,7 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       const bubble = target?.closest('.community-chat-message[data-message-id]');
       if (bubble && communityChatMessagesEl.contains(bubble)) {
         bubble.classList.toggle('actions-open');
+        if (bubble.classList.contains('actions-open')) revealCommunityChatActions(bubble);
       } else {
         communityChatMessagesEl.querySelectorAll('.community-chat-message.actions-open').forEach((node) => node.classList.remove('actions-open'));
       }
@@ -5575,9 +5656,7 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       const start = communityChatInputEl.selectionStart ?? communityChatInputEl.value.length;
       const end = communityChatInputEl.selectionEnd ?? start;
       communityChatInputEl.setRangeText(emoji, start, end, 'end');
-      // Đóng picker ngay khi chọn, rồi mới focus lại ô nhập.
-      communityChatEmojiPicker.hidden = true;
-      communityChatEmojiBtn?.setAttribute('aria-expanded', 'false');
+      // Giữ picker mở để người dùng có thể chèn liên tiếp nhiều emoji.
       updateCommunityChatCounter();
       communityChatInputEl.focus();
     });
@@ -5601,6 +5680,12 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       const current = communityChatMessages.get(String(updated.id));
       if (!current) return;
       upsertCommunityChatMessage({ ...current, ...updated, isOwn: current.isOwn === true }, false);
+    });
+    socket.on('communityChatReadReceipt', (receipt) => {
+      if (!receipt || receipt.messageId == null) return;
+      const current = communityChatMessages.get(String(receipt.messageId));
+      if (!current || current.isOwn !== true) return;
+      upsertCommunityChatMessage({ ...current, hasBeenRead: true }, false);
     });
     socket.on('communityChatMessageEmphasis', (updated) => {
       if (!updated || updated.id == null) return;
