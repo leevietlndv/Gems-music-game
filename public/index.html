@@ -1612,11 +1612,69 @@
     }
     .community-chat-sender { font-weight: 800; }
     .community-chat-time { margin-left: auto; white-space: nowrap; }
+    .community-chat-edited-label { font-size: 9px; opacity: .62; }
     .community-chat-message-text {
       font-size: 13px;
       line-height: 1.4;
       white-space: pre-wrap;
       overflow-wrap: anywhere;
+    }
+    .community-chat-reply-quote {
+      margin: 0 0 5px;
+      padding: 5px 7px;
+      border-left: 3px solid #4caf50;
+      border-radius: 4px;
+      background: rgba(128,128,128,.13);
+      font-size: 10px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    .community-chat-reply-quote strong { display: block; margin-bottom: 2px; }
+    .community-chat-message-actions {
+      display: none;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 5px;
+      margin-top: 5px;
+      padding-top: 3px;
+      border-top: 1px solid rgba(128,128,128,.14);
+    }
+    .community-chat-message.actions-open .community-chat-message-actions { display: flex; }
+    .community-chat-action-btn {
+      width: 27px;
+      height: 25px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: inherit;
+      opacity: .72;
+      cursor: pointer;
+    }
+    .community-chat-action-btn:hover,
+    .community-chat-action-btn:focus-visible { opacity: 1; background: rgba(128,128,128,.18); outline: none; }
+    .community-chat-action-btn svg { width: 15px; height: 15px; }
+    .community-chat-compose-preview {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      padding: 7px 9px;
+      border-left: 3px solid #4caf50;
+      border-radius: 6px;
+      background: rgba(128,128,128,.13);
+      font-size: 11px;
+    }
+    .community-chat-compose-preview[hidden] { display: none; }
+    .community-chat-compose-preview-content { flex: 1 1 auto; min-width: 0; }
+    .community-chat-compose-preview-title { font-weight: 800; margin-bottom: 2px; }
+    .community-chat-compose-preview-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .78; }
+    .community-chat-compose-preview button {
+      flex: 0 0 25px; width: 25px; height: 25px; border: 0; border-radius: 5px;
+      background: rgba(128,128,128,.18); color: inherit; cursor: pointer;
     }
     .community-chat-compose { position: relative; margin-top: 9px; }
     .community-chat-input-row {
@@ -4169,6 +4227,13 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       <div class="community-chat-empty">Đang chờ kết nối Telegram...</div>
     </div>
     <div class="community-chat-compose">
+      <div id="communityChatComposePreview" class="community-chat-compose-preview" hidden>
+        <div class="community-chat-compose-preview-content">
+          <div id="communityChatComposePreviewTitle" class="community-chat-compose-preview-title"></div>
+          <div id="communityChatComposePreviewText" class="community-chat-compose-preview-text"></div>
+        </div>
+        <button id="communityChatComposePreviewCancel" type="button" aria-label="Hủy Reply hoặc Edit" title="Hủy">×</button>
+      </div>
       <div id="communityChatEmojiPicker" class="community-chat-emoji-picker" hidden aria-label="Chọn emoji">
         <button type="button" data-emoji="😀">😀</button><button type="button" data-emoji="😃">😃</button><button type="button" data-emoji="😂">😂</button><button type="button" data-emoji="🥰">🥰</button><button type="button" data-emoji="😍">😍</button><button type="button" data-emoji="😘">😘</button>
         <button type="button" data-emoji="😊">😊</button><button type="button" data-emoji="😉">😉</button><button type="button" data-emoji="😎">😎</button><button type="button" data-emoji="😭">😭</button><button type="button" data-emoji="😅">😅</button><button type="button" data-emoji="🤔">🤔</button>
@@ -4348,7 +4413,7 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
     // Import engine của Morphicons cho DOM thuần
     import { createMorph } from 'https://esm.sh/morphicons/dom';
     // Import dữ liệu icon nét (stroke-based) từ Lucide
-    import { Play, Pause, Menu, X, Volume2, Volume1, VolumeX, Shuffle, Square, ChevronDown, ChevronUp, RefreshCw, Upload, Pencil, Heart, Check, Trash2 } from 'https://esm.sh/lucide';
+    import { Play, Pause, Menu, X, Volume2, Volume1, VolumeX, Shuffle, Square, ChevronDown, ChevronUp, RefreshCw, Upload, Pencil, Send, Heart, Check, Trash2 } from 'https://esm.sh/lucide';
 
     const tg = window.Telegram?.WebApp;
     if (tg) {
@@ -4843,6 +4908,10 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
     const communityChatEmojiPicker = document.getElementById('communityChatEmojiPicker');
     const communityChatStatusEl = document.getElementById('communityChatStatus');
     const communityChatCounterEl = document.getElementById('communityChatCounter');
+    const communityChatComposePreviewEl = document.getElementById('communityChatComposePreview');
+    const communityChatComposePreviewTitleEl = document.getElementById('communityChatComposePreviewTitle');
+    const communityChatComposePreviewTextEl = document.getElementById('communityChatComposePreviewText');
+    const communityChatComposePreviewCancelBtn = document.getElementById('communityChatComposePreviewCancel');
 
 
     // Set lưu trữ ID các bài hát đã được thêm vào playlist trong phiên hiện tại
@@ -5135,6 +5204,8 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
     const communityChatMessages = new Map();
     let communityChatSending = false;
     let communityChatLoaded = false;
+    let communityChatReplyTo = null;
+    let communityChatEditingId = null;
     const COMMUNITY_CHAT_MAX_CHARS = 100;
 
     function countChatGraphemes(value) {
@@ -5157,8 +5228,40 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
     }
 
+    function createCommunityChatLucideIcon(iconDefinition) {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('width', '15');
+      svg.setAttribute('height', '15');
+      svg.setAttribute('fill', 'none');
+      svg.setAttribute('stroke', 'currentColor');
+      svg.setAttribute('stroke-width', '2');
+      svg.setAttribute('stroke-linecap', 'round');
+      svg.setAttribute('stroke-linejoin', 'round');
+      (iconDefinition?.iconNode || []).forEach(([tag, attrs]) => {
+        const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+        Object.entries(attrs || {}).forEach(([key, value]) => node.setAttribute(key, String(value)));
+        svg.appendChild(node);
+      });
+      return svg;
+    }
+
+    function createCommunityChatActionButton(action, label, iconDefinition, messageId) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'community-chat-action-btn';
+      button.dataset.chatAction = action;
+      button.dataset.messageId = String(messageId);
+      button.setAttribute('aria-label', label);
+      button.title = label;
+      button.appendChild(createCommunityChatLucideIcon(iconDefinition));
+      return button;
+    }
+
     function renderCommunityChatMessages(shouldScroll = true) {
       if (!communityChatMessagesEl) return;
+      const previousScrollTop = communityChatMessagesEl.scrollTop;
+      const wasNearBottom = communityChatMessagesEl.scrollHeight - communityChatMessagesEl.clientHeight - previousScrollTop < 45;
       const entries = Array.from(communityChatMessages.values()).sort((a, b) => {
         const diff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         return diff || String(a.id).localeCompare(String(b.id), undefined, { numeric: true });
@@ -5174,6 +5277,8 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       entries.forEach((item) => {
         const bubble = document.createElement('div');
         bubble.className = 'community-chat-message' + (item.isOwn === true ? ' is-own' : '');
+        bubble.dataset.messageId = String(item.id);
+
         const meta = document.createElement('div');
         meta.className = 'community-chat-message-meta';
         const sender = document.createElement('span');
@@ -5183,13 +5288,85 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
         time.className = 'community-chat-time';
         time.textContent = formatCommunityChatTime(item.createdAt);
         meta.append(sender, time);
+        bubble.appendChild(meta);
+
+        if (item.replyTo) {
+          const quote = document.createElement('div');
+          quote.className = 'community-chat-reply-quote';
+          const quoteSender = document.createElement('strong');
+          quoteSender.textContent = item.replyTo.senderName || 'Tin nhắn được trích dẫn';
+          const quoteText = document.createElement('span');
+          quoteText.textContent = item.replyTo.message || '';
+          quote.append(quoteSender, quoteText);
+          bubble.appendChild(quote);
+        }
+
         const body = document.createElement('div');
         body.className = 'community-chat-message-text';
         body.textContent = item.message || '';
-        bubble.append(meta, body);
+        bubble.appendChild(body);
+
+        if (item.editedAt) {
+          const edited = document.createElement('span');
+          edited.className = 'community-chat-edited-label';
+          edited.textContent = ' · đã chỉnh sửa';
+          body.appendChild(edited);
+        }
+
+        const actions = document.createElement('div');
+        actions.className = 'community-chat-message-actions';
+        actions.appendChild(createCommunityChatActionButton('reply', 'Reply', Send, item.id));
+        if (item.isOwn === true) {
+          actions.appendChild(createCommunityChatActionButton('edit', 'Edit', Pencil, item.id));
+        }
+        bubble.appendChild(actions);
         communityChatMessagesEl.appendChild(bubble);
       });
-      if (shouldScroll) communityChatMessagesEl.scrollTop = communityChatMessagesEl.scrollHeight;
+      if (shouldScroll && wasNearBottom) communityChatMessagesEl.scrollTop = communityChatMessagesEl.scrollHeight;
+      else communityChatMessagesEl.scrollTop = previousScrollTop;
+    }
+
+    function setCommunityChatComposeMode(mode, message = null) {
+      communityChatReplyTo = mode === 'reply' ? message : null;
+      communityChatEditingId = mode === 'edit' && message ? String(message.id) : null;
+      if (communityChatComposePreviewEl) {
+        const active = mode === 'reply' || mode === 'edit';
+        communityChatComposePreviewEl.hidden = !active;
+        if (active) {
+          communityChatComposePreviewTitleEl.textContent = mode === 'reply'
+            ? `Đang trả lời ${message?.senderName || 'người dùng'}`
+            : 'Đang chỉnh sửa tin nhắn';
+          communityChatComposePreviewTextEl.textContent = mode === 'reply'
+            ? (message?.message || '')
+            : (message?.message || '');
+        }
+      }
+      if (communityChatSendBtn) {
+        communityChatSendBtn.title = mode === 'edit' ? 'Lưu chỉnh sửa' : 'Gửi';
+        communityChatSendBtn.setAttribute('aria-label', mode === 'edit' ? 'Lưu chỉnh sửa' : 'Gửi tin nhắn');
+        communityChatSendBtn.textContent = mode === 'edit' ? '✓' : '➤';
+      }
+    }
+
+    function beginCommunityChatReply(message) {
+      if (!message) return;
+      setCommunityChatComposeMode('reply', message);
+      if (communityChatInputEl) {
+        communityChatInputEl.value = '';
+        updateCommunityChatCounter();
+        communityChatInputEl.focus();
+      }
+    }
+
+    function beginCommunityChatEdit(message) {
+      if (!message || message.isOwn !== true) return;
+      setCommunityChatComposeMode('edit', message);
+      if (communityChatInputEl) {
+        communityChatInputEl.value = String(message.message || '');
+        updateCommunityChatCounter();
+        communityChatInputEl.focus();
+        communityChatInputEl.setSelectionRange(communityChatInputEl.value.length, communityChatInputEl.value.length);
+      }
     }
 
     function upsertCommunityChatMessage(message, shouldScroll = true) {
@@ -5231,7 +5408,7 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       const message = String(communityChatInputEl?.value || '').trim();
       const characterCount = countChatGraphemes(message);
       if (!message) {
-        setCommunityChatStatus('Bạn chưa nhập tin nhắn.', true);
+        setCommunityChatStatus(communityChatEditingId ? 'Nội dung chỉnh sửa không được để trống.' : 'Bạn chưa nhập tin nhắn.', true);
         communityChatInputEl?.focus();
         return;
       }
@@ -5241,27 +5418,41 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       }
       communityChatSending = true;
       communityChatSendBtn.disabled = true;
-      setCommunityChatStatus('Đang gửi...');
+      setCommunityChatStatus(communityChatEditingId ? 'Đang lưu chỉnh sửa...' : 'Đang gửi...');
       try {
-        const response = await fetch('/api/community-chat/messages', {
-          method: 'POST',
+        const isEditing = !!communityChatEditingId;
+        const url = isEditing
+          ? `/api/community-chat/messages/${encodeURIComponent(communityChatEditingId)}`
+          : '/api/community-chat/messages';
+        const response = await fetch(url, {
+          method: isEditing ? 'PUT' : 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ initData: telegramInitData, message })
+          body: JSON.stringify({
+            initData: telegramInitData,
+            message,
+            ...(communityChatReplyTo ? { replyToMessageId: String(communityChatReplyTo.id) } : {})
+          })
         });
         const data = await response.json();
         if (!response.ok || data?.success !== true || !data.message) {
-          throw new Error(data?.message || 'Không thể gửi tin nhắn.');
+          throw new Error(data?.message || (isEditing ? 'Không thể chỉnh sửa tin nhắn.' : 'Không thể gửi tin nhắn.'));
         }
-        upsertCommunityChatMessage(data.message, true);
+        if (isEditing) {
+          const current = communityChatMessages.get(String(data.message.id)) || {};
+          upsertCommunityChatMessage({ ...current, ...data.message, isOwn: true }, false);
+          setCommunityChatStatus('Đã cập nhật tin nhắn');
+        } else {
+          upsertCommunityChatMessage(data.message, true);
+          setCommunityChatStatus('Đã gửi tin nhắn');
+        }
         communityChatInputEl.value = '';
+        setCommunityChatComposeMode(null);
         updateCommunityChatCounter();
-        setCommunityChatStatus('Đã gửi tin nhắn');
       } catch (error) {
-        console.error('❌ Community Chat send error:', error);
-        setCommunityChatStatus(error.message || 'Gửi tin nhắn thất bại.', true);
+        console.error('❌ Community Chat send/edit error:', error);
+        setCommunityChatStatus(error.message || 'Thao tác thất bại.', true);
       } finally {
         communityChatSending = false;
-        communityChatSendBtn.disabled = false;
         updateCommunityChatCounter();
       }
     }
@@ -5276,6 +5467,31 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
           !String(communityChatInputEl.value || '').trim() || count > COMMUNITY_CHAT_MAX_CHARS;
       }
     }
+
+    communityChatMessagesEl?.addEventListener('click', (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const actionButton = target?.closest('button[data-chat-action]');
+      if (actionButton && communityChatMessagesEl.contains(actionButton)) {
+        const message = communityChatMessages.get(String(actionButton.dataset.messageId || ''));
+        if (!message) return;
+        if (actionButton.dataset.chatAction === 'reply') beginCommunityChatReply(message);
+        else if (actionButton.dataset.chatAction === 'edit') beginCommunityChatEdit(message);
+        communityChatMessagesEl.querySelectorAll('.community-chat-message.actions-open').forEach((node) => node.classList.remove('actions-open'));
+        return;
+      }
+      const bubble = target?.closest('.community-chat-message[data-message-id]');
+      if (bubble && communityChatMessagesEl.contains(bubble)) {
+        bubble.classList.toggle('actions-open');
+      } else {
+        communityChatMessagesEl.querySelectorAll('.community-chat-message.actions-open').forEach((node) => node.classList.remove('actions-open'));
+      }
+    });
+    communityChatComposePreviewCancelBtn?.addEventListener('click', () => {
+      const wasEditing = !!communityChatEditingId;
+      setCommunityChatComposeMode(null);
+      if (wasEditing && communityChatInputEl) communityChatInputEl.value = '';
+      updateCommunityChatCounter();
+    });
 
     communityChatInputEl?.addEventListener('input', updateCommunityChatCounter);
     communityChatInputEl?.addEventListener('keydown', (event) => {
@@ -5312,11 +5528,20 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
         communityChatEmojiPicker.hidden = true;
         communityChatEmojiBtn?.setAttribute('aria-expanded', 'false');
       }
+      if (communityChatMessagesEl && !communityChatMessagesEl.contains(event.target)) {
+        communityChatMessagesEl.querySelectorAll('.community-chat-message.actions-open').forEach((node) => node.classList.remove('actions-open'));
+      }
     });
 
     socket.on('communityChatMessage', (message) => {
       // Sự kiện chỉ được server phát cho socket đã xác thực trong phòng chung.
       upsertCommunityChatMessage(message, true);
+    });
+    socket.on('communityChatMessageEdited', (updated) => {
+      if (!updated || updated.id == null) return;
+      const current = communityChatMessages.get(String(updated.id));
+      if (!current) return;
+      upsertCommunityChatMessage({ ...current, ...updated, isOwn: current.isOwn === true }, false);
     });
     updateCommunityChatCounter();
 
