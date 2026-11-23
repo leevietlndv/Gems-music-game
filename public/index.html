@@ -1584,6 +1584,26 @@
       scrollbar-width: thin;
       scroll-padding-block: 10px;
     }
+    .community-chat-load-more {
+      align-self: center;
+      flex: 0 0 auto;
+      max-width: 100%;
+      margin: 2px 0 5px;
+      padding: 6px 12px;
+      border: 1px solid var(--gems-chat-panel-border, rgba(128,128,128,.28));
+      border-radius: 999px;
+      background: var(--gems-chat-bubble-other, rgba(128,128,128,.16));
+      color: inherit;
+      font: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.35;
+      cursor: pointer;
+    }
+    .community-chat-load-more:disabled {
+      opacity: .65;
+      cursor: wait;
+    }
     .community-chat-empty {
       margin: auto;
       padding: 12px 8px;
@@ -5268,6 +5288,9 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
     const communityChatEmphasisPending = new Set();
     let communityChatSending = false;
     let communityChatLoaded = false;
+    let communityChatHasMore = false;
+    let communityChatNextCursor = null;
+    let communityChatLoadingOlder = false;
     let communityChatReplyTo = null;
     let communityChatEditingId = null;
     let communityChatReadObserver = null;
@@ -5350,15 +5373,26 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       return button;
     }
 
-    function renderCommunityChatMessages(shouldScroll = true, forceBottom = false) {
+    function renderCommunityChatMessages(shouldScroll = true, forceBottom = false, preserveScrollHeight = false) {
       if (!communityChatMessagesEl) return;
       const previousScrollTop = communityChatMessagesEl.scrollTop;
-      const wasNearBottom = communityChatMessagesEl.scrollHeight - communityChatMessagesEl.clientHeight - previousScrollTop < 45;
+      const previousScrollHeight = communityChatMessagesEl.scrollHeight;
+      const wasNearBottom = previousScrollHeight - communityChatMessagesEl.clientHeight - previousScrollTop < 45;
       const entries = Array.from(communityChatMessages.values()).sort((a, b) => {
         const diff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         return diff || String(a.id).localeCompare(String(b.id), undefined, { numeric: true });
       });
       communityChatMessagesEl.replaceChildren();
+      if (communityChatHasMore || communityChatLoadingOlder) {
+        const moreButton = document.createElement('button');
+        moreButton.type = 'button';
+        moreButton.className = 'community-chat-load-more';
+        moreButton.dataset.chatLoadOlder = 'true';
+        moreButton.disabled = communityChatLoadingOlder;
+        moreButton.textContent = communityChatLoadingOlder ? 'Đang tải tin nhắn cũ...' : '↑ Xem thêm tin nhắn cũ';
+        moreButton.setAttribute('aria-label', 'Xem thêm tin nhắn cũ');
+        communityChatMessagesEl.appendChild(moreButton);
+      }
       if (!entries.length) {
         const empty = document.createElement('div');
         empty.className = 'community-chat-empty';
@@ -5423,7 +5457,10 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
         communityChatMessagesEl.appendChild(bubble);
       });
       if (forceBottom || (shouldScroll && wasNearBottom)) communityChatMessagesEl.scrollTop = communityChatMessagesEl.scrollHeight;
-      else communityChatMessagesEl.scrollTop = previousScrollTop;
+      else if (preserveScrollHeight) {
+        // Giữ nguyên tin nhắn đang đọc khi chèn trang cũ vào phía trên.
+        communityChatMessagesEl.scrollTop = previousScrollTop + (communityChatMessagesEl.scrollHeight - previousScrollHeight);
+      } else communityChatMessagesEl.scrollTop = previousScrollTop;
       observeCommunityChatMessages();
     }
 
@@ -5597,6 +5634,40 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       }
     }
 
+    async function loadOlderCommunityChatMessages() {
+      if (communityChatLoadingOlder || !communityChatHasMore || !communityChatNextCursor?.beforeId || !socketAuthenticated || !telegramInitData) return;
+      communityChatLoadingOlder = true;
+      renderCommunityChatMessages(false);
+      const previousIds = new Set(communityChatMessages.keys());
+      try {
+        const params = new URLSearchParams({
+          initData: telegramInitData,
+          beforeId: String(communityChatNextCursor.beforeId)
+        });
+        const response = await fetch('/api/community-chat/messages?' + params.toString(), {
+          method: 'GET',
+          cache: 'no-store'
+        });
+        const data = await response.json();
+        if (!response.ok || data?.success !== true || !Array.isArray(data.messages)) {
+          throw new Error(data?.message || 'Không thể tải tin nhắn cũ.');
+        }
+        data.messages.forEach((message) => communityChatMessages.set(String(message.id), message));
+        communityChatHasMore = data.hasMore === true;
+        communityChatNextCursor = data.nextCursor || null;
+        // Nếu server báo còn dữ liệu nhưng không trả thêm ID mới, dừng nút để tránh vòng lặp vô hạn.
+        const addedCount = Array.from(communityChatMessages.keys()).filter(id => !previousIds.has(id)).length;
+        if (addedCount === 0) communityChatHasMore = false;
+        communityChatLoadingOlder = false;
+        renderCommunityChatMessages(false, false, true);
+      } catch (error) {
+        communityChatLoadingOlder = false;
+        renderCommunityChatMessages(false);
+        console.error('❌ Community Chat older history error:', error);
+        setCommunityChatStatus(error.message || 'Không thể tải tin nhắn cũ.', true);
+      }
+    }
+
     async function loadCommunityChatMessages() {
       if (!socketAuthenticated || !telegramInitData || !communityChatMessagesEl) return;
       try {
@@ -5612,6 +5683,8 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
         // Merge thay vì clear để không làm mất sự kiện realtime vừa tới
         // trong lúc request lịch sử đang chờ phản hồi.
         data.messages.forEach((message) => communityChatMessages.set(String(message.id), message));
+        communityChatHasMore = data.hasMore === true;
+        communityChatNextCursor = data.nextCursor || null;
         communityChatLoaded = true;
         renderCommunityChatMessages(true);
         setCommunityChatStatus('Đã kết nối phòng chat chung');
@@ -5692,6 +5765,11 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
 
     communityChatMessagesEl?.addEventListener('click', (event) => {
       const target = event.target instanceof Element ? event.target : null;
+      const loadOlderButton = target?.closest('[data-chat-load-older]');
+      if (loadOlderButton && communityChatMessagesEl.contains(loadOlderButton)) {
+        loadOlderCommunityChatMessages();
+        return;
+      }
       const actionButton = target?.closest('button[data-chat-action]');
       if (actionButton && communityChatMessagesEl.contains(actionButton)) {
         const message = communityChatMessages.get(String(actionButton.dataset.messageId || ''));
