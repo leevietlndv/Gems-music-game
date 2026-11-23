@@ -1761,6 +1761,12 @@
       font-weight: 800;
       box-shadow: 0 2px 7px var(--gems-chat-accent-shadow, rgba(46,125,50,.22));
     }
+    .community-chat-send-btn svg {
+      width: 18px;
+      height: 18px;
+      display: block;
+      flex: 0 0 auto;
+    }
     .community-chat-send-btn:disabled { opacity: .45; cursor: not-allowed; }
     .community-chat-footer {
       display: flex;
@@ -4326,7 +4332,7 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       <div class="community-chat-input-row">
         <textarea id="communityChatInput" class="community-chat-input" rows="1" maxlength="1200" placeholder="Nhập tin nhắn..." aria-label="Tin nhắn Community Chat"></textarea>
         <button id="communityChatEmojiBtn" class="community-chat-emoji-btn" type="button" aria-label="Chọn emoji" title="Chọn emoji">😊</button>
-        <button id="communityChatSendBtn" class="community-chat-send-btn" type="button" aria-label="Gửi tin nhắn" title="Gửi">➤</button>
+        <button id="communityChatSendBtn" class="community-chat-send-btn" type="button" aria-label="Gửi tin nhắn" title="Gửi"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg></button>
       </div>
       <div class="community-chat-footer">
         <span id="communityChatStatus" class="community-chat-status" aria-live="polite">Đang xác thực Telegram...</span>
@@ -5321,8 +5327,9 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
     function createCommunityChatLucideIcon(iconDefinition, action) {
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       svg.setAttribute('viewBox', '0 0 24 24');
-      svg.setAttribute('width', '15');
-      svg.setAttribute('height', '15');
+      const iconSize = action === 'send' ? '18' : '15';
+      svg.setAttribute('width', iconSize);
+      svg.setAttribute('height', iconSize);
       svg.setAttribute('fill', 'none');
       svg.setAttribute('stroke', 'currentColor');
       svg.setAttribute('stroke-width', '2');
@@ -5333,6 +5340,10 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       // không cung cấp `iconNode`. Dùng SVG path Lucide tương ứng làm fallback
       // để nút Reply/Edit không bị trống icon trên các môi trường đó.
       const fallbackNodes = {
+        send: [
+          ['path', { d: 'm22 2-7 20-4-9-9-4Z' }],
+          ['path', { d: 'M22 2 11 13' }]
+        ],
         reply: [
           ['path', { d: 'm22 2-7 20-4-9-9-4Z' }],
           ['path', { d: 'M22 2 11 13' }]
@@ -5482,7 +5493,11 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       if (communityChatSendBtn) {
         communityChatSendBtn.title = mode === 'edit' ? 'Lưu chỉnh sửa' : 'Gửi';
         communityChatSendBtn.setAttribute('aria-label', mode === 'edit' ? 'Lưu chỉnh sửa' : 'Gửi tin nhắn');
-        communityChatSendBtn.textContent = mode === 'edit' ? '✓' : '➤';
+        if (mode === 'edit') {
+          communityChatSendBtn.textContent = '✓';
+        } else {
+          communityChatSendBtn.replaceChildren(createCommunityChatLucideIcon(Send, 'send'));
+        }
       }
     }
 
