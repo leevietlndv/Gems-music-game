@@ -3663,13 +3663,23 @@ io.on('connection', (socket) => {
     if (socket.authenticated === true || socketAuth.has(socket.id)) {
       removeOnlineUser(socket.id, true);
     }
-    // Phase 3D: không để socket giữ room Theme của tài khoản cũ khi re-authenticate.
+    // Re-authenticate phải xóa toàn bộ room gắn với identity cũ. Đặc biệt
+    // myplaylist:<telegramId> là room riêng dùng để gửi dữ liệu cá nhân; nếu
+    // giữ room này, socket đổi tài khoản có thể nhận thông báo của tài khoản cũ.
     for (const room of Array.from(socket.rooms)) {
-      if (room.startsWith('theme:') || room === COMMUNITY_CHAT_ROOM) socket.leave(room);
+      if (
+        room.startsWith('theme:') ||
+        room.startsWith('myplaylist:') ||
+        room.startsWith('myplaylist-watch:') ||
+        room === COMMUNITY_CHAT_ROOM
+      ) {
+        socket.leave(room);
+      }
     }
     socket.authenticated = false;
     socket.isAdmin = false;
     socket.adminRole = null;
+    socket.telegramId = null;
     console.log(
       `🔑 Authenticate received: socket=${socket.id}, initDataLength=${initData.length}`
     );
