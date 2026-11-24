@@ -1861,6 +1861,35 @@
       .community-chat-emoji-picker button { width: 34px; }
     }
 
+    .community-chat-heading-actions { display:flex; align-items:center; gap:8px; }
+    .community-chat-bg-manage-btn, .community-chat-bg-manager button { font:inherit; cursor:pointer; }
+    .community-chat-bg-manage-btn { border:1px solid var(--gems-chat-panel-border, rgba(128,128,128,.3)); border-radius:7px; padding:5px 8px; background:var(--gems-chat-bubble-other, rgba(128,128,128,.12)); color:inherit; font-size:11px; font-weight:700; white-space:nowrap; }
+    .community-chat-bg-manager { margin:0 0 9px; padding:10px; border:1px solid var(--gems-chat-panel-border, rgba(128,128,128,.3)); border-radius:10px; background:var(--gems-chat-panel-bg, rgba(128,128,128,.08)); color:inherit; }
+    .community-chat-bg-manager[hidden], .community-chat-bg-preview[hidden] { display:none !important; }
+    .community-chat-bg-manager-head, .community-chat-bg-upload-row, .community-chat-bg-preview-actions { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .community-chat-bg-manager-head { margin-bottom:9px; }
+    .community-chat-bg-manager-head button { width:27px; height:27px; border:0; border-radius:6px; background:rgba(128,128,128,.16); color:inherit; font-size:20px; }
+    .community-chat-bg-upload-row { justify-content:flex-start; flex-wrap:wrap; margin-bottom:5px; }
+    .community-chat-bg-upload-row span, .community-chat-bg-status { font-size:10px; opacity:.75; }
+    .community-chat-bg-upload-label, .community-chat-bg-preview-actions button, .community-chat-bg-reset-btn, .community-chat-bg-item button { display:inline-flex; align-items:center; justify-content:center; border:1px solid var(--gems-chat-panel-border, rgba(128,128,128,.3)); border-radius:7px; padding:6px 9px; background:var(--gems-chat-accent, #2e7d32); color:var(--gems-chat-accent-contrast, #fff); font-size:11px; font-weight:700; cursor:pointer; }
+    .community-chat-bg-status { min-height:14px; margin:4px 0; overflow-wrap:anywhere; }
+    .community-chat-bg-preview { display:flex; align-items:center; gap:9px; padding:8px; margin:6px 0; border-radius:8px; background:rgba(128,128,128,.10); }
+    .community-chat-bg-preview img { width:90px; height:58px; object-fit:cover; border-radius:6px; }
+    .community-chat-bg-preview-actions { flex-wrap:wrap; justify-content:flex-start; }
+    .community-chat-bg-preview-actions button:last-child, .community-chat-bg-item button.delete { background:rgba(180,40,40,.12); color:inherit; }
+    .community-chat-bg-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:8px 0; }
+    .community-chat-bg-item { min-width:0; padding:6px; border:1px solid var(--gems-chat-panel-border, rgba(128,128,128,.25)); border-radius:8px; background:rgba(128,128,128,.07); }
+    .community-chat-bg-item.active { outline:2px solid var(--gems-chat-accent, #2e7d32); }
+    .community-chat-bg-item img { display:block; width:100%; height:76px; object-fit:cover; border-radius:5px; }
+    .community-chat-bg-item-name { margin:5px 0; font-size:10px; overflow-wrap:anywhere; }
+    .community-chat-bg-item-actions { display:flex; gap:5px; }
+    .community-chat-bg-item button { flex:1; padding:5px 4px; font-size:10px; }
+    .community-chat-bg-item button:disabled { opacity:.55; cursor:default; }
+    .community-chat-bg-empty { grid-column:1/-1; padding:9px; text-align:center; font-size:11px; opacity:.7; }
+    .community-chat-bg-reset-btn { width:100%; background:rgba(128,128,128,.13); color:inherit; }
+    .community-chat-messages.has-custom-background { background-position:center; background-size:cover; background-repeat:no-repeat; background-attachment:local; }
+    @media (max-width:600px) { .community-chat-bg-list { grid-template-columns:repeat(2,minmax(0,1fr)); } .community-chat-heading-actions { gap:5px; } .community-chat-bg-manage-btn { padding:5px 6px; } }
+
     /* ==================== PLAYBACK TIMELINE ==================== */
     .playback-timeline {
       margin-top: 10px;
@@ -4310,7 +4339,31 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
   <section id="communityChatCard" class="card community-chat-card" aria-label="Community Chat">
     <div class="community-chat-heading">
       <div class="community-chat-title">💬 Community Chat</div>
-      <div class="community-chat-retention">Tin nhắn lưu 6 giờ</div>
+      <div class="community-chat-heading-actions">
+        <div class="community-chat-retention">Tin nhắn lưu 6 giờ</div>
+        <button id="communityChatBackgroundManageBtn" class="community-chat-bg-manage-btn" type="button" hidden aria-expanded="false"> <span aria-hidden="true">▧</span> Hình nền</button>
+      </div>
+    </div>
+    <div id="communityChatBackgroundManager" class="community-chat-bg-manager" hidden>
+      <div class="community-chat-bg-manager-head">
+        <strong>Thư viện hình nền</strong>
+        <button id="communityChatBackgroundCloseBtn" type="button" aria-label="Đóng quản lý hình nền">×</button>
+      </div>
+      <div class="community-chat-bg-upload-row">
+        <label class="community-chat-bg-upload-label" for="communityChatBackgroundFile">＋ Tải hình nền mới</label>
+        <input id="communityChatBackgroundFile" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+        <span>JPG / PNG / WebP · tối đa 5 MB</span>
+      </div>
+      <div id="communityChatBackgroundUploadStatus" class="community-chat-bg-status" aria-live="polite"></div>
+      <div id="communityChatBackgroundPreview" class="community-chat-bg-preview" hidden>
+        <img id="communityChatBackgroundPreviewImage" alt="Xem trước hình nền">
+        <div class="community-chat-bg-preview-actions">
+          <button id="communityChatBackgroundPreviewUploadBtn" type="button">Tải lên thư viện</button>
+          <button id="communityChatBackgroundPreviewCancelBtn" type="button">Hủy</button>
+        </div>
+      </div>
+      <div id="communityChatBackgroundList" class="community-chat-bg-list"><div class="community-chat-bg-empty">Đang tải thư viện...</div></div>
+      <button id="communityChatBackgroundResetBtn" class="community-chat-bg-reset-btn" type="button">Khôi phục background mặc định</button>
     </div>
     <div id="communityChatMessages" class="community-chat-messages" role="log" aria-live="polite" aria-relevant="additions">
       <div class="community-chat-empty">Đang chờ kết nối Telegram...</div>
@@ -4991,6 +5044,23 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
     const blacklistDetails = document.getElementById('blacklistDetails');
     const blacklistListEl = document.getElementById('blacklistList');
     const communityChatMessagesEl = document.getElementById('communityChatMessages');
+    const communityChatBackgroundManageBtn = document.getElementById('communityChatBackgroundManageBtn');
+    const communityChatBackgroundManager = document.getElementById('communityChatBackgroundManager');
+    const communityChatBackgroundCloseBtn = document.getElementById('communityChatBackgroundCloseBtn');
+    const communityChatBackgroundFile = document.getElementById('communityChatBackgroundFile');
+    const communityChatBackgroundUploadStatus = document.getElementById('communityChatBackgroundUploadStatus');
+    const communityChatBackgroundPreview = document.getElementById('communityChatBackgroundPreview');
+    const communityChatBackgroundPreviewImage = document.getElementById('communityChatBackgroundPreviewImage');
+    const communityChatBackgroundPreviewUploadBtn = document.getElementById('communityChatBackgroundPreviewUploadBtn');
+    const communityChatBackgroundPreviewCancelBtn = document.getElementById('communityChatBackgroundPreviewCancelBtn');
+    const communityChatBackgroundList = document.getElementById('communityChatBackgroundList');
+    const communityChatBackgroundResetBtn = document.getElementById('communityChatBackgroundResetBtn');
+    let communityChatBackgroundPendingFile = null;
+    let communityChatBackgroundPreviewUrl = null;
+    let communityChatBackgroundBusy = false;
+    let communityChatBackgrounds = [];
+    let communityChatActiveBackground = null;
+
     const communityChatInputEl = document.getElementById('communityChatInput');
     const communityChatSendBtn = document.getElementById('communityChatSendBtn');
     const communityChatEmojiBtn = document.getElementById('communityChatEmojiBtn');
@@ -5317,6 +5387,207 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       communityChatStatusEl.textContent = message;
       communityChatStatusEl.style.color = isError ? '#d32f2f' : '';
     }
+
+    function setCommunityChatBackgroundStatus(message, isError = false) {
+      if (!communityChatBackgroundUploadStatus) return;
+      communityChatBackgroundUploadStatus.textContent = message || '';
+      communityChatBackgroundUploadStatus.style.color = isError ? '#d32f2f' : '';
+    }
+
+    function applyCommunityChatBackground(background) {
+      communityChatActiveBackground = background || null;
+      if (!communityChatMessagesEl) return;
+      if (background?.secureUrl) {
+        const safeUrl = String(background.secureUrl).replace(/(["\\])/g, '\\$1');
+        communityChatMessagesEl.style.backgroundImage = `linear-gradient(rgba(0,0,0,.42), rgba(0,0,0,.42)), url("${safeUrl}")`;
+        communityChatMessagesEl.classList.add('has-custom-background');
+      } else {
+        communityChatMessagesEl.style.backgroundImage = '';
+        communityChatMessagesEl.classList.remove('has-custom-background');
+      }
+      renderCommunityChatBackgroundList();
+    }
+
+    async function communityChatBackgroundRequest(url, options = {}) {
+      const response = await fetch(url, options);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data?.success !== true) throw new Error(data?.message || `Yêu cầu thất bại (${response.status}).`);
+      return data;
+    }
+
+    async function loadCommunityChatBackgroundLibrary() {
+      if (!telegramInitData) return;
+      try {
+        const data = await communityChatBackgroundRequest(`/api/community-chat/backgrounds?initData=${encodeURIComponent(telegramInitData)}`, { cache: 'no-store' });
+        communityChatBackgrounds = Array.isArray(data.backgrounds) ? data.backgrounds : [];
+        applyCommunityChatBackground(data.activeBackground || null);
+      } catch (error) {
+        console.error('Community Chat background library:', error);
+        setCommunityChatBackgroundStatus(error.message || 'Không thể tải thư viện hình nền.', true);
+      }
+    }
+
+    function renderCommunityChatBackgroundList() {
+      if (!communityChatBackgroundList) return;
+      communityChatBackgroundList.replaceChildren();
+      if (!communityChatBackgrounds.length) {
+        const empty = document.createElement('div');
+        empty.className = 'community-chat-bg-empty';
+        empty.textContent = 'Thư viện chưa có hình nền nào.';
+        communityChatBackgroundList.appendChild(empty);
+        return;
+      }
+      communityChatBackgrounds.forEach((item) => {
+        const card = document.createElement('div');
+        card.className = 'community-chat-bg-item' + (String(item.id) === String(communityChatActiveBackground?.id) ? ' active' : '');
+        const image = document.createElement('img');
+        image.src = item.secureUrl;
+        image.alt = 'Hình nền Community Chat';
+        image.loading = 'lazy';
+        const name = document.createElement('div');
+        name.className = 'community-chat-bg-item-name';
+        name.textContent = `${item.format || 'image'} · ${Math.max(1, Math.round((Number(item.bytes) || 0) / 1024))} KB`;
+        const actions = document.createElement('div');
+        actions.className = 'community-chat-bg-item-actions';
+        const select = document.createElement('button');
+        select.type = 'button';
+        select.textContent = String(item.id) === String(communityChatActiveBackground?.id) ? 'Đang dùng' : 'Áp dụng';
+        select.disabled = String(item.id) === String(communityChatActiveBackground?.id) || communityChatBackgroundBusy;
+        select.addEventListener('click', () => activateCommunityChatBackground(item.id));
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'delete';
+        remove.textContent = 'Xóa';
+        remove.disabled = communityChatBackgroundBusy;
+        remove.addEventListener('click', () => deleteCommunityChatBackground(item));
+        actions.append(select, remove);
+        card.append(image, name, actions);
+        communityChatBackgroundList.appendChild(card);
+      });
+    }
+
+    async function activateCommunityChatBackground(id) {
+      if (!window.isOwner || communityChatBackgroundBusy) return;
+      communityChatBackgroundBusy = true;
+      renderCommunityChatBackgroundList();
+      try {
+        const data = await communityChatBackgroundRequest(`/api/community-chat/backgrounds/${encodeURIComponent(id)}/active`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ initData: telegramInitData })
+        });
+        applyCommunityChatBackground(data.background || null);
+        setCommunityChatBackgroundStatus('Đã áp dụng hình nền cho toàn bộ phòng chat.');
+      } catch (error) { setCommunityChatBackgroundStatus(error.message, true); }
+      finally { communityChatBackgroundBusy = false; renderCommunityChatBackgroundList(); }
+    }
+
+    async function deleteCommunityChatBackground(item) {
+      if (!window.isOwner || communityChatBackgroundBusy) return;
+      const isActive = String(item.id) === String(communityChatActiveBackground?.id);
+      const prompt = isActive
+        ? 'Hình nền này đang được sử dụng. Xóa sẽ đưa phòng chat về background mặc định. Bạn có chắc chắn?'
+        : 'Bạn có chắc muốn xóa hình nền này khỏi thư viện?';
+      if (!window.confirm(prompt)) return;
+      communityChatBackgroundBusy = true;
+      renderCommunityChatBackgroundList();
+      try {
+        const data = await communityChatBackgroundRequest(`/api/community-chat/backgrounds/${encodeURIComponent(item.id)}`, {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ initData: telegramInitData })
+        });
+        communityChatBackgrounds = communityChatBackgrounds.filter(entry => String(entry.id) !== String(item.id));
+        applyCommunityChatBackground(data.activeBackground || null);
+        setCommunityChatBackgroundStatus('Đã xóa hình nền khỏi thư viện.');
+      } catch (error) { setCommunityChatBackgroundStatus(error.message, true); }
+      finally { communityChatBackgroundBusy = false; renderCommunityChatBackgroundList(); }
+    }
+
+    async function uploadCommunityChatBackground() {
+      const file = communityChatBackgroundPendingFile;
+      if (!window.isOwner || !file || communityChatBackgroundBusy) return;
+      const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+      if (!allowed.includes(file.type) || file.size < 1 || file.size > 5 * 1024 * 1024) {
+        setCommunityChatBackgroundStatus('Chỉ nhận JPG, PNG, WebP và dung lượng tối đa 5 MB.', true);
+        return;
+      }
+      communityChatBackgroundBusy = true;
+      communityChatBackgroundPreviewUploadBtn.disabled = true;
+      setCommunityChatBackgroundStatus('Đang chuẩn bị tải ảnh...');
+      try {
+        const signature = await communityChatBackgroundRequest('/api/community-chat/backgrounds/upload-signature', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ initData: telegramInitData })
+        });
+        const form = new FormData();
+        form.append('file', file);
+        form.append('api_key', signature.apiKey);
+        form.append('timestamp', String(signature.timestamp));
+        form.append('folder', signature.folder);
+        form.append('signature', signature.signature);
+        setCommunityChatBackgroundStatus('Đang tải ảnh lên kho lưu trữ...');
+        const cloudResponse = await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(signature.cloudName)}/image/upload`, { method: 'POST', body: form });
+        const cloudData = await cloudResponse.json().catch(() => ({}));
+        if (!cloudResponse.ok || !cloudData.secure_url || !cloudData.public_id) throw new Error(cloudData.error?.message || 'Cloudinary không thể tải ảnh lên.');
+        const registered = await communityChatBackgroundRequest('/api/community-chat/backgrounds', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ initData: telegramInitData, publicId: cloudData.public_id, secureUrl: cloudData.secure_url, format: cloudData.format, bytes: cloudData.bytes, width: cloudData.width, height: cloudData.height })
+        });
+        communityChatBackgrounds.unshift(registered.background);
+        communityChatBackgroundPendingFile = null;
+        communityChatBackgroundFile.value = '';
+        communityChatBackgroundPreview.hidden = true;
+        if (communityChatBackgroundPreviewUrl) URL.revokeObjectURL(communityChatBackgroundPreviewUrl);
+        communityChatBackgroundPreviewUrl = null;
+        renderCommunityChatBackgroundList();
+        setCommunityChatBackgroundStatus('Đã thêm ảnh vào thư viện. Chọn “Áp dụng” để đặt làm hình nền chung.');
+      } catch (error) { setCommunityChatBackgroundStatus(error.message || 'Không thể tải hình nền.', true); }
+      finally { communityChatBackgroundBusy = false; communityChatBackgroundPreviewUploadBtn.disabled = false; renderCommunityChatBackgroundList(); }
+    }
+
+    communityChatBackgroundManageBtn?.addEventListener('click', async () => {
+      if (!window.isOwner) return;
+      const opening = communityChatBackgroundManager.hidden;
+      communityChatBackgroundManager.hidden = !opening;
+      communityChatBackgroundManageBtn.setAttribute('aria-expanded', String(opening));
+      if (opening) await loadCommunityChatBackgroundLibrary();
+    });
+    communityChatBackgroundCloseBtn?.addEventListener('click', () => {
+      communityChatBackgroundManager.hidden = true;
+      communityChatBackgroundManageBtn?.setAttribute('aria-expanded', 'false');
+    });
+    communityChatBackgroundFile?.addEventListener('change', () => {
+      const file = communityChatBackgroundFile.files?.[0] || null;
+      if (!file) return;
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024 || file.size < 1) {
+        setCommunityChatBackgroundStatus('Chỉ nhận JPG, PNG, WebP và dung lượng tối đa 5 MB.', true);
+        communityChatBackgroundFile.value = '';
+        return;
+      }
+      communityChatBackgroundPendingFile = file;
+      if (communityChatBackgroundPreviewUrl) URL.revokeObjectURL(communityChatBackgroundPreviewUrl);
+      communityChatBackgroundPreviewUrl = URL.createObjectURL(file);
+      communityChatBackgroundPreviewImage.src = communityChatBackgroundPreviewUrl;
+      communityChatBackgroundPreview.hidden = false;
+      setCommunityChatBackgroundStatus('Xem trước ảnh trước khi tải lên thư viện.');
+    });
+    communityChatBackgroundPreviewUploadBtn?.addEventListener('click', uploadCommunityChatBackground);
+    communityChatBackgroundPreviewCancelBtn?.addEventListener('click', () => {
+      communityChatBackgroundPendingFile = null;
+      communityChatBackgroundFile.value = '';
+      communityChatBackgroundPreview.hidden = true;
+      if (communityChatBackgroundPreviewUrl) URL.revokeObjectURL(communityChatBackgroundPreviewUrl);
+      communityChatBackgroundPreviewUrl = null;
+    });
+    communityChatBackgroundResetBtn?.addEventListener('click', async () => {
+      if (!window.isOwner || communityChatBackgroundBusy) return;
+      if (!window.confirm('Khôi phục background mặc định theo theme hiện tại?')) return;
+      communityChatBackgroundBusy = true;
+      try {
+        const data = await communityChatBackgroundRequest('/api/community-chat/backgrounds/reset', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ initData: telegramInitData })
+        });
+        applyCommunityChatBackground(data.background || null);
+        setCommunityChatBackgroundStatus('Đã khôi phục background mặc định.');
+      } catch (error) { setCommunityChatBackgroundStatus(error.message, true); }
+      finally { communityChatBackgroundBusy = false; renderCommunityChatBackgroundList(); }
+    });
 
     function formatCommunityChatTime(value) {
       const date = new Date(value);
@@ -5848,6 +6119,13 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       }
     });
 
+    socket.on('communityChatBackgroundUpdated', (payload) => {
+      applyCommunityChatBackground(payload?.background || null);
+      if (window.isOwner && communityChatBackgroundManager && !communityChatBackgroundManager.hidden) {
+        loadCommunityChatBackgroundLibrary();
+      }
+    });
+
     socket.on('communityChatMessage', (message) => {
       // Sự kiện chỉ được server phát cho socket đã xác thực trong phòng chung.
       upsertCommunityChatMessage(message, true);
@@ -5947,6 +6225,9 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
 
     socket.on('disconnect', (reason) => {
       socketAuthenticated = false;
+      window.isOwner = false;
+      if (communityChatBackgroundManageBtn) communityChatBackgroundManageBtn.hidden = true;
+      if (communityChatBackgroundManager) communityChatBackgroundManager.hidden = true;
       clearAuthTimer();
       console.warn('🔌 Socket disconnected:', reason);
       setConnectionStatus('🔴 Mất kết nối', 'offline');
@@ -5970,6 +6251,10 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
 
       // Lưu trạng thái Admin để updateUI() biết có hiện nút Xóa hay không
       window.isAdmin = data.isAdmin === true;
+      window.isOwner = data.adminRole === 'owner';
+      if (communityChatBackgroundManageBtn) communityChatBackgroundManageBtn.hidden = !window.isOwner;
+      if (!window.isOwner && communityChatBackgroundManager) { communityChatBackgroundManager.hidden = true; }
+      if (socketAuthenticated) loadCommunityChatBackgroundLibrary();
       updateNavbarAdminUI();
       updateScriptSettingsAdminUI();
       updatePlaybackTimelineAccess();
