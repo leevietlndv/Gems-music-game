@@ -5,6 +5,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const crypto = require('crypto');
+const https = require('https');
 const { Telegraf, Markup } = require('telegraf');
 const { Pool } = require('pg');
 const rateLimit = require('express-rate-limit');
@@ -300,6 +301,35 @@ async function initDatabase() {
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_community_chat_message_reads_user
     ON community_chat_message_reads (telegram_id, seen_at)
+  `);
+
+  // Community Chat Background Library Phase 1: shared image library + singleton active selection.
+  // Image binaries live in durable Cloudinary storage; PostgreSQL stores metadata only.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS community_chat_backgrounds (
+      id BIGSERIAL PRIMARY KEY,
+      public_id TEXT NOT NULL UNIQUE,
+      secure_url TEXT NOT NULL,
+      format TEXT NOT NULL CHECK (format IN ('jpg', 'jpeg', 'png', 'webp')),
+      bytes BIGINT NOT NULL CHECK (bytes > 0 AND bytes <= 5242880),
+      width INTEGER NOT NULL CHECK (width > 0),
+      height INTEGER NOT NULL CHECK (height > 0),
+      created_by TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS community_chat_background_state (
+      id SMALLINT PRIMARY KEY CHECK (id = 1),
+      background_id BIGINT REFERENCES community_chat_backgrounds(id) ON DELETE SET NULL,
+      updated_by TEXT,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query(`
+    INSERT INTO community_chat_background_state (id, background_id)
+    VALUES (1, NULL)
+    ON CONFLICT (id) DO NOTHING
   `);
 
   console.log('🗄️ PostgreSQL: Database ready');
@@ -1455,6 +1485,233 @@ const communityChatSendLimiter = rateLimit({
 // Cursor pagination: tải 30 tin nhắn mới nhất; beforeId lấy mốc ID của tin cũ nhất
 // ở trang hiện tại. ID BIGSERIAL tạo thứ tự ổn định, không bị lệch bởi tin nhắn mới.
 const COMMUNITY_CHAT_PAGE_SIZE = 30;
+
+// ================= COMMUNITY CHAT BACKGROUND LIBRARY PHASE 1 =================
+const COMMUNITY_CHAT_BACKGROUND_FOLDER = 'gems-radio/community-chat';
+const COMMUNITY_CHAT_BACKGROUND_MAX_BYTES = 5 * 1024 * 1024;
+
+function getCloudinaryConfig() {
+  return {
+    cloudName: String(process.env.CLOUDINARY_CLOUD_NAME || '').trim(),
+    apiKey: String(process.env.CLOUDINARY_API_KEY || '').trim(),
+    apiSecret: String(process.env.CLOUDINARY_API_SECRET || '').trim()
+  };
+}
+
+function signCloudinaryParams(params, apiSecret) {
+  const canonical = Object.keys(params).sort()
+    .filter(key => params[key] !== undefined && params[key] !== null && params[key] !== '')
+    .map(key => `${key}=${params[key]}`).join('&');
+  return crypto.createHash('sha1').update(canonical + apiSecret).digest('hex');
+}
+
+function requireBackgroundOwner(req, res) {
+  const auth = validateTelegramInitData(req.body?.initData || req.query?.initData || '');
+  if (!auth.valid) {
+    res.status(401).json({ success: false, message: `Xác thực Telegram thất bại: ${auth.message}` });
+    return null;
+  }
+  return getAdminRole(String(auth.user.id)).then(role => {
+    if (role !== 'owner') {
+      res.status(403).json({ success: false, message: 'Chỉ Owner mới có quyền quản lý hình nền Community Chat.' });
+      return null;
+    }
+    return { user: auth.user, telegramId: String(auth.user.id) };
+  });
+}
+
+function cloudinaryDestroyImage(publicId, config) {
+  return new Promise((resolve, reject) => {
+    const timestamp = Math.floor(Date.now() / 1000);
+    const params = { public_id: publicId, timestamp };
+    const signature = signCloudinaryParams(params, config.apiSecret);
+    const body = new URLSearchParams({ ...params, api_key: config.apiKey, signature }).toString();
+    const request = https.request({
+      hostname: 'api.cloudinary.com',
+      path: `/v1_1/${encodeURIComponent(config.cloudName)}/image/destroy`,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(body),
+        Authorization: `Basic ${Buffer.from(`${config.apiKey}:${config.apiSecret}`).toString('base64')}`
+      }
+    }, response => {
+      let data = '';
+      response.setEncoding('utf8');
+      response.on('data', chunk => { data += chunk; });
+      response.on('end', () => {
+        let parsed = {};
+        try { parsed = JSON.parse(data || '{}'); } catch (_) {}
+        if (response.statusCode >= 200 && response.statusCode < 300 && ['ok', 'not found'].includes(parsed.result)) {
+          resolve(parsed);
+        } else {
+          reject(new Error(parsed.error?.message || `Cloudinary destroy failed (${response.statusCode})`));
+        }
+      });
+    });
+    request.on('error', reject);
+    request.setTimeout(15000, () => request.destroy(new Error('Cloudinary request timeout')));
+    request.end(body);
+  });
+}
+
+// Read-only library/config is available to every authenticated Mini App user.
+app.get('/api/community-chat/backgrounds', async (req, res) => {
+  const auth = validateTelegramInitData(req.query?.initData || '');
+  if (!auth.valid) return res.status(401).json({ success: false, message: 'Xác thực Telegram thất bại.' });
+  try {
+    const result = await pool.query(`
+      SELECT b.id, b.secure_url AS "secureUrl", b.format, b.bytes, b.width, b.height,
+             b.created_at AS "createdAt", (s.background_id = b.id) AS "isActive"
+      FROM community_chat_backgrounds b
+      CROSS JOIN community_chat_background_state s
+      ORDER BY b.created_at DESC, b.id DESC
+    `);
+    const active = await pool.query(`
+      SELECT b.id, b.secure_url AS "secureUrl", b.format, b.width, b.height
+      FROM community_chat_background_state s
+      LEFT JOIN community_chat_backgrounds b ON b.id = s.background_id
+      WHERE s.id = 1
+    `);
+    return res.json({ success: true, backgrounds: result.rows, activeBackground: active.rows[0]?.id ? active.rows[0] : null });
+  } catch (error) {
+    console.error('❌ Community Chat background list error:', error);
+    return res.status(500).json({ success: false, message: 'Không thể tải thư viện hình nền.' });
+  }
+});
+
+// Owner requests a short-lived upload signature; the browser uploads directly to Cloudinary.
+app.post('/api/community-chat/backgrounds/upload-signature', async (req, res) => {
+  const owner = await requireBackgroundOwner(req, res);
+  if (!owner) return;
+  const config = getCloudinaryConfig();
+  if (!config.cloudName || !config.apiKey || !config.apiSecret) {
+    return res.status(503).json({ success: false, message: 'Chưa cấu hình Cloudinary: CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET.' });
+  }
+  const timestamp = Math.floor(Date.now() / 1000);
+  const params = { folder: COMMUNITY_CHAT_BACKGROUND_FOLDER, timestamp };
+  return res.json({
+    success: true,
+    cloudName: config.cloudName,
+    apiKey: config.apiKey,
+    timestamp,
+    folder: COMMUNITY_CHAT_BACKGROUND_FOLDER,
+    signature: signCloudinaryParams(params, config.apiSecret),
+    maxBytes: COMMUNITY_CHAT_BACKGROUND_MAX_BYTES,
+    allowedFormats: ['jpg', 'jpeg', 'png', 'webp']
+  });
+});
+
+// Register metadata only after Cloudinary confirms the direct upload succeeded.
+app.post('/api/community-chat/backgrounds', async (req, res) => {
+  const owner = await requireBackgroundOwner(req, res);
+  if (!owner) return;
+  const config = getCloudinaryConfig();
+  if (!config.cloudName || !config.apiKey || !config.apiSecret) {
+    return res.status(503).json({ success: false, message: 'Cloudinary chưa được cấu hình.' });
+  }
+  const body = req.body || {};
+  const publicId = String(body.publicId || '').trim();
+  const secureUrl = String(body.secureUrl || '').trim();
+  const format = String(body.format || '').toLowerCase();
+  const bytes = Number(body.bytes);
+  const width = Number(body.width);
+  const height = Number(body.height);
+  let parsedUrl;
+  try { parsedUrl = new URL(secureUrl); } catch (_) {}
+  const expectedPrefix = `https://res.cloudinary.com/${config.cloudName}/image/upload/`;
+  if (!publicId.startsWith(`${COMMUNITY_CHAT_BACKGROUND_FOLDER}/`) ||
+      !parsedUrl || parsedUrl.protocol !== 'https:' || !secureUrl.startsWith(expectedPrefix) ||
+      !['jpg', 'jpeg', 'png', 'webp'].includes(format) ||
+      !Number.isSafeInteger(bytes) || bytes < 1 || bytes > COMMUNITY_CHAT_BACKGROUND_MAX_BYTES ||
+      !Number.isSafeInteger(width) || width < 1 || !Number.isSafeInteger(height) || height < 1) {
+    return res.status(400).json({ success: false, message: 'Thông tin hình ảnh không hợp lệ hoặc vượt giới hạn 5 MB.' });
+  }
+  try {
+    const result = await pool.query(`
+      INSERT INTO community_chat_backgrounds (public_id, secure_url, format, bytes, width, height, created_by)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ON CONFLICT (public_id) DO NOTHING
+      RETURNING id, public_id AS "publicId", secure_url AS "secureUrl", format, bytes, width, height,
+                created_at AS "createdAt"
+    `, [publicId, secureUrl, format, bytes, width, height, owner.telegramId]);
+    if (!result.rowCount) return res.status(409).json({ success: false, message: 'Hình nền này đã tồn tại trong thư viện.' });
+    return res.status(201).json({ success: true, background: result.rows[0] });
+  } catch (error) {
+    console.error('❌ Community Chat background register error:', error);
+    return res.status(500).json({ success: false, message: 'Không thể lưu hình nền vào thư viện.' });
+  }
+});
+
+app.put('/api/community-chat/backgrounds/:id/active', async (req, res) => {
+  const owner = await requireBackgroundOwner(req, res);
+  if (!owner) return;
+  const id = String(req.params.id || '');
+  if (!/^\d{1,18}$/.test(id)) return res.status(400).json({ success: false, message: 'ID hình nền không hợp lệ.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const found = await client.query('SELECT id FROM community_chat_backgrounds WHERE id = $1', [id]);
+    if (!found.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: 'Không tìm thấy hình nền.' });
+    }
+    await client.query(`UPDATE community_chat_background_state SET background_id = $1, updated_by = $2, updated_at = CURRENT_TIMESTAMP WHERE id = 1`, [id, owner.telegramId]);
+    const selected = await client.query(`SELECT id, secure_url AS "secureUrl", format, width, height FROM community_chat_backgrounds WHERE id = $1`, [id]);
+    await client.query('COMMIT');
+    const payload = { background: selected.rows[0] };
+    io.to(COMMUNITY_CHAT_ROOM).emit('communityChatBackgroundUpdated', payload);
+    return res.json({ success: true, ...payload });
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    console.error('❌ Community Chat background activate error:', error);
+    return res.status(500).json({ success: false, message: 'Không thể áp dụng hình nền.' });
+  } finally { client.release(); }
+});
+
+app.post('/api/community-chat/backgrounds/reset', async (req, res) => {
+  const owner = await requireBackgroundOwner(req, res);
+  if (!owner) return;
+  try {
+    await pool.query(`UPDATE community_chat_background_state SET background_id = NULL, updated_by = $1, updated_at = CURRENT_TIMESTAMP WHERE id = 1`, [owner.telegramId]);
+    io.to(COMMUNITY_CHAT_ROOM).emit('communityChatBackgroundUpdated', { background: null });
+    return res.json({ success: true, background: null });
+  } catch (error) {
+    console.error('❌ Community Chat background reset error:', error);
+    return res.status(500).json({ success: false, message: 'Không thể khôi phục hình nền mặc định.' });
+  }
+});
+
+app.delete('/api/community-chat/backgrounds/:id', async (req, res) => {
+  const owner = await requireBackgroundOwner(req, res);
+  if (!owner) return;
+  const id = String(req.params.id || '');
+  if (!/^\d{1,18}$/.test(id)) return res.status(400).json({ success: false, message: 'ID hình nền không hợp lệ.' });
+  const config = getCloudinaryConfig();
+  if (!config.cloudName || !config.apiKey || !config.apiSecret) return res.status(503).json({ success: false, message: 'Cloudinary chưa được cấu hình.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const found = await client.query('SELECT public_id FROM community_chat_backgrounds WHERE id = $1 FOR UPDATE', [id]);
+    if (!found.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: 'Không tìm thấy hình nền.' });
+    }
+    const publicId = found.rows[0].public_id;
+    // If active, deletion atomically falls back to the theme's default chat background.
+    await client.query(`UPDATE community_chat_background_state SET background_id = NULL, updated_by = $1, updated_at = CURRENT_TIMESTAMP WHERE id = 1 AND background_id = $2`, [owner.telegramId, id]);
+    await cloudinaryDestroyImage(publicId, config);
+    await client.query('DELETE FROM community_chat_backgrounds WHERE id = $1', [id]);
+    await client.query('COMMIT');
+    const active = await pool.query(`SELECT b.id, b.secure_url AS "secureUrl", b.format, b.width, b.height FROM community_chat_background_state s LEFT JOIN community_chat_backgrounds b ON b.id=s.background_id WHERE s.id=1`);
+    io.to(COMMUNITY_CHAT_ROOM).emit('communityChatBackgroundUpdated', { background: active.rows[0]?.id ? active.rows[0] : null });
+    return res.json({ success: true, deletedId: id, activeBackground: active.rows[0]?.id ? active.rows[0] : null });
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    console.error('❌ Community Chat background delete error:', error);
+    return res.status(502).json({ success: false, message: 'Không thể xóa hình nền khỏi kho lưu trữ. Dữ liệu thư viện vẫn được giữ nguyên.' });
+  } finally { client.release(); }
+});
 
 app.get('/api/community-chat/messages', async (req, res) => {
   const auth = validateTelegramInitData(req.query?.initData || '');
