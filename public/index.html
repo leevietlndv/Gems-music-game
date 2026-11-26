@@ -1820,8 +1820,8 @@
       --gems-chat-accent: #00bcd4;
       --gems-chat-accent-contrast: #071521;
       --gems-chat-accent-shadow: rgba(0, 229, 255, .22);
-      --gems-chat-message-other-bg: rgba(0, 229, 255, .6);
-      --gems-chat-message-own-bg: rgba(168, 85, 247, .6);
+      --gems-chat-message-other-bg: rgba(0, 229, 255, .8);
+      --gems-chat-message-own-bg: rgba(168, 85, 247, .8);
     }
     body[data-theme="christmas"] {
       --gems-chat-panel-bg: rgba(241, 231, 216, .72);
@@ -1833,8 +1833,8 @@
       --gems-chat-accent: #176b45;
       --gems-chat-accent-contrast: #fffdf8;
       --gems-chat-accent-shadow: rgba(23, 107, 69, .2);
-      --gems-chat-message-other-bg: rgba(255, 253, 248, .6);
-      --gems-chat-message-own-bg: rgba(229, 240, 231, .6);
+      --gems-chat-message-other-bg: rgba(255, 253, 248, .8);
+      --gems-chat-message-own-bg: rgba(229, 240, 231, .8);
     }
     body[data-theme="christmas_victorian"] {
       --gems-chat-panel-bg: rgba(33, 27, 27, .88);
@@ -1846,8 +1846,8 @@
       --gems-chat-accent: #722b35;
       --gems-chat-accent-contrast: #f3e5c5;
       --gems-chat-accent-shadow: rgba(197, 161, 90, .22);
-      --gems-chat-message-other-bg: rgba(255, 253, 248, .6);
-      --gems-chat-message-own-bg: rgba(229, 240, 231, .6);
+      --gems-chat-message-other-bg: rgba(52, 42, 40, .8);
+      --gems-chat-message-own-bg: rgba(114, 43, 53, .8);
     }
     body[data-theme="tet_vietnam"] {
       --gems-chat-panel-bg: rgba(84, 32, 42, .82);
@@ -1859,8 +1859,8 @@
       --gems-chat-accent: #c9a34e;
       --gems-chat-accent-contrast: #4b1019;
       --gems-chat-accent-shadow: rgba(201, 163, 78, .24);
-      --gems-chat-message-other-bg: rgba(255, 253, 248, .6);
-      --gems-chat-message-own-bg: rgba(229, 240, 231, .6);
+      --gems-chat-message-other-bg: rgba(100, 18, 29, .8);
+      --gems-chat-message-own-bg: rgba(201, 163, 78, .8);
     }
     @media (max-width: 600px) {
       .community-chat-card { padding: 11px; }
@@ -5407,7 +5407,7 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       if (!communityChatMessagesEl) return;
       if (background?.secureUrl) {
         const safeUrl = String(background.secureUrl).replace(/(["\\])/g, '\\$1');
-        communityChatMessagesEl.style.backgroundImage = `linear-gradient(rgba(0,0,0,.42), rgba(0,0,0,.42)), url("${safeUrl}")`;
+        communityChatMessagesEl.style.backgroundImage = `linear-gradient(rgba(0,0,0,.15), rgba(0,0,0,.15)), url("${safeUrl}")`;
         communityChatMessagesEl.classList.add('has-custom-background');
       } else {
         communityChatMessagesEl.style.backgroundImage = '';
