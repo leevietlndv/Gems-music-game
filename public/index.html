@@ -7991,13 +7991,18 @@ function scanYouTubePlaylist(playlistId) {
         resultPanel.hidden = true;
       }
 
-      // Reset nút Tiếp tục
+      // Phase 4C.6: Khôi phục hai nút khi mở Playlist mới
       const confirmButton =
         document.getElementById('playlistPreviewContinue');
 
       if (confirmButton) {
         confirmButton.disabled = false;
         confirmButton.textContent = 'Tiếp tục';
+
+        // Hiển thị lại vùng chứa hai nút
+        if (confirmButton.parentElement) {
+          confirmButton.parentElement.style.display = 'flex';
+        }
       }
 
       // Reset tiến trình và thống kê
