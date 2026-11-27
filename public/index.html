@@ -4334,25 +4334,32 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
     <div id="playlistPreviewPlayer"
       style="width:200px;height:200px;min-width:200px;min-height:200px;margin-top:10px;">
     </div>
+    <!-- GEMS Playlist Scanner - Phase 2 -->
+    <div id="playlistVideoPreview" hidden style="margin-top:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;">
+        <label style="display:flex;align-items:center;gap:7px;">
+          <input type="checkbox" id="playlistSelectAll" checked>
+          <span>Chọn tất cả</span>
+        </label>
 
-     </div>
+        <span id="playlistSelectedCount">Đã chọn 0/0 bài</span>
+      </div>
 
-    <div id="playlistVideoList"
-      style="display:flex;flex-direction:column;gap:9px;">
+      <div id="playlistVideoList"
+        style="display:flex;flex-direction:column;gap:9px;">
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:14px;">
+        <button type="button" id="playlistPreviewContinue"
+          style="flex:1;">
+          Tiếp tục
+        </button>
+
+        <button type="button" id="playlistPreviewCancel">
+          Hủy
+        </button>
+      </div>
     </div>
-
-    <div style="display:flex;gap:8px;margin-top:14px;">
-      <button type="button" id="playlistPreviewContinue"
-        style="flex:1;">
-        Tiếp tục
-      </button>
-
-      <button type="button" id="playlistPreviewCancel">
-        Hủy
-      </button>
-    </div>
-  </div>
-
   </div>
 
   <div id="onlineBar" class="online-bar">
@@ -7753,9 +7760,188 @@ function scanYouTubePlaylist(playlistId) {
     });
   });
 }
-
-
 // ==================== END GEMS PLAYLIST SCANNER ====================
+
+// ==================== PLAYLIST PREVIEW - PHASE 2 ====================
+
+    let gemsPlaylistPreviewItems = [];
+
+    async function getPlaylistVideoInfo(videoId) {
+      const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+      try {
+        const response = await fetch(
+          `https://www.youtube.com/oembed?url=${encodeURIComponent(videoUrl)}&format=json`
+        );
+
+        if (!response.ok) {
+          throw new Error('Không lấy được thông tin video');
+        }
+
+        const data = await response.json();
+
+        return {
+          videoId,
+          title: data.title || `Video ${videoId}`,
+          thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+          url: videoUrl
+        };
+      } catch (error) {
+        console.warn('Không lấy được tiêu đề video:', videoId, error);
+
+        return {
+          videoId,
+          title: `Video ${videoId}`,
+          thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+          url: videoUrl
+        };
+      }
+    }
+
+    function updatePlaylistSelectedCount() {
+      const selected = gemsPlaylistPreviewItems.filter(item => item.selected).length;
+      const total = gemsPlaylistPreviewItems.length;
+
+      document.getElementById('playlistSelectedCount').textContent =
+        `Đã chọn ${selected}/${total} bài`;
+
+      const selectAll = document.getElementById('playlistSelectAll');
+
+      selectAll.checked = total > 0 && selected === total;
+      selectAll.indeterminate = selected > 0 && selected < total;
+    }
+
+    function renderPlaylistVideoList() {
+      const container = document.getElementById('playlistVideoList');
+      container.innerHTML = '';
+
+      gemsPlaylistPreviewItems.forEach((item, index) => {
+        const row = document.createElement('div');
+
+        row.style.cssText = `
+          display:flex;
+          align-items:center;
+          gap:10px;
+          padding:9px;
+          border:1px solid var(--border-color, #888);
+          border-radius:9px;
+          min-width:0;
+        `;
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = item.selected;
+        checkbox.style.flexShrink = '0';
+
+        checkbox.addEventListener('change', () => {
+          item.selected = checkbox.checked;
+          updatePlaylistSelectedCount();
+        });
+
+        const thumbnail = document.createElement('img');
+        thumbnail.src = item.thumbnail;
+        thumbnail.alt = '';
+        thumbnail.loading = 'lazy';
+        thumbnail.style.cssText = `
+          width:105px;
+          aspect-ratio:16/9;
+          object-fit:cover;
+          border-radius:6px;
+          flex-shrink:0;
+        `;
+
+        const title = document.createElement('div');
+        title.textContent = `${index + 1}. ${item.title}`;
+        title.style.cssText = `
+          flex:1;
+          min-width:0;
+          font-size:13px;
+          line-height:1.4;
+          overflow-wrap:anywhere;
+        `;
+
+        row.append(checkbox, thumbnail, title);
+        container.appendChild(row);
+      });
+
+      updatePlaylistSelectedCount();
+    }
+
+    async function loadPlaylistPreview(videoIds) {
+      const panel = document.getElementById('playlistVideoPreview');
+      const status = document.getElementById('playlistScanStatus');
+
+      panel.hidden = false;
+
+      gemsPlaylistPreviewItems = [];
+
+      status.textContent =
+        `Đang lấy thông tin ${videoIds.length} video...`;
+
+      // Chia thành từng nhóm 5 video để tránh gửi quá nhiều request cùng lúc.
+      for (let i = 0; i < videoIds.length; i += 5) {
+        const batch = videoIds.slice(i, i + 5);
+
+        const results = await Promise.all(
+          batch.map(videoId => getPlaylistVideoInfo(videoId))
+        );
+
+        gemsPlaylistPreviewItems.push(
+          ...results.map(item => ({
+            ...item,
+            selected: true
+          }))
+        );
+
+        renderPlaylistVideoList();
+
+        status.textContent =
+          `Đã tải thông tin ${gemsPlaylistPreviewItems.length}/${videoIds.length} video`;
+      }
+
+      status.textContent =
+        `Playlist có ${gemsPlaylistPreviewItems.length} video. Hãy chọn những bài hát muốn thêm.`;
+    }
+
+    // Chọn tất cả / bỏ chọn tất cả
+    document.getElementById('playlistSelectAll')
+      .addEventListener('change', function () {
+        gemsPlaylistPreviewItems.forEach(item => {
+          item.selected = this.checked;
+        });
+
+        renderPlaylistVideoList();
+      });
+
+    // Hủy xem trước
+    document.getElementById('playlistPreviewCancel')
+      .addEventListener('click', function () {
+        document.getElementById('playlistVideoPreview').hidden = true;
+        document.getElementById('playlistScanPanel').hidden = true;
+
+        gemsPlaylistPreviewItems = [];
+      });
+
+    // Phase 2 chưa thêm bài hát vào GEMS Studio.
+    // Nút này chỉ xác nhận và lưu tạm danh sách được chọn.
+    document.getElementById('playlistPreviewContinue')
+      .addEventListener('click', function () {
+        const selectedItems = gemsPlaylistPreviewItems.filter(
+          item => item.selected
+        );
+
+        if (selectedItems.length === 0) {
+          alert('Bạn chưa chọn bài hát nào.');
+          return;
+        }
+
+        window.__gemsSelectedPlaylistItems = selectedItems;
+
+        alert(
+          `Đã xác nhận ${selectedItems.length} bài hát.\n` +
+          'Danh sách đã được lưu tạm để chuẩn bị cho Phase 3.'
+        );
+      });
   
     // ==================== YOUTUBE PLAYER API ====================
     let pendingPlayerSong = null;
@@ -8899,10 +9085,7 @@ function scanYouTubePlaylist(playlistId) {
           const result = await scanYouTubePlaylist(playlistId);
 
           if (result.success) {
-            alert(
-              `Đã đọc được ${result.videoIds.length} video từ Playlist.\n` +
-              'Danh sách Video ID đã được lưu tạm để kiểm tra.'
-            );
+            await loadPlaylistPreview(result.videoIds);
           } else {
             alert('Không thể đọc Playlist. Vui lòng kiểm tra lại đường link.');
           }
