@@ -8010,6 +8010,54 @@ function scanYouTubePlaylist(playlistId) {
       const panel = document.getElementById('playlistVideoPreview');
       const status = document.getElementById('playlistScanStatus');
 
+      // Phase 4B.2: Reset dữ liệu Playlist cũ
+
+      // Xóa trạng thái xử lý Playlist trước
+      window.__gemsSelectedPlaylistItems = [];
+      window.__gemsPlaylistPhase3SourceKey = null;
+      window.__gemsPlaylistPhase3Pending = [];
+      window.__gemsPlaylistPhase3Report = null;
+
+      // Ẩn bảng kết quả cũ
+      const resultPanel =
+        document.getElementById('playlistResultPanel');
+
+      if (resultPanel) {
+        resultPanel.hidden = true;
+      }
+
+      // Reset nút Tiếp tục
+      const confirmButton =
+        document.getElementById('playlistPreviewContinue');
+
+      if (confirmButton) {
+        confirmButton.disabled = false;
+        confirmButton.textContent = 'Tiếp tục';
+      }
+
+      // Reset tiến trình và thống kê
+      const resetElements = {
+        playlistResultTotal: '0/0 bài',
+        playlistProgressLabel: 'Đang chờ xử lý',
+        playlistProgressPercent: '0%',
+        playlistResultSuccess: '0',
+        playlistResultDuplicate: '0',
+        playlistResultBlacklist: '0',
+        playlistResultFailed: '0'
+      };
+
+      Object.entries(resetElements).forEach(([id, value]) => {
+        const element = document.getElementById(id);
+        if (element) element.textContent = value;
+      });
+
+      const progressBar =
+        document.getElementById('playlistProgressBar');
+
+      if (progressBar) {
+        progressBar.style.width = '0%';
+      }
+
       panel.hidden = false;
 
       gemsPlaylistPreviewItems = [];
