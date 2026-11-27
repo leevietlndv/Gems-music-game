@@ -9811,6 +9811,9 @@ document.getElementById('playlistPreviewContinue')
 
           if (result.success) {
             await loadPlaylistPreview(result.videoIds);
+
+            // Xóa link Playlist khỏi form sau khi tải Preview.
+            songUrlInput.value = '';
           } else {
             alert('Không thể đọc Playlist. Vui lòng kiểm tra lại đường link.');
           }
