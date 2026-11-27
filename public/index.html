@@ -8079,6 +8079,14 @@ function scanYouTubePlaylist(playlistId) {
   destroyPlaylistPreviewPlayer();
 
   panel.hidden = false;
+  // Ẩn HUD YouTube ngay khi bắt đầu gửi link Playlist.
+  const playlistHud =
+    document.getElementById('playlistPreviewPlayer');
+
+  if (playlistHud) {
+    playlistHud.hidden = true;
+  }
+
   status.textContent = 'Đang kết nối YouTube và đọc Playlist...';
 
   return new Promise((resolve) => {
