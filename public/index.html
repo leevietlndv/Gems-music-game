@@ -8368,20 +8368,19 @@ document.getElementById('playlistPreviewContinue')
 
   });
 
-  // Phase 4A.3.1: Đóng bảng kết quả
-  document.getElementById('playlistResultClose')
+    // Phase 4B.3: Đóng toàn bộ Playlist và dọn dữ liệu tạm
+    document.getElementById('playlistResultClose')
     .addEventListener('click', function () {
 
-      const resultPanel =
-        document.getElementById('playlistResultPanel');
+      const cancelButton =
+        document.getElementById('playlistPreviewCancel');
 
-      if (resultPanel) {
-        resultPanel.hidden = true;
+      if (cancelButton) {
+        cancelButton.click();
       }
 
     });
 
-  
     // ==================== YOUTUBE PLAYER API ====================
     let pendingPlayerSong = null;
     let pendingPlayerSound = false;
