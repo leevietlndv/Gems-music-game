@@ -7670,32 +7670,11 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
 
 // ==================== GEMS PLAYLIST SCANNER - PHASE 1 ====================
 
-// GEMS Playlist Scanner - Phase 4B.4
-let playlistCueScanId = 0;
 let playlistPreviewPlayer = null;
-
 let playlistScanResolve = null;
 let playlistScanTimeout = null;
-
 let pendingPlaylistId = null;
 let playlistScanCompleted = false;
-
-// Mã nhận diện từng lượt quét.
-let playlistScanId = 0;
-
-// Mã phiên đang được Player xử lý.
-let playlistPlayerScanId = 0;
-
-// Lưu trạng thái Player đã sẵn sàng.
-let playlistPlayerReady = false;
-
-// Kiểm tra một lượt quét có còn hợp lệ hay không.
-function isPlaylistScanActive(scanId) {
-  return (
-    scanId === playlistScanId &&
-    !playlistScanCompleted
-  );
-}
 
 // Nhận diện Playlist ID từ các dạng URL YouTube phổ biến.
 function getYouTubePlaylistId(url) {
@@ -7719,10 +7698,9 @@ function getYouTubePlaylistId(url) {
   }
 }
 
-// Kết thúc một lượt quét Playlist.
-function finishPlaylistScan(result, scanId) {
-  // Không cho phép lượt quét cũ kết thúc lượt mới.
-  if (!isPlaylistScanActive(scanId)) return;
+// Kết thúc một lần quét Playlist.
+function finishPlaylistScan(result) {
+  if (playlistScanCompleted) return;
 
   playlistScanCompleted = true;
 
@@ -7734,24 +7712,15 @@ function finishPlaylistScan(result, scanId) {
   const resolve = playlistScanResolve;
   playlistScanResolve = null;
 
-  if (resolve) {
-    resolve(result);
-  }
+  if (resolve) resolve(result);
 }
 
-// Đọc Video ID thuộc đúng lượt quét hiện hành.
-function collectPlaylistVideoIds(scanId) {
-  if (!isPlaylistScanActive(scanId)) return;
-
-  if (
-    !playlistPreviewPlayer ||
-    typeof playlistPreviewPlayer.getPlaylist !== 'function'
-  ) {
+// Đọc danh sách Video ID sau khi YouTube báo Playlist đã được cue.
+function collectPlaylistVideoIds() {
+  if (!playlistPreviewPlayer ||
+      typeof playlistPreviewPlayer.getPlaylist !== 'function') {
     return;
   }
-
-  // Player phải thuộc đúng phiên đang quét.
-  if (playlistPlayerScanId !== scanId) return;
 
   const videoIds = playlistPreviewPlayer.getPlaylist() || [];
 
@@ -7762,11 +7731,12 @@ function collectPlaylistVideoIds(scanId) {
     finishPlaylistScan({
       success: false,
       videoIds: []
-    }, scanId);
+    });
 
     return;
   }
 
+  // Lưu tạm để kiểm tra trong DevTools ở Phase 1.
   window.__gemsPlaylistVideoIds = videoIds.slice();
 
   console.log('🎵 GEMS Playlist Scanner - Video IDs:');
@@ -7782,91 +7752,18 @@ function collectPlaylistVideoIds(scanId) {
   finishPlaylistScan({
     success: true,
     videoIds: videoIds
-  }, scanId);
+  });
 }
 
-
-
-// Đảm bảo luôn có phần tử HTML để tạo YouTube Player.
-function ensurePlaylistPreviewPlayerElement() {
-  let playerElement =
-    document.getElementById('playlistPreviewPlayer');
-
-  if (playerElement) return playerElement;
-
-  const panel = document.getElementById('playlistScanPanel');
-  const preview = document.getElementById('playlistVideoPreview');
-
-  playerElement = document.createElement('div');
-  playerElement.id = 'playlistPreviewPlayer';
-  playerElement.style.cssText =
-    'width:200px;height:200px;min-width:200px;min-height:200px;margin-top:10px;';
-
-  panel.insertBefore(playerElement, preview);
-
-  return playerElement;
-}
-
-
-// Hủy Player cũ và giải phóng tham chiếu.
-
-function destroyPlaylistPreviewPlayer() {
-  const oldPlayer = playlistPreviewPlayer;
-
-  playlistPreviewPlayer = null;
-  playlistPlayerReady = false;
-  playlistPlayerScanId = 0;
-  playlistCueScanId = 0;
-
-  if (oldPlayer) {
-    try {
-      oldPlayer.destroy();
-    } catch (error) {
-      console.warn(
-        'Không thể hủy Playlist Preview Player:',
-        error
-      );
-    }
-  }
-
-  // YouTube API có thể đã thay thế phần tử div bằng iframe.
-  // Tạo lại div để lượt quét tiếp theo sử dụng.
-  ensurePlaylistPreviewPlayerElement();
-}
-
-// Tạo Player riêng cho từng lượt quét Playlist.
-function initPlaylistPreviewPlayer(scanId) {
-  if (!isPlaylistScanActive(scanId)) return;
-
-  // Nếu Player thuộc phiên khác, hủy Player cũ.
-  if (
-    playlistPreviewPlayer &&
-    playlistPlayerScanId !== scanId
-  ) {
-    destroyPlaylistPreviewPlayer();
-  }
-
-  // Không tạo trùng Player trong cùng một phiên.
-  if (
-    playlistPreviewPlayer &&
-    playlistPlayerScanId === scanId
-  ) {
-    return;
-  }
+// Tạo Player độc lập, tuyệt đối không sử dụng youtubeApiPlayer.
+function initPlaylistPreviewPlayer() {
+  if (playlistPreviewPlayer) return;
 
   if (!window.YT || !window.YT.Player) {
     throw new Error('YouTube IFrame API chưa sẵn sàng.');
   }
 
-  const playerElement =
-    ensurePlaylistPreviewPlayerElement();
-
-  playlistPlayerReady = false;
-  playlistPlayerScanId = scanId;
-  playlistCueScanId = 0;
-
-  // Callback giữ cố định scanId của Player này.
-  playlistPreviewPlayer = new YT.Player(playerElement.id, {
+  playlistPreviewPlayer = new YT.Player('playlistPreviewPlayer', {
     width: '200',
     height: '200',
 
@@ -7878,28 +7775,22 @@ function initPlaylistPreviewPlayer(scanId) {
     },
 
     events: {
-      onReady: () => {
-        if (!isPlaylistScanActive(scanId)) return;
-        if (playlistPlayerScanId !== scanId) return;
-
-        playlistPlayerReady = true;
-
-        cuePendingPlaylist(scanId);
+      onReady: (event) => {
+        if (pendingPlaylistId) {
+          event.target.cuePlaylist({
+            listType: 'playlist',
+            list: pendingPlaylistId
+          });
+        }
       },
 
       onStateChange: (event) => {
-        if (!isPlaylistScanActive(scanId)) return;
-        if (playlistPlayerScanId !== scanId) return;
-
         if (event.data === YT.PlayerState.CUED) {
-          collectPlaylistVideoIds(scanId);
+          collectPlaylistVideoIds();
         }
       },
 
       onError: (event) => {
-        if (!isPlaylistScanActive(scanId)) return;
-        if (playlistPlayerScanId !== scanId) return;
-
         console.error(
           '❌ GEMS Playlist Scanner - YouTube error:',
           event.data
@@ -7912,130 +7803,27 @@ function initPlaylistPreviewPlayer(scanId) {
           success: false,
           videoIds: [],
           error: event.data
-        }, scanId);
+        });
       }
     }
   });
 }
 
-
-// Chỉ gửi một lệnh cue cho mỗi lượt quét.
-function cuePendingPlaylist(scanId) {
-  if (!isPlaylistScanActive(scanId)) return;
-  if (!playlistPlayerReady || !playlistPreviewPlayer) return;
-  if (playlistPlayerScanId !== scanId) return;
-  if (!pendingPlaylistId) return;
-
-  // Ngăn onReady và scanYouTubePlaylist cue trùng nhau.
-  if (playlistCueScanId === scanId) return;
-
-  playlistCueScanId = scanId;
-
-  try {
-    playlistPreviewPlayer.cuePlaylist({
-      listType: 'playlist',
-      list: pendingPlaylistId,
-      index: 0
-    });
-
-    console.log(
-      '🎵 GEMS Playlist Scanner - Đang cue:',
-      pendingPlaylistId,
-      'Scan ID:',
-      scanId
-    );
-
-  } catch (error) {
-    console.error('❌ Cue Playlist error:', error);
-
-    finishPlaylistScan({
-      success: false,
-      videoIds: [],
-      error: error.message
-    }, scanId);
-  }
-}
-
-// Chỉ một nơi chịu trách nhiệm cue Playlist.
-function cuePendingPlaylist(scanId) {
-  if (!isPlaylistScanActive(scanId)) return;
-
-  if (!playlistPlayerReady || !playlistPreviewPlayer) return;
-
-  if (playlistPlayerScanId !== scanId) return;
-
-  if (!pendingPlaylistId) return;
-
-  try {
-    playlistPreviewPlayer.cuePlaylist({
-      listType: 'playlist',
-      list: pendingPlaylistId,
-      index: 0
-    });
-
-    console.log(
-      '🎵 GEMS Playlist Scanner - Đang cue:',
-      pendingPlaylistId,
-      'Scan ID:',
-      scanId
-    );
-
-  } catch (error) {
-    console.error('❌ Cue Playlist error:', error);
-
-    finishPlaylistScan({
-      success: false,
-      videoIds: [],
-      error: error.message
-    }, scanId);
-  }
-}
-
-// Bắt đầu một lượt quét Playlist mới.
+// Bắt đầu đọc Playlist.
 function scanYouTubePlaylist(playlistId) {
   const panel = document.getElementById('playlistScanPanel');
   const status = document.getElementById('playlistScanStatus');
 
-  // Tạo mã nhận diện cho lượt quét mới.
-  const scanId = ++playlistScanId;
-
-  // Hủy timeout của lượt quét trước.
-  if (playlistScanTimeout) {
-    clearTimeout(playlistScanTimeout);
-    playlistScanTimeout = null;
-  }
-
-  // Kết thúc Promise cũ nếu vẫn đang chờ.
-  const previousResolve = playlistScanResolve;
-  playlistScanResolve = null;
-
-  if (previousResolve) {
-    previousResolve({
-      success: false,
-      videoIds: [],
-      error: 'superseded'
-    });
-  }
-
-  // Đặt lại trạng thái phiên mới.
-  playlistScanCompleted = false;
-  pendingPlaylistId = playlistId;
-  playlistPlayerScanId = 0;
-  playlistCueScanId = 0;
-  playlistPlayerReady = false;
-
-  // Hủy Player của lượt quét trước.
-  destroyPlaylistPreviewPlayer();
-
   panel.hidden = false;
   status.textContent = 'Đang kết nối YouTube và đọc Playlist...';
+
+  pendingPlaylistId = playlistId;
+  playlistScanCompleted = false;
 
   return new Promise((resolve) => {
     playlistScanResolve = resolve;
 
     playlistScanTimeout = setTimeout(() => {
-      if (!isPlaylistScanActive(scanId)) return;
-
       status.textContent =
         'Quá thời gian chờ đọc Playlist. Vui lòng thử lại.';
 
@@ -8043,24 +7831,26 @@ function scanYouTubePlaylist(playlistId) {
         success: false,
         videoIds: [],
         error: 'timeout'
-      }, scanId);
-
+      });
     }, 20000);
 
     whenYouTubeApiReady(() => {
-      // Bỏ qua callback nếu phiên đã bị thay thế hoặc hủy.
-      if (!isPlaylistScanActive(scanId)) return;
-
       try {
-        initPlaylistPreviewPlayer(scanId);
+        initPlaylistPreviewPlayer();
 
+        // Player đã tồn tại và sẵn sàng: cue Playlist mới.
+        if (
+          playlistPreviewPlayer &&
+          typeof playlistPreviewPlayer.cuePlaylist === 'function' &&
+          playlistPreviewPlayer.getPlayerState() !== -1
+        ) {
+          playlistPreviewPlayer.cuePlaylist({
+            listType: 'playlist',
+            list: playlistId
+          });
+        }
       } catch (error) {
-        if (!isPlaylistScanActive(scanId)) return;
-
-        console.error(
-          '❌ Playlist Scanner init error:',
-          error
-        );
+        console.error('❌ Playlist Scanner init error:', error);
 
         status.textContent =
           'Không thể khởi tạo trình đọc Playlist.';
@@ -8069,12 +7859,11 @@ function scanYouTubePlaylist(playlistId) {
           success: false,
           videoIds: [],
           error: error.message
-        }, scanId);
+        });
       }
     });
   });
 }
-
 // ==================== END GEMS PLAYLIST SCANNER ====================
 
 // ==================== PLAYLIST PREVIEW - PHASE 2 ====================
@@ -8283,87 +8072,35 @@ function scanYouTubePlaylist(playlistId) {
 
     // Hủy xem trước
     
-document.getElementById('playlistPreviewCancel')
-  .addEventListener('click', function () {
+    document.getElementById('playlistPreviewCancel')
+      .addEventListener('click', function () {
 
-    // 1. Vô hiệu hóa toàn bộ callback của phiên cũ.
-    playlistScanId++;
-    playlistPlayerScanId = 0;
+        // Đóng giao diện Playlist
+        document.getElementById('playlistVideoPreview').hidden = true;
+        document.getElementById('playlistScanPanel').hidden = true;
 
-    // 2. Hủy timeout đang chờ.
-    if (playlistScanTimeout) {
-      clearTimeout(playlistScanTimeout);
-      playlistScanTimeout = null;
-    }
+        // Xóa dữ liệu xem trước
+        gemsPlaylistPreviewItems = [];
 
-    // 3. Kết thúc Promise đang chờ nếu có.
-    playlistScanCompleted = true;
+        // Xóa dữ liệu tạm của Phase 3
+        window.__gemsSelectedPlaylistItems = [];
+        window.__gemsPlaylistPhase3SourceKey = null;
+        window.__gemsPlaylistPhase3Pending = [];
+        window.__gemsPlaylistPhase3Report = null;
 
-    const previousResolve = playlistScanResolve;
-    playlistScanResolve = null;
+        // Xóa dữ liệu video ID đã quét
+        window.__gemsPlaylistVideoIds = [];
 
-    if (previousResolve) {
-      previousResolve({
-        success: false,
-        videoIds: [],
-        error: 'cancelled'
+        // Đặt lại trạng thái nút
+        const confirmButton =
+          document.getElementById('playlistPreviewContinue');
+
+        if (confirmButton) {
+          confirmButton.disabled = false;
+          confirmButton.textContent = 'Tiếp tục';
+        }
+
       });
-    }
-
-    // 4. Xóa Playlist ID đang xử lý.
-    pendingPlaylistId = null;
-
-    // 5. Hủy YouTube Preview Player.
-    if (playlistPreviewPlayer) {
-      try {
-        playlistPreviewPlayer.destroy();
-      } catch (error) {
-        console.warn(
-          'Không thể hủy Playlist Preview Player:',
-          error
-        );
-      }
-
-      playlistPreviewPlayer = null;
-    }
-
-    playlistPlayerReady = false;
-
-    // 6. Xóa dữ liệu xem trước.
-    gemsPlaylistPreviewItems = [];
-
-    // 7. Xóa dữ liệu tạm Phase 3.
-    window.__gemsSelectedPlaylistItems = [];
-    window.__gemsPlaylistPhase3SourceKey = null;
-    window.__gemsPlaylistPhase3Pending = [];
-    window.__gemsPlaylistPhase3Report = null;
-
-    // 8. Xóa dữ liệu Video ID.
-    window.__gemsPlaylistVideoIds = [];
-
-    // 9. Đóng toàn bộ giao diện Scanner.
-    document.getElementById('playlistVideoPreview').hidden = true;
-    document.getElementById('playlistScanPanel').hidden = true;
-
-    // 10. Đóng bảng kết quả.
-    const resultPanel =
-      document.getElementById('playlistResultPanel');
-
-    if (resultPanel) {
-      resultPanel.hidden = true;
-    }
-
-    // 11. Đặt lại trạng thái nút Tiếp tục.
-    const confirmButton =
-      document.getElementById('playlistPreviewContinue');
-
-    if (confirmButton) {
-      confirmButton.disabled = false;
-      confirmButton.textContent = 'Tiếp tục';
-    }
-
-    console.log('🧹 GEMS Playlist Scanner: Đã đóng và dọn dẹp.');
-  });
     
 // ======================================================
 // GEMS PLAYLIST - PHASE 3A
