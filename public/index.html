@@ -4452,14 +4452,14 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
 
       </div>
       <!-- End Phase 4A.1 -->
-
       <div style="display:flex;gap:8px;margin-top:14px;">
         <button type="button" id="playlistPreviewContinue"
-          style="flex:1;">
+          style="flex:7;">
           Tiếp tục
         </button>
 
-        <button type="button" id="playlistPreviewCancel">
+        <button type="button" id="playlistPreviewCancel"
+          style="flex:3;">
           Hủy
         </button>
       </div>
@@ -8145,9 +8145,8 @@ document.getElementById('playlistPreviewContinue')
       return;
     }
 
-    // Ngăn người dùng bấm nhiều lần trong khi đang gửi.
-    confirmButton.disabled = true;
-    cancelButton.disabled = true;
+    // Ẩn hai nút sau khi bắt đầu xử lý Playlist
+    confirmButton.parentElement.style.display = 'none';
 
     const originalButtonText = confirmButton.textContent;
     confirmButton.textContent = 'Đang gửi...';
