@@ -4323,6 +4323,19 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
     </div>
   </div>
 
+  <!-- GEMS Playlist Scanner - Phase 1 -->
+  <div id="playlistScanPanel" hidden
+    style="margin-top:12px;padding:12px;border:1px solid var(--border-color, #888);border-radius:10px;">
+    <div id="playlistScanStatus" role="status" aria-live="polite">
+      Đang chuẩn bị đọc Playlist...
+    </div>
+
+    <!-- Player riêng cho Playlist, không dùng chung với trình phát nhạc chính -->
+    <div id="playlistPreviewPlayer"
+      style="width:200px;height:200px;min-width:200px;min-height:200px;margin-top:10px;">
+    </div>
+  </div>
+
   <div id="onlineBar" class="online-bar">
     <div class="online-summary">
       <span>🟢</span>
@@ -7524,6 +7537,206 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
       }
     }
 
+
+// ==================== GEMS PLAYLIST SCANNER - PHASE 1 ====================
+
+let playlistPreviewPlayer = null;
+let playlistScanResolve = null;
+let playlistScanTimeout = null;
+let pendingPlaylistId = null;
+let playlistScanCompleted = false;
+
+// Nhận diện Playlist ID từ các dạng URL YouTube phổ biến.
+function getYouTubePlaylistId(url) {
+  try {
+    const parsed = new URL(url);
+
+    const allowedHosts = [
+      'youtube.com',
+      'www.youtube.com',
+      'm.youtube.com',
+      'youtu.be'
+    ];
+
+    if (!allowedHosts.includes(parsed.hostname.toLowerCase())) {
+      return null;
+    }
+
+    return parsed.searchParams.get('list') || null;
+  } catch (error) {
+    return null;
+  }
+}
+
+// Kết thúc một lần quét Playlist.
+function finishPlaylistScan(result) {
+  if (playlistScanCompleted) return;
+
+  playlistScanCompleted = true;
+
+  if (playlistScanTimeout) {
+    clearTimeout(playlistScanTimeout);
+    playlistScanTimeout = null;
+  }
+
+  const resolve = playlistScanResolve;
+  playlistScanResolve = null;
+
+  if (resolve) resolve(result);
+}
+
+// Đọc danh sách Video ID sau khi YouTube báo Playlist đã được cue.
+function collectPlaylistVideoIds() {
+  if (!playlistPreviewPlayer ||
+      typeof playlistPreviewPlayer.getPlaylist !== 'function') {
+    return;
+  }
+
+  const videoIds = playlistPreviewPlayer.getPlaylist() || [];
+
+  if (!videoIds.length) {
+    document.getElementById('playlistScanStatus').textContent =
+      'Không đọc được video trong Playlist. Playlist có thể riêng tư, không khả dụng hoặc không có video.';
+
+    finishPlaylistScan({
+      success: false,
+      videoIds: []
+    });
+
+    return;
+  }
+
+  // Lưu tạm để kiểm tra trong DevTools ở Phase 1.
+  window.__gemsPlaylistVideoIds = videoIds.slice();
+
+  console.log('🎵 GEMS Playlist Scanner - Video IDs:');
+  console.table(videoIds.map((id, index) => ({
+    order: index + 1,
+    videoId: id,
+    url: `https://www.youtube.com/watch?v=${id}`
+  })));
+
+  document.getElementById('playlistScanStatus').textContent =
+    `Đã đọc thành công ${videoIds.length} video ID từ Playlist.`;
+
+  finishPlaylistScan({
+    success: true,
+    videoIds: videoIds
+  });
+}
+
+// Tạo Player độc lập, tuyệt đối không sử dụng youtubeApiPlayer.
+function initPlaylistPreviewPlayer() {
+  if (playlistPreviewPlayer) return;
+
+  if (!window.YT || !window.YT.Player) {
+    throw new Error('YouTube IFrame API chưa sẵn sàng.');
+  }
+
+  playlistPreviewPlayer = new YT.Player('playlistPreviewPlayer', {
+    width: '200',
+    height: '200',
+
+    playerVars: {
+      autoplay: 0,
+      controls: 1,
+      rel: 0,
+      playsinline: 1
+    },
+
+    events: {
+      onReady: (event) => {
+        if (pendingPlaylistId) {
+          event.target.cuePlaylist({
+            listType: 'playlist',
+            list: pendingPlaylistId
+          });
+        }
+      },
+
+      onStateChange: (event) => {
+        if (event.data === YT.PlayerState.CUED) {
+          collectPlaylistVideoIds();
+        }
+      },
+
+      onError: (event) => {
+        console.error(
+          '❌ GEMS Playlist Scanner - YouTube error:',
+          event.data
+        );
+
+        document.getElementById('playlistScanStatus').textContent =
+          `YouTube không thể đọc Playlist (mã lỗi ${event.data}).`;
+
+        finishPlaylistScan({
+          success: false,
+          videoIds: [],
+          error: event.data
+        });
+      }
+    }
+  });
+}
+
+// Bắt đầu đọc Playlist.
+function scanYouTubePlaylist(playlistId) {
+  const panel = document.getElementById('playlistScanPanel');
+  const status = document.getElementById('playlistScanStatus');
+
+  panel.hidden = false;
+  status.textContent = 'Đang kết nối YouTube và đọc Playlist...';
+
+  pendingPlaylistId = playlistId;
+  playlistScanCompleted = false;
+
+  return new Promise((resolve) => {
+    playlistScanResolve = resolve;
+
+    playlistScanTimeout = setTimeout(() => {
+      status.textContent =
+        'Quá thời gian chờ đọc Playlist. Vui lòng thử lại.';
+
+      finishPlaylistScan({
+        success: false,
+        videoIds: [],
+        error: 'timeout'
+      });
+    }, 20000);
+
+    whenYouTubeApiReady(() => {
+      try {
+        initPlaylistPreviewPlayer();
+
+        // Player đã tồn tại và sẵn sàng: cue Playlist mới.
+        if (
+          playlistPreviewPlayer &&
+          typeof playlistPreviewPlayer.cuePlaylist === 'function' &&
+          playlistPreviewPlayer.getPlayerState() !== -1
+        ) {
+          playlistPreviewPlayer.cuePlaylist({
+            listType: 'playlist',
+            list: playlistId
+          });
+        }
+      } catch (error) {
+        console.error('❌ Playlist Scanner init error:', error);
+
+        status.textContent =
+          'Không thể khởi tạo trình đọc Playlist.';
+
+        finishPlaylistScan({
+          success: false,
+          videoIds: [],
+          error: error.message
+        });
+      }
+    });
+  });
+}
+
+// ==================== END GEMS PLAYLIST SCANNER ====================
+
     // ==================== YOUTUBE PLAYER API ====================
     let pendingPlayerSong = null;
     let pendingPlayerSound = false;
@@ -8655,9 +8868,30 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
 
       btnSubmit.disabled = true;
       try {
+        
         const cleanUrl = url.trim();
 
+        // Phase 1: Nếu là Playlist, đọc danh sách Video ID trước.
+        // Không gửi Playlist URL trực tiếp đến /api/submit.
+        const playlistId = getYouTubePlaylistId(cleanUrl);
+
+        if (playlistId) {
+          const result = await scanYouTubePlaylist(playlistId);
+
+          if (result.success) {
+            alert(
+              `Đã đọc được ${result.videoIds.length} video từ Playlist.\n` +
+              'Danh sách Video ID đã được lưu tạm để kiểm tra.'
+            );
+          } else {
+            alert('Không thể đọc Playlist. Vui lòng kiểm tra lại đường link.');
+          }
+
+          return;
+        }
+
         if (!isYouTubeUrl(cleanUrl)) {
+
           alert('❌ Vui lòng nhập link YouTube hợp lệ!');
           return;
         }
