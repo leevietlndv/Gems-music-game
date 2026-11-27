@@ -7922,26 +7922,187 @@ function scanYouTubePlaylist(playlistId) {
         gemsPlaylistPreviewItems = [];
       });
 
-    // Phase 2 chưa thêm bài hát vào GEMS Studio.
-    // Nút này chỉ xác nhận và lưu tạm danh sách được chọn.
-    document.getElementById('playlistPreviewContinue')
-      .addEventListener('click', function () {
-        const selectedItems = gemsPlaylistPreviewItems.filter(
-          item => item.selected
-        );
+    
+// ======================================================
+// GEMS PLAYLIST - PHASE 3A
+// Gửi từng bài hát vào API Submit hiện có
+// ======================================================
 
-        if (selectedItems.length === 0) {
-          alert('Bạn chưa chọn bài hát nào.');
-          return;
+document.getElementById('playlistPreviewContinue')
+  .addEventListener('click', async function () {
+
+    const selectedItems = gemsPlaylistPreviewItems.filter(
+      item => item.selected
+    );
+
+    if (selectedItems.length === 0) {
+      alert('Bạn chưa chọn bài hát nào.');
+      return;
+    }
+
+    const status = document.getElementById('playlistScanStatus');
+    const confirmButton = document.getElementById('playlistPreviewContinue');
+    const cancelButton = document.getElementById('playlistPreviewCancel');
+
+    // Nhận diện danh sách hiện tại để hỗ trợ gửi lại những bài lỗi.
+    const sourceKey = selectedItems
+      .map(item => item.videoId)
+      .join(',');
+
+    if (window.__gemsPlaylistPhase3SourceKey !== sourceKey) {
+      window.__gemsPlaylistPhase3SourceKey = sourceKey;
+      window.__gemsPlaylistPhase3Pending = selectedItems.map(item => ({
+        ...item
+      }));
+    }
+
+    const pendingItems = window.__gemsPlaylistPhase3Pending || [];
+
+    if (pendingItems.length === 0) {
+      alert('Danh sách này đã được xử lý hoàn tất.');
+      return;
+    }
+
+    if (!telegramInitData) {
+      alert(
+        'Chưa nhận được dữ liệu xác thực Telegram. ' +
+        'Vui lòng tải lại Mini App.'
+      );
+      return;
+    }
+
+    // Ngăn người dùng bấm nhiều lần trong khi đang gửi.
+    confirmButton.disabled = true;
+    cancelButton.disabled = true;
+
+    const originalButtonText = confirmButton.textContent;
+    confirmButton.textContent = 'Đang gửi...';
+
+    const report = {
+      total: pendingItems.length,
+      success: 0,
+      duplicate: 0,
+      blacklist: 0,
+      failed: 0
+    };
+
+    const remainingItems = [];
+
+    try {
+
+      for (let i = 0; i < pendingItems.length; i++) {
+
+        const item = pendingItems[i];
+
+        status.textContent =
+          `Đang gửi bài ${i + 1}/${pendingItems.length}: ${item.title}`;
+
+        try {
+
+          const response = await fetch('/api/submit', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              url: item.url,
+              initData: telegramInitData
+            })
+          });
+
+          const data = await response.json();
+
+          if (data.success === true) {
+
+            report.success++;
+
+          } else {
+
+            const message = String(data.message || '');
+
+            if (/đã tồn tại|trùng lặp|đã có trong danh sách/i.test(message)) {
+
+              report.duplicate++;
+
+            } else if (/blacklist|gỡ chặn|admin chặn/i.test(message)) {
+
+              report.blacklist++;
+
+            } else {
+
+              report.failed++;
+              remainingItems.push(item);
+
+              console.warn(
+                '[GEMS Playlist] Không gửi được:',
+                item.videoId,
+                message
+              );
+            }
+          }
+
+        } catch (error) {
+
+          report.failed++;
+          remainingItems.push(item);
+
+          console.error(
+            '[GEMS Playlist] Lỗi gửi video:',
+            item.videoId,
+            error
+          );
         }
 
-        window.__gemsSelectedPlaylistItems = selectedItems;
+        // Cập nhật tiến độ sau mỗi bài.
+        status.textContent =
+          `Đã xử lý ${i + 1}/${pendingItems.length} bài | ` +
+          `Thành công: ${report.success} | ` +
+          `Trùng: ${report.duplicate} | ` +
+          `Blacklist: ${report.blacklist} | ` +
+          `Lỗi: ${report.failed}`;
+      }
 
-        alert(
-          `Đã xác nhận ${selectedItems.length} bài hát.\n` +
-          'Danh sách đã được lưu tạm để chuẩn bị cho Phase 3.'
-        );
-      });
+    } finally {
+
+      // Chỉ giữ lại những bài thực sự chưa gửi được.
+      window.__gemsPlaylistPhase3Pending = remainingItems;
+
+      confirmButton.disabled = false;
+      cancelButton.disabled = false;
+
+      if (remainingItems.length > 0) {
+
+        confirmButton.textContent =
+          `Thử gửi lại ${remainingItems.length} bài lỗi`;
+
+      } else {
+
+        confirmButton.textContent = 'Đã hoàn tất';
+        confirmButton.disabled = true;
+      }
+    }
+
+    window.__gemsPlaylistPhase3Report = report;
+
+    status.textContent =
+      `Hoàn tất xử lý ${report.total} bài hát.`;
+
+    alert(
+      'KẾT QUẢ THÊM PLAYLIST\n\n' +
+      `Tổng số xử lý: ${report.total}\n` +
+      `✅ Thành công: ${report.success}\n` +
+      `⚠️ Đã tồn tại: ${report.duplicate}\n` +
+      `🚫 Blacklist: ${report.blacklist}\n` +
+      `❌ Thất bại: ${report.failed}` +
+      (
+        remainingItems.length > 0
+          ? `\n\nBạn có thể bấm nút gửi lại để thử các bài lỗi.`
+          : ''
+      )
+    );
+
+  });
+
   
     // ==================== YOUTUBE PLAYER API ====================
     let pendingPlayerSong = null;
