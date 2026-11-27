@@ -7715,44 +7715,74 @@ function finishPlaylistScan(result) {
   if (resolve) resolve(result);
 }
 
-// Đọc danh sách Video ID sau khi YouTube báo Playlist đã được cue.
+// Đọc Video ID và xác minh đúng Playlist đang được yêu cầu.
 function collectPlaylistVideoIds() {
-  if (!playlistPreviewPlayer ||
-      typeof playlistPreviewPlayer.getPlaylist !== 'function') {
+  if (
+    !playlistPreviewPlayer ||
+    typeof playlistPreviewPlayer.getPlaylist !== 'function' ||
+    typeof playlistPreviewPlayer.getVideoUrl !== 'function'
+  ) {
     return;
   }
 
-  const videoIds = playlistPreviewPlayer.getPlaylist() || [];
+  try {
+    // Xác minh Playlist ID hiện tại của YouTube Player
+    const currentVideoUrl = playlistPreviewPlayer.getVideoUrl();
+    const currentUrl = new URL(currentVideoUrl);
+    const currentPlaylistId = currentUrl.searchParams.get('list');
 
-  if (!videoIds.length) {
+    // Không xử lý nếu Player vẫn đang ở Playlist cũ
+    if (
+      !pendingPlaylistId ||
+      currentPlaylistId !== pendingPlaylistId
+    ) {
+      console.log(
+        '⏳ Đang chờ YouTube chuyển sang Playlist mới...',
+        {
+          expected: pendingPlaylistId,
+          actual: currentPlaylistId
+        }
+      );
+
+      return;
+    }
+
+    const videoIds = playlistPreviewPlayer.getPlaylist() || [];
+
+    if (!videoIds.length) {
+      document.getElementById('playlistScanStatus').textContent =
+        'Không đọc được video trong Playlist. Playlist có thể riêng tư, không khả dụng hoặc không có video.';
+
+      finishPlaylistScan({
+        success: false,
+        videoIds: []
+      });
+
+      return;
+    }
+
+    // Lưu tạm danh sách video
+    window.__gemsPlaylistVideoIds = videoIds.slice();
+
+    console.log('🎵 GEMS Playlist Scanner - Video IDs:');
+
+    console.table(videoIds.map((id, index) => ({
+      order: index + 1,
+      videoId: id,
+      url: `https://www.youtube.com/watch?v=${id}`
+    })));
+
     document.getElementById('playlistScanStatus').textContent =
-      'Không đọc được video trong Playlist. Playlist có thể riêng tư, không khả dụng hoặc không có video.';
+      `Đã đọc thành công ${videoIds.length} video ID từ Playlist.`;
 
     finishPlaylistScan({
-      success: false,
-      videoIds: []
+      success: true,
+      videoIds: videoIds
     });
 
-    return;
+  } catch (error) {
+    console.error('❌ Lỗi đọc Playlist:', error);
   }
-
-  // Lưu tạm để kiểm tra trong DevTools ở Phase 1.
-  window.__gemsPlaylistVideoIds = videoIds.slice();
-
-  console.log('🎵 GEMS Playlist Scanner - Video IDs:');
-  console.table(videoIds.map((id, index) => ({
-    order: index + 1,
-    videoId: id,
-    url: `https://www.youtube.com/watch?v=${id}`
-  })));
-
-  document.getElementById('playlistScanStatus').textContent =
-    `Đã đọc thành công ${videoIds.length} video ID từ Playlist.`;
-
-  finishPlaylistScan({
-    success: true,
-    videoIds: videoIds
-  });
 }
 
 // Tạo Player độc lập, tuyệt đối không sử dụng youtubeApiPlayer.
@@ -7786,7 +7816,10 @@ function initPlaylistPreviewPlayer() {
 
       onStateChange: (event) => {
         if (event.data === YT.PlayerState.CUED) {
-          collectPlaylistVideoIds();
+          // Chờ Player cập nhật URL và danh sách Playlist
+          setTimeout(() => {
+            collectPlaylistVideoIds();
+          }, 300);
         }
       },
 
