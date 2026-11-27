@@ -4349,16 +4349,129 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
         style="display:flex;flex-direction:column;gap:9px;">
       </div>
 
-      <div style="display:flex;gap:8px;margin-top:14px;">
-        <button type="button" id="playlistPreviewContinue"
-          style="flex:1;">
-          Tiếp tục
-        </button>
+      <!-- GEMS Playlist Scanner - Phase 4A.1: Result Panel -->
+      <div id="playlistResultPanel" hidden
+        style="
+          margin-top:14px;
+          padding:14px;
+          border:1px solid var(--border-color, rgba(128,128,128,0.25));
+          border-radius:12px;
+          background:var(--card-bg, rgba(128,128,128,0.06));
+        ">
 
-        <button type="button" id="playlistPreviewCancel">
-          Hủy
-        </button>
+        <div style="
+          display:flex;
+          justify-content:space-between;
+          align-items:center;
+          gap:8px;
+          margin-bottom:12px;
+        ">
+          <strong style="font-size:15px;">
+            Kết quả thêm Playlist
+          </strong>
+
+          <span id="playlistResultTotal"
+            style="font-size:13px;opacity:0.75;">
+            0/0 bài
+          </span>
+        </div>
+
+        <!-- Progress -->
+        <div style="margin-bottom:14px;">
+
+          <div style="
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            margin-bottom:6px;
+            font-size:12px;
+          ">
+            <span id="playlistProgressLabel">
+              Đang chờ xử lý
+            </span>
+
+            <strong id="playlistProgressPercent">0%</strong>
+          </div>
+
+          <div style="
+            height:8px;
+            width:100%;
+            overflow:hidden;
+            border-radius:20px;
+            background:rgba(128,128,128,0.2);
+          ">
+            <div id="playlistProgressBar"
+              style="
+                width:0%;
+                height:100%;
+                border-radius:20px;
+                background:#16a34a;
+                transition:width 0.25s ease;
+              ">
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Statistics -->
+        <div style="
+          display:grid;
+          grid-template-columns:repeat(2,minmax(0,1fr));
+          gap:9px;
+        ">
+
+          <div style="
+            padding:11px;
+            border-radius:9px;
+            background:rgba(22,163,74,0.10);
+          ">
+            <div id="playlistResultSuccess"
+              style="font-size:23px;font-weight:700;color:#16a34a;">
+              0
+            </div>
+            <div style="font-size:12px;">✅ Thành công</div>
+          </div>
+
+          <div style="
+            padding:11px;
+            border-radius:9px;
+            background:rgba(217,119,6,0.10);
+          ">
+            <div id="playlistResultDuplicate"
+              style="font-size:23px;font-weight:700;color:#d97706;">
+              0
+            </div>
+            <div style="font-size:12px;">⚠️ Trùng lặp</div>
+          </div>
+
+          <div style="
+            padding:11px;
+            border-radius:9px;
+            background:rgba(220,38,38,0.10);
+          ">
+            <div id="playlistResultBlacklist"
+              style="font-size:23px;font-weight:700;color:#dc2626;">
+              0
+            </div>
+            <div style="font-size:12px;">🚫 Blacklist</div>
+          </div>
+
+          <div style="
+            padding:11px;
+            border-radius:9px;
+            background:rgba(128,128,128,0.10);
+          ">
+            <div id="playlistResultFailed"
+              style="font-size:23px;font-weight:700;">
+              0
+            </div>
+            <div style="font-size:12px;">❌ Thất bại</div>
+          </div>
+
+        </div>
       </div>
+      <!-- End Phase 4A.1 -->
+
     </div>
   </div>
 
