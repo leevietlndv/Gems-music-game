@@ -4469,6 +4469,22 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
           </div>
 
         </div>
+
+        <!-- Phase 4A.3.1: Close result button -->
+        <button type="button" id="playlistResultClose"
+          style="
+            width:100%;
+            margin-top:12px;
+            padding:10px;
+            border:1px solid var(--border-color, rgba(128,128,128,0.25));
+            border-radius:9px;
+            background:transparent;
+            color:inherit;
+            cursor:pointer;
+          ">
+          Đóng kết quả
+        </button>
+
       </div>
       <!-- End Phase 4A.1 -->
 
@@ -8295,6 +8311,19 @@ document.getElementById('playlistPreviewContinue')
     );
 
   });
+
+  // Phase 4A.3.1: Đóng bảng kết quả
+  document.getElementById('playlistResultClose')
+    .addEventListener('click', function () {
+
+      const resultPanel =
+        document.getElementById('playlistResultPanel');
+
+      if (resultPanel) {
+        resultPanel.hidden = true;
+      }
+
+    });
 
   
     // ==================== YOUTUBE PLAYER API ====================
