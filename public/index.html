@@ -1508,24 +1508,6 @@
       font-weight: 700;
     }
 
-    /* GEMS Playlist - Ẩn HUD quét Playlist */
-    #playlistScanPanel {
-      position: fixed !important;
-      left: -10000px !important;
-      top: 0 !important;
-      width: 220px !important;
-      height: 240px !important;
-      opacity: 0 !important;
-      pointer-events: none !important;
-      overflow: hidden !important;
-    }
-
-    /* Giữ nguyên kích thước YouTube Preview Player */
-    #playlistPreviewPlayer {
-      width: 200px !important;
-      height: 200px !important;
-    }
-
     /* ==================== COMMUNITY CHAT PHASE 3 ==================== */
     .community-chat-card {
       width: 100%;
@@ -4473,12 +4455,11 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
 
       <div style="display:flex;gap:8px;margin-top:14px;">
         <button type="button" id="playlistPreviewContinue"
-          style="flex:7;">
+          style="flex:1;">
           Tiếp tục
         </button>
 
-        <button type="button" id="playlistPreviewCancel"
-          style="flex:3;">
+        <button type="button" id="playlistPreviewCancel">
           Hủy
         </button>
       </div>
@@ -8164,13 +8145,6 @@ document.getElementById('playlistPreviewContinue')
       return;
     }
 
-    // Phase 4C.3: Ẩn hai nút sau khi xác nhận
-    const buttonContainer = confirmButton.parentElement;
-
-    if (buttonContainer) {
-      buttonContainer.style.display = 'none';
-    }
-
     // Ngăn người dùng bấm nhiều lần trong khi đang gửi.
     confirmButton.disabled = true;
     cancelButton.disabled = true;
@@ -8241,15 +8215,9 @@ document.getElementById('playlistPreviewContinue')
           const data = await response.json();
 
           if (data.success === true) {
+
             report.success++;
 
-            // Xóa video đã thêm thành công khỏi danh sách xem trước
-            gemsPlaylistPreviewItems =
-              gemsPlaylistPreviewItems.filter(
-                previewItem => previewItem.videoId !== item.videoId
-              );
-
-            renderPlaylistVideoList();
           } else {
 
             const message = String(data.message || '');
@@ -8346,11 +8314,16 @@ document.getElementById('playlistPreviewContinue')
       confirmButton.disabled = false;
       cancelButton.disabled = false;
 
-      // Phase 4C.5: Không hỗ trợ gửi lại
-      window.__gemsPlaylistPhase3Pending = [];
+      if (remainingItems.length > 0) {
 
-      confirmButton.disabled = true;
-      confirmButton.textContent = 'Đã hoàn tất';
+        confirmButton.textContent =
+          `Thử gửi lại ${remainingItems.length} bài lỗi`;
+
+      } else {
+
+        confirmButton.textContent = 'Đã hoàn tất';
+        confirmButton.disabled = true;
+      }
     }
 
     window.__gemsPlaylistPhase3Report = report;
