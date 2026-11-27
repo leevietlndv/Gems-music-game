@@ -4435,9 +4435,14 @@ body[data-theme="tet_vietnam"] #playlistResultClose {
       Đang chuẩn bị đọc Playlist...
     </div>
 
-    <!-- Player riêng cho Playlist, không dùng chung với trình phát nhạc chính -->
-    <div id="playlistPreviewPlayer"
-      style="width:200px;height:200px;min-width:200px;min-height:200px;margin-top:10px;">
+    <!-- Player riêng cho Playlist Scanner: giữ hoạt động nhưng không hiển thị HUD -->
+    <div id="playlistPreviewHud"
+      style="position:fixed;left:-10000px;top:0;width:200px;height:200px;overflow:hidden;">
+
+      <div id="playlistPreviewPlayer"
+        style="width:200px;height:200px;min-width:200px;min-height:200px;">
+      </div>
+
     </div>
     <!-- GEMS Playlist Scanner - Phase 2 -->
     <div id="playlistVideoPreview" hidden style="margin-top:12px;">
