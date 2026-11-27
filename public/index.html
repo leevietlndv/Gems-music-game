@@ -8053,14 +8053,36 @@ function scanYouTubePlaylist(playlistId) {
       });
 
     // Hủy xem trước
+    
     document.getElementById('playlistPreviewCancel')
       .addEventListener('click', function () {
+
+        // Đóng giao diện Playlist
         document.getElementById('playlistVideoPreview').hidden = true;
         document.getElementById('playlistScanPanel').hidden = true;
 
+        // Xóa dữ liệu xem trước
         gemsPlaylistPreviewItems = [];
-      });
 
+        // Xóa dữ liệu tạm của Phase 3
+        window.__gemsSelectedPlaylistItems = [];
+        window.__gemsPlaylistPhase3SourceKey = null;
+        window.__gemsPlaylistPhase3Pending = [];
+        window.__gemsPlaylistPhase3Report = null;
+
+        // Xóa dữ liệu video ID đã quét
+        window.__gemsPlaylistVideoIds = [];
+
+        // Đặt lại trạng thái nút
+        const confirmButton =
+          document.getElementById('playlistPreviewContinue');
+
+        if (confirmButton) {
+          confirmButton.disabled = false;
+          confirmButton.textContent = 'Tiếp tục';
+        }
+
+      });
     
 // ======================================================
 // GEMS PLAYLIST - PHASE 3A
@@ -8295,20 +8317,6 @@ document.getElementById('playlistPreviewContinue')
 
     status.textContent =
       `Hoàn tất xử lý ${report.total} bài hát.`;
-
-    alert(
-      'KẾT QUẢ THÊM PLAYLIST\n\n' +
-      `Tổng số xử lý: ${report.total}\n` +
-      `✅ Thành công: ${report.success}\n` +
-      `⚠️ Đã tồn tại: ${report.duplicate}\n` +
-      `🚫 Blacklist: ${report.blacklist}\n` +
-      `❌ Thất bại: ${report.failed}` +
-      (
-        remainingItems.length > 0
-          ? `\n\nBạn có thể bấm nút gửi lại để thử các bài lỗi.`
-          : ''
-      )
-    );
 
   });
 
