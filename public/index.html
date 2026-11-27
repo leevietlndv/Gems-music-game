@@ -8185,37 +8185,81 @@ function scanYouTubePlaylist(playlistId) {
         renderPlaylistVideoList();
       });
 
-    // Hủy xem trước
-    
+    // Hủy xem trước và dọn dẹp toàn bộ phiên Scanner.
     document.getElementById('playlistPreviewCancel')
       .addEventListener('click', function () {
 
-        // Đóng giao diện Playlist
-        document.getElementById('playlistVideoPreview').hidden = true;
-        document.getElementById('playlistScanPanel').hidden = true;
+        // 1. Vô hiệu hóa lượt quét hiện tại trước tiên.
+        // Callback cũ sẽ không còn quyền cập nhật giao diện.
+        playlistScanId++;
+        playlistScanCompleted = true;
 
-        // Xóa dữ liệu xem trước
+        // 2. Hủy timeout đang chờ.
+        if (playlistScanTimeout) {
+          clearTimeout(playlistScanTimeout);
+          playlistScanTimeout = null;
+        }
+
+        // 3. Kết thúc Promise nếu lượt quét vẫn đang chờ.
+        const previousResolve = playlistScanResolve;
+        playlistScanResolve = null;
+
+        if (previousResolve) {
+          previousResolve({
+            success: false,
+            videoIds: [],
+            error: 'cancelled'
+          });
+        }
+
+        // 4. Xóa Playlist ID đang chờ.
+        pendingPlaylistId = null;
+
+        // 5. Hủy Player hiện tại.
+        destroyPlaylistPreviewPlayer();
+
+        // 6. Xóa dữ liệu Preview.
         gemsPlaylistPreviewItems = [];
 
-        // Xóa dữ liệu tạm của Phase 3
+        // 7. Xóa dữ liệu tạm của Phase 3.
         window.__gemsSelectedPlaylistItems = [];
         window.__gemsPlaylistPhase3SourceKey = null;
         window.__gemsPlaylistPhase3Pending = [];
         window.__gemsPlaylistPhase3Report = null;
 
-        // Xóa dữ liệu video ID đã quét
+        // 8. Xóa danh sách Video ID đã quét.
         window.__gemsPlaylistVideoIds = [];
 
-        // Đặt lại trạng thái nút
+        // 9. Đóng toàn bộ giao diện Playlist.
+        document.getElementById('playlistVideoPreview').hidden = true;
+        document.getElementById('playlistScanPanel').hidden = true;
+
+        const resultPanel =
+          document.getElementById('playlistResultPanel');
+
+        if (resultPanel) {
+          resultPanel.hidden = true;
+        }
+
+        // 10. Khôi phục nút Tiếp tục.
         const confirmButton =
           document.getElementById('playlistPreviewContinue');
 
         if (confirmButton) {
           confirmButton.disabled = false;
           confirmButton.textContent = 'Tiếp tục';
+
+          if (confirmButton.parentElement) {
+            confirmButton.parentElement.style.display = 'flex';
+          }
         }
 
+        console.log(
+          '🧹 GEMS Playlist Scanner: Đã đóng và dọn dẹp phiên quét.'
+        );
+
       });
+
     
 // ======================================================
 // GEMS PLAYLIST - PHASE 3A
