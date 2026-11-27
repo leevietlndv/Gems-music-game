@@ -7678,6 +7678,8 @@ let playlistScanCompleted = false;
 // Quản lý phiên quét và trạng thái Player.
 let playlistScanId = 0;
 let playlistPlayerReady = false;
+// Quản lý phiên tải thông tin Preview.
+let playlistPreviewLoadId = 0;
 
 // Nhận diện Playlist ID từ các dạng URL YouTube phổ biến.
 function getYouTubePlaylistId(url) {
@@ -7906,6 +7908,9 @@ function scanYouTubePlaylist(playlistId) {
   // Tạo mã riêng cho lượt quét mới.
   const scanId = ++playlistScanId;
 
+  // Vô hiệu hóa mọi tác vụ tải Preview của Playlist trước.
+  playlistPreviewLoadId++;
+
   // Dọn timeout cũ.
   if (playlistScanTimeout) {
     clearTimeout(playlistScanTimeout);
@@ -8087,6 +8092,8 @@ function scanYouTubePlaylist(playlistId) {
     }
 
     async function loadPlaylistPreview(videoIds) {
+      // Ghi nhận phiên tải Preview hiện tại.
+      const previewLoadId = ++playlistPreviewLoadId;
       const panel = document.getElementById('playlistVideoPreview');
       const status = document.getElementById('playlistScanStatus');
 
@@ -8158,6 +8165,12 @@ function scanYouTubePlaylist(playlistId) {
           batch.map(videoId => getPlaylistVideoInfo(videoId))
         );
 
+        // Nếu đã đóng Scanner hoặc có Playlist mới,
+        // không cho phép kết quả cũ cập nhật giao diện.
+        if (previewLoadId !== playlistPreviewLoadId || panel.hidden) {
+          return;
+        }
+
         gemsPlaylistPreviewItems.push(
           ...results.map(item => ({
             ...item,
@@ -8169,6 +8182,11 @@ function scanYouTubePlaylist(playlistId) {
 
         status.textContent =
           `Đã tải thông tin ${gemsPlaylistPreviewItems.length}/${videoIds.length} video`;
+      }
+
+      // Chỉ phiên Preview còn hiệu lực mới được cập nhật trạng thái cuối.
+      if (previewLoadId !== playlistPreviewLoadId || panel.hidden) {
+        return;
       }
 
       status.textContent =
@@ -8193,6 +8211,7 @@ function scanYouTubePlaylist(playlistId) {
         // Callback cũ sẽ không còn quyền cập nhật giao diện.
         playlistScanId++;
         playlistScanCompleted = true;
+        playlistPreviewLoadId++;
 
         // 2. Hủy timeout đang chờ.
         if (playlistScanTimeout) {
