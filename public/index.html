@@ -8111,6 +8111,34 @@ document.getElementById('playlistPreviewContinue')
 
     const remainingItems = [];
 
+    // Phase 4A.2: Kết nối bảng kết quả
+    const resultPanel = document.getElementById('playlistResultPanel');
+    const resultTotal = document.getElementById('playlistResultTotal');
+
+    const progressLabel = document.getElementById('playlistProgressLabel');
+    const progressPercent = document.getElementById('playlistProgressPercent');
+    const progressBar = document.getElementById('playlistProgressBar');
+
+    const resultSuccess = document.getElementById('playlistResultSuccess');
+    const resultDuplicate = document.getElementById('playlistResultDuplicate');
+    const resultBlacklist = document.getElementById('playlistResultBlacklist');
+    const resultFailed = document.getElementById('playlistResultFailed');
+
+    // Hiển thị bảng kết quả khi bắt đầu gửi.
+    if (resultPanel) resultPanel.hidden = false;
+
+    // Đặt lại giao diện cho lượt gửi hiện tại.
+    if (resultTotal) resultTotal.textContent = `0/${report.total} bài`;
+
+    if (progressLabel) progressLabel.textContent = 'Đang chuẩn bị...';
+    if (progressPercent) progressPercent.textContent = '0%';
+    if (progressBar) progressBar.style.width = '0%';
+
+    if (resultSuccess) resultSuccess.textContent = '0';
+    if (resultDuplicate) resultDuplicate.textContent = '0';
+    if (resultBlacklist) resultBlacklist.textContent = '0';
+    if (resultFailed) resultFailed.textContent = '0';
+
     try {
 
       for (let i = 0; i < pendingItems.length; i++) {
@@ -8174,6 +8202,48 @@ document.getElementById('playlistPreviewContinue')
             item.videoId,
             error
           );
+        }
+
+        // Phase 4A.2: Cập nhật bảng thống kê và tiến trình
+        const processed = i + 1;
+        const percent = Math.round(
+          (processed / report.total) * 100
+        );
+
+        if (resultTotal) {
+          resultTotal.textContent =
+            `${processed}/${report.total} bài`;
+        }
+
+        if (progressPercent) {
+          progressPercent.textContent = `${percent}%`;
+        }
+
+        if (progressBar) {
+          progressBar.style.width = `${percent}%`;
+        }
+
+        if (progressLabel) {
+          progressLabel.textContent =
+            processed === report.total
+              ? 'Đã xử lý xong'
+              : `Đang xử lý bài ${processed}/${report.total}`;
+        }
+
+        if (resultSuccess) {
+          resultSuccess.textContent = report.success;
+        }
+
+        if (resultDuplicate) {
+          resultDuplicate.textContent = report.duplicate;
+        }
+
+        if (resultBlacklist) {
+          resultBlacklist.textContent = report.blacklist;
+        }
+
+        if (resultFailed) {
+          resultFailed.textContent = report.failed;
         }
 
         // Cập nhật tiến độ sau mỗi bài.
