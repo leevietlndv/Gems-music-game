@@ -1243,24 +1243,6 @@
       font-size: 18px;
     }
 
-    /* GEMS Playlist - Ẩn HUD quét Playlist */
-    #playlistScanPanel {
-      position: fixed !important;
-      left: -10000px !important;
-      top: 0 !important;
-      width: 220px !important;
-      height: 240px !important;
-      opacity: 0 !important;
-      pointer-events: none !important;
-      overflow: hidden !important;
-    }
-
-    /* Giữ nguyên kích thước YouTube Preview Player */
-    #playlistPreviewPlayer {
-      width: 200px !important;
-      height: 200px !important;
-    }
-
     .playlist-picker {
       position: fixed;
       inset: 0;
@@ -1491,6 +1473,24 @@
       background: #2e7d32;
     }
 
+    .vote-actions {
+      flex: 0 0 28%;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+
+    .vote-button {
+      min-height: 54px;
+      padding: 5px 2px;
+      font-size: 12px;
+      border-radius: 8px;
+      color: #fff;
+      flex-direction: column;
+      gap: 1px;
+      line-height: 1.05;
+    }
+
     .action-label {
       color: #ddd;
       font-weight: 400;
@@ -1506,6 +1506,24 @@
     .action-user {
       color: #64b5f6;
       font-weight: 700;
+    }
+
+    /* GEMS Playlist - Ẩn HUD quét Playlist */
+    #playlistScanPanel {
+      position: fixed !important;
+      left: -10000px !important;
+      top: 0 !important;
+      width: 220px !important;
+      height: 240px !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+      overflow: hidden !important;
+    }
+
+    /* Giữ nguyên kích thước YouTube Preview Player */
+    #playlistPreviewPlayer {
+      width: 200px !important;
+      height: 200px !important;
     }
 
     /* ==================== COMMUNITY CHAT PHASE 3 ==================== */
@@ -8329,11 +8347,11 @@ document.getElementById('playlistPreviewContinue')
       cancelButton.disabled = false;
 
       // Phase 4C.5: Không hỗ trợ gửi lại
-    window.__gemsPlaylistPhase3Pending = [];
+      window.__gemsPlaylistPhase3Pending = [];
 
-    confirmButton.disabled = true;
-    confirmButton.textContent = 'Đã hoàn tất';
-      }
+      confirmButton.disabled = true;
+      confirmButton.textContent = 'Đã hoàn tất';
+    }
 
     window.__gemsPlaylistPhase3Report = report;
 
