@@ -1243,6 +1243,24 @@
       font-size: 18px;
     }
 
+    /* GEMS Playlist - Ẩn HUD quét Playlist */
+    #playlistScanPanel {
+      position: fixed !important;
+      left: -10000px !important;
+      top: 0 !important;
+      width: 220px !important;
+      height: 240px !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+      overflow: hidden !important;
+    }
+
+    /* Giữ nguyên kích thước YouTube Preview Player */
+    #playlistPreviewPlayer {
+      width: 200px !important;
+      height: 200px !important;
+    }
+
     .playlist-picker {
       position: fixed;
       inset: 0;
@@ -1473,24 +1491,6 @@
       background: #2e7d32;
     }
 
-    .vote-actions {
-      flex: 0 0 28%;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 6px;
-    }
-
-    .vote-button {
-      min-height: 54px;
-      padding: 5px 2px;
-      font-size: 12px;
-      border-radius: 8px;
-      color: #fff;
-      flex-direction: column;
-      gap: 1px;
-      line-height: 1.05;
-    }
-
     .action-label {
       color: #ddd;
       font-weight: 400;
@@ -1506,41 +1506,6 @@
     .action-user {
       color: #64b5f6;
       font-weight: 700;
-    }
-
-    .vote-icon {
-      font-size: 20px;
-      line-height: 1;
-      margin-bottom: 3px;
-    }
-
-    .vote-label {
-      font-size: 11px;
-      font-weight: 700;
-    }
-
-    .vote-count {
-      font-size: 12px;
-      font-weight: 800;
-      opacity: 0.95;
-    }
-
-    .vote-button.like {
-      background: #2e7d32;
-    }
-
-    .vote-button.dislike {
-      background: #d32f2f;
-    }
-
-    .vote-button.active {
-      box-shadow: inset 0 0 0 3px #fff;
-      transform: translateY(-1px);
-    }
-
-    .vote-button:disabled {
-      opacity: 0.45;
-      cursor: not-allowed;
     }
 
     /* ==================== COMMUNITY CHAT PHASE 3 ==================== */
@@ -4490,11 +4455,12 @@ body:not([data-theme="tet_vietnam"]) .tet-spring-lantern {
 
       <div style="display:flex;gap:8px;margin-top:14px;">
         <button type="button" id="playlistPreviewContinue"
-          style="flex:1;">
+          style="flex:7;">
           Tiếp tục
         </button>
 
-        <button type="button" id="playlistPreviewCancel">
+        <button type="button" id="playlistPreviewCancel"
+          style="flex:3;">
           Hủy
         </button>
       </div>
@@ -8180,6 +8146,13 @@ document.getElementById('playlistPreviewContinue')
       return;
     }
 
+    // Phase 4C.3: Ẩn hai nút sau khi xác nhận
+    const buttonContainer = confirmButton.parentElement;
+
+    if (buttonContainer) {
+      buttonContainer.style.display = 'none';
+    }
+
     // Ngăn người dùng bấm nhiều lần trong khi đang gửi.
     confirmButton.disabled = true;
     cancelButton.disabled = true;
@@ -8250,9 +8223,15 @@ document.getElementById('playlistPreviewContinue')
           const data = await response.json();
 
           if (data.success === true) {
-
             report.success++;
 
+            // Xóa video đã thêm thành công khỏi danh sách xem trước
+            gemsPlaylistPreviewItems =
+              gemsPlaylistPreviewItems.filter(
+                previewItem => previewItem.videoId !== item.videoId
+              );
+
+            renderPlaylistVideoList();
           } else {
 
             const message = String(data.message || '');
@@ -8349,17 +8328,12 @@ document.getElementById('playlistPreviewContinue')
       confirmButton.disabled = false;
       cancelButton.disabled = false;
 
-      if (remainingItems.length > 0) {
+      // Phase 4C.5: Không hỗ trợ gửi lại
+    window.__gemsPlaylistPhase3Pending = [];
 
-        confirmButton.textContent =
-          `Thử gửi lại ${remainingItems.length} bài lỗi`;
-
-      } else {
-
-        confirmButton.textContent = 'Đã hoàn tất';
-        confirmButton.disabled = true;
+    confirmButton.disabled = true;
+    confirmButton.textContent = 'Đã hoàn tất';
       }
-    }
 
     window.__gemsPlaylistPhase3Report = report;
 
