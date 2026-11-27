@@ -1508,6 +1508,18 @@
       font-weight: 700;
     }
 
+    /* GEMS Playlist Scanner - Layout Spacing Fix */
+
+    /* Thu gọn khoảng cách giữa form gửi bài hát và Playlist */
+    #playlistScanPanel:not([hidden]) {
+      margin-top: 0 !important;
+    }
+
+    /* Tạo khoảng cách an toàn giữa Playlist và Bar online */
+    #playlistScanPanel:not([hidden]) + .online-bar {
+      margin-top: 12px;
+    }
+
     /* ==================== COMMUNITY CHAT PHASE 3 ==================== */
     .community-chat-card {
       width: 100%;
