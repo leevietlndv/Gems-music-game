@@ -3701,12 +3701,13 @@ body[data-theme="tet_vietnam"] .playlist-picker-create input {
   border: 1px solid var(--gems-tet-border-soft) !important;
 }
 
-/* Input focus border — consistent with other themes. */
+/* Input focus border and outline — consistent with other themes. */
 body[data-theme="tet_vietnam"] .script-settings-input:focus,
 body[data-theme="tet_vietnam"] input[type="text"]:focus,
 body[data-theme="tet_vietnam"] .playlist-picker-create input:focus {
   border-color: var(--gems-tet-gold-light) !important;
-  outline-color: rgba(225, 196, 119, .25) !important;
+  outline: 2px solid rgba(225, 196, 119, .25) !important;
+  outline-offset: 1px;
 }
 
 body[data-theme="tet_vietnam"] .script-settings-input::placeholder,
